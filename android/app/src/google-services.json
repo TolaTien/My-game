@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "419437402803",
+    "project_id": "my-game-ec4fa",
+    "storage_bucket": "my-game-ec4fa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419437402803:android:20575160792c1660e72ec6",
+        "android_client_info": {
+          "package_name": "com.example.my_game"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwSFGtB6oYr1hbPU51WF5YngM5nwlzpdw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

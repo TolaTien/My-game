@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "enemies": [
+    {
+      "id": "zombie",
+      "name": "Xác Sống Hầm Ngục",
+      "type": "melee",
+      "baseHp": 60,
+      "baseDamage": 10,
+      "speed": 75,
+      "expReward": 25,
+      "goldReward": 50,
+      "spriteSheet": "assets/images/enemies/zombie_sheet.png"
+    },
+    {
+      "id": "skeleton",
+      "name": "Cung Thủ Xương Khô",
+      "type": "ranged_kiting",
+      "baseHp": 45,
+      "baseDamage": 14,
+      "speed": 85,
+      "preferredRange": 160,
+      "expReward": 35,
+      "goldReward": 75,
+      "spriteSheet": "assets/images/enemies/skeleton_sheet.png"
+    },
+    {
+      "id": "dungeon_boss",
+      "name": "Chúa Tể Hầm Ngục Hoàng Kim",
+      "type": "boss",
+      "baseHp": 600,
+      "baseDamage": 25,
+      "speed": 95,
+      "expReward": 200,
+      "goldReward": 500,
+      "spriteSheet": "assets/images/enemies/boss_sheet.png"
+    }
+  ]
+}
