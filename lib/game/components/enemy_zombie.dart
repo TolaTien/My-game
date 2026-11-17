@@ -1,3 +1,4 @@
+import '../combat/combat_status.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
@@ -8,7 +9,7 @@ import '../ai/astar_pathfinder.dart';
 import '../gold_rush_game.dart';
 
 class ZombieEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, CombatStatus, HasGameReference<GoldRushGame> {
   double maxHp = 60.0;
   double currentHp = 60.0;
   double speed = 65.0;
@@ -42,6 +43,8 @@ class ZombieEnemy extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    tickCombatStatus(dt);
+    if (isStunned) return;
     if (attackCooldown > 0) attackCooldown -= dt;
 
     final distanceToPlayer = position.distanceTo(player.position);
@@ -59,7 +62,7 @@ class ZombieEnemy extends PositionComponent
         // Fallback di chuyển thẳng nếu chưa mount game
         previousPosition = position.clone();
         final dir = (player.position - position).normalized();
-        position.add(dir * speed * dt);
+        position.add(dir * speed * combatMoveFactor * dt);
       }
     } else {
       _waypoints.clear();
@@ -87,7 +90,7 @@ class ZombieEnemy extends PositionComponent
       // Direct approach fallback
       previousPosition = position.clone();
       final dir = (player.position - position).normalized();
-      position.add(dir * speed * dt);
+      position.add(dir * speed * combatMoveFactor * dt);
       return;
     }
 
@@ -108,7 +111,7 @@ class ZombieEnemy extends PositionComponent
     if (toTarget.length2 > 0.0001) {
       previousPosition = position.clone();
       final dir = toTarget.normalized();
-      position.add(dir * speed * dt);
+      position.add(dir * speed * combatMoveFactor * dt);
     }
   }
 

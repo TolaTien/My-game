@@ -1,5 +1,12 @@
+import 'package:flame/components.dart';
+
+import 'combat/hero_combat.dart';
+import 'combat/hero_kit.dart';
+import 'combat/combat_targets.dart';
+
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
+
 import '../models/player_profile.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
@@ -15,6 +22,36 @@ import 'components/floating_combat_text.dart';
 class GoldRushGame extends FlameGame with HasCollisionDetection {
   final PlayerProfile? playerProfile;
 
+  HeroCombat? _heroCombat;
+  HeroCombat get heroCombat => _heroCombat ??= HeroCombat(
+    owner: player,
+    heroId: player.heroId,
+    damage: () => player.attackDamage,
+    facing: () => player.attackDirection,
+    targets: () => <PositionComponent>[...enemies, ...skeletons, ?boss]
+        .where((body) => body.isMounted)
+        .map(
+          (body) => combatTarget(
+            body,
+            onHit: (damage) {
+              _spawnDamageNumber(
+                body.position,
+                damage.toInt(),
+                CombatTextType.skillDamage,
+              );
+            },
+          ),
+        )
+        .toList(),
+    canWalk: (point) => !isLoaded || pointInMap(point, dungeonMap, 1152, 768),
+    enabled: () =>
+        player.currentHp > 0 && !isVictoryTriggered && !isGameOverTriggered,
+    rage: (duration) {
+      player.isBerserk = true;
+      player.berserkTimer = duration;
+    },
+    maxHp: player.maxHp,
+  );
   late final PlayerComponent player;
   late DungeonMapComponent dungeonMap;
   BossEnemy? boss;
@@ -47,6 +84,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     player = PlayerComponent(
       position: Vector2(400, 300),
       heroId: hero,
+      skinId: activeProfile.selectedSkinId,
       userHeroLevel: userHeroLv,
     );
   }
@@ -68,6 +106,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     player.position = Vector2(400, 300);
     player.onStatsChanged = () => onPlayerStatsChanged?.call();
     await world.add(player);
+    await world.add(heroCombat);
 
     // 3. Thêm một số Zombie quái vật
     _spawnZombies(floor: currentFloor);
@@ -84,10 +123,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     // 7. Thêm AI Companion Drone nếu người chơi đã trang bị
     final companionId = activeProfile.selectedCompanionId;
     if (companionId != null && companionId.isNotEmpty) {
-      companion = CompanionComponent(
-        companionId: companionId,
-        player: player,
-      );
+      companion = CompanionComponent(companionId: companionId, player: player);
       await world.add(companion!);
     }
 
@@ -120,7 +156,10 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
 
     // Kiểm tra quét sạch toàn bộ quái và Boss -> Kích hoạt Chiến Thắng Vượt Ải
     final isBossDefeated = boss == null || boss!.isDefeated || !boss!.isMounted;
-    if (!isVictoryTriggered && enemies.isEmpty && skeletons.isEmpty && isBossDefeated) {
+    if (!isVictoryTriggered &&
+        enemies.isEmpty &&
+        skeletons.isEmpty &&
+        isBossDefeated) {
       isVictoryTriggered = true;
       AudioService.instance.playSfx(SfxSound.wheelJackpot);
       onVictory?.call();
@@ -171,6 +210,8 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _cleanupFloorEntities() {
+    _heroCombat?.reset();
+    player.resetCombat();
     for (final e in List<ZombieEnemy>.from(enemies)) {
       if (e.isMounted) e.removeFromParent();
     }
@@ -271,7 +312,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void onBasicAttack() {
-    player.performBasicAttack();
+    if (!player.performBasicAttack()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.basic(player.comboStep);
+      return;
+    }
 
     // Gây sát thương quái trong phạm vi cận chiến (55px, hoặc 80px ở đòn combo thứ 3)
     final isCombo3 = player.comboStep == 3;
@@ -289,7 +334,9 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         _spawnDamageNumber(
           enemy.position,
           dmg.toInt(),
-          isCombo3 ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
         );
       }
     }
@@ -305,7 +352,9 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         _spawnDamageNumber(
           skeleton.position,
           dmg.toInt(),
-          isCombo3 ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
         );
       }
     }
@@ -317,7 +366,9 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         _spawnDamageNumber(
           boss!.position,
           dmg.toInt(),
-          isCombo3 ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
         );
       }
     }
@@ -325,6 +376,10 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
 
   void onSkill1() {
     if (!player.useSkill1()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.skill(1);
+      return;
+    }
 
     // Búa Cuồng Phong / Lôi Ảnh Trảm: Quét 360 độ (bán kính 85px)
     const aoeRadius = 85.0;
@@ -337,7 +392,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(enemy.position);
       if (distance <= aoeRadius) {
         enemy.takeDamage(skillDmg);
-        _spawnDamageNumber(enemy.position, skillDmg.toInt(), CombatTextType.skillDamage);
+        _spawnDamageNumber(
+          enemy.position,
+          skillDmg.toInt(),
+          CombatTextType.skillDamage,
+        );
       }
     }
 
@@ -349,7 +408,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(skeleton.position);
       if (distance <= aoeRadius) {
         skeleton.takeDamage(skillDmg);
-        _spawnDamageNumber(skeleton.position, skillDmg.toInt(), CombatTextType.skillDamage);
+        _spawnDamageNumber(
+          skeleton.position,
+          skillDmg.toInt(),
+          CombatTextType.skillDamage,
+        );
       }
     }
 
@@ -357,13 +420,21 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(boss!.position);
       if (distance <= aoeRadius + 15.0) {
         boss!.takeDamage(skillDmg);
-        _spawnDamageNumber(boss!.position, skillDmg.toInt(), CombatTextType.skillDamage);
+        _spawnDamageNumber(
+          boss!.position,
+          skillDmg.toInt(),
+          CombatTextType.skillDamage,
+        );
       }
     }
   }
 
   void onSkill2() {
     if (!player.useSkill2()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.skill(2);
+      return;
+    }
 
     // Nện Đất / Lôi Điện Hộ Thể: Chấn động cực mạnh (bán kính 110px)
     const aoeRadius = 110.0;
@@ -376,7 +447,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(enemy.position);
       if (distance <= aoeRadius) {
         enemy.takeDamage(skillDmg);
-        _spawnDamageNumber(enemy.position, skillDmg.toInt(), CombatTextType.criticalDamage);
+        _spawnDamageNumber(
+          enemy.position,
+          skillDmg.toInt(),
+          CombatTextType.criticalDamage,
+        );
       }
     }
 
@@ -388,7 +463,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(skeleton.position);
       if (distance <= aoeRadius) {
         skeleton.takeDamage(skillDmg);
-        _spawnDamageNumber(skeleton.position, skillDmg.toInt(), CombatTextType.criticalDamage);
+        _spawnDamageNumber(
+          skeleton.position,
+          skillDmg.toInt(),
+          CombatTextType.criticalDamage,
+        );
       }
     }
 
@@ -396,13 +475,21 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final distance = player.position.distanceTo(boss!.position);
       if (distance <= aoeRadius + 15.0) {
         boss!.takeDamage(skillDmg);
-        _spawnDamageNumber(boss!.position, skillDmg.toInt(), CombatTextType.criticalDamage);
+        _spawnDamageNumber(
+          boss!.position,
+          skillDmg.toInt(),
+          CombatTextType.criticalDamage,
+        );
       }
     }
   }
 
   void onSkill3() {
     if (player.useSkill3()) {
+      if (HeroKit.isSpecialized(player.heroId)) {
+        heroCombat.skill(3);
+        return;
+      }
       final hero = player.heroId;
       String ultText = 'CUỒNG NỘ!';
       switch (hero) {
@@ -467,11 +554,13 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       }
 
       if (isLoaded) {
-        world.add(FloatingCombatText(
-          position: player.position,
-          text: ultText,
-          type: CombatTextType.buff,
-        ));
+        world.add(
+          FloatingCombatText(
+            position: player.position,
+            text: ultText,
+            type: CombatTextType.buff,
+          ),
+        );
       }
     }
   }
@@ -487,21 +576,19 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     }
     if (companion!.activateSpecialSkill()) {
       if (isLoaded) {
-        world.add(FloatingCombatText(
-          position: player.position,
-          text: 'TRƯỜNG TRỌNG LỰC HOÀNG KIM!',
-          type: CombatTextType.buff,
-        ));
+        world.add(
+          FloatingCombatText(
+            position: player.position,
+            text: 'TRƯỜNG TRỌNG LỰC HOÀNG KIM!',
+            type: CombatTextType.buff,
+          ),
+        );
       }
     }
   }
 
   void _spawnDamageNumber(Vector2 pos, int dmg, CombatTextType type) {
     if (!isLoaded) return;
-    world.add(FloatingCombatText(
-      position: pos,
-      text: '-$dmg',
-      type: type,
-    ));
+    world.add(FloatingCombatText(position: pos, text: '-$dmg', type: type));
   }
 }

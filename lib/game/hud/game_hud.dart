@@ -1,11 +1,12 @@
 import 'dart:math';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+
 import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
 import '../components/companion_component.dart';
-import '../components/player.dart';
 import '../gold_rush_game.dart';
 import 'boss_bar_overlay.dart';
 import 'virtual_joystick.dart';
@@ -34,8 +35,11 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
     fn?.call();
     if (_isRebuildScheduled) return;
 
-    final isBuilding = WidgetsBinding.instance.buildOwner?.debugBuilding ?? false;
-    final isPersistent = WidgetsBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks;
+    final isBuilding =
+        WidgetsBinding.instance.buildOwner?.debugBuilding ?? false;
+    final isPersistent =
+        WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks;
 
     if (isBuilding || isPersistent) {
       _isRebuildScheduled = true;
@@ -83,7 +87,10 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                       colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
                     ),
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: const Color(0xFFFFD700), width: 2),
+                    border: Border.all(
+                      color: const Color(0xFFFFD700),
+                      width: 2,
+                    ),
                     boxShadow: const [
                       BoxShadow(color: Colors.black54, blurRadius: 6),
                     ],
@@ -94,11 +101,12 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                       Icon(
                         player.heroId == 'kaelen'
                             ? Icons.bolt_rounded
-                            : player.heroId == 'ranger' || player.heroId == 'valeria'
-                                ? Icons.gps_fixed_rounded
-                                : player.heroId == 'ninja'
-                                    ? Icons.flash_on_rounded
-                                    : Icons.shield,
+                            : player.heroId == 'ranger' ||
+                                  player.heroId == 'valeria'
+                            ? Icons.gps_fixed_rounded
+                            : player.heroId == 'ninja'
+                            ? Icons.flash_on_rounded
+                            : Icons.shield,
                         color: player.heroId == 'kaelen'
                             ? const Color(0xFF00E5FF)
                             : Colors.orangeAccent,
@@ -108,7 +116,10 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                         bottom: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFD700),
                             borderRadius: BorderRadius.circular(4),
@@ -152,11 +163,17 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                     if (player.shieldHp > 0) ...[
                       const SizedBox(height: 3),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFD700).withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFFD700), width: 1),
+                          border: Border.all(
+                            color: const Color(0xFFFFD700),
+                            width: 1,
+                          ),
                         ),
                         child: Text(
                           '🛡 KHIÊN HOÀNG KIM +${player.shieldHp.toInt()}',
@@ -181,16 +198,25 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E2838),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.8)),
+                    border: Border.all(
+                      color: Colors.cyanAccent.withValues(alpha: 0.8),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.stairs, color: Colors.cyanAccent, size: 16),
+                      const Icon(
+                        Icons.stairs,
+                        color: Colors.cyanAccent,
+                        size: 16,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'TẦNG ${widget.game.currentFloor}',
@@ -204,15 +230,24 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.6)),
+                    border: Border.all(
+                      color: Colors.amberAccent.withValues(alpha: 0.6),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: Colors.amberAccent, size: 20),
+                      const Icon(
+                        Icons.monetization_on,
+                        color: Colors.amberAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '${player.coinsCollected * GameConstants.goldPerCoinPickup} Vàng',
@@ -246,7 +281,11 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                 ],
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 36),
+                  icon: const Icon(
+                    Icons.pause_circle_filled,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                   onPressed: () {
                     // Mở menu pause hoặc thoát
                     Navigator.of(context).pop();
@@ -275,11 +314,17 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                   if (isDesktopOrWeb)
                     Container(
                       margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.75),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.7), width: 1),
+                        border: Border.all(
+                          color: Colors.amberAccent.withValues(alpha: 0.7),
+                          width: 1,
+                        ),
                       ),
                       child: const Text(
                         'W A S D',
@@ -341,13 +386,16 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                       right: 0,
                       child: _ActionButton(
                         size: 52,
-                        icon: Icons.cyclone,
-                        label: '25 Ki',
+                        icon: player.kit.skills[0].icon,
+                        description:
+                            '${player.kit.skills[0].name}: ${player.kit.skills[0].description}',
+                        label: '${player.kit.skills[0].cost.toInt()} Ki',
                         hotkey: isDesktopOrWeb ? '1' : null,
                         color: const Color(0xFFFF9800),
                         cooldownRemaining: player.skill1VisualCd,
-                        maxCooldown: PlayerComponent.skill1MaxCd,
-                        hasEnoughKi: player.currentKi >= 25,
+                        maxCooldown: player.kit.skills[0].cooldown,
+                        hasEnoughKi:
+                            player.currentKi >= player.kit.skills[0].cost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill1(),
                       ),
@@ -359,13 +407,16 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                       right: 66,
                       child: _ActionButton(
                         size: 52,
-                        icon: Icons.landslide,
-                        label: '35 Ki',
+                        icon: player.kit.skills[1].icon,
+                        description:
+                            '${player.kit.skills[1].name}: ${player.kit.skills[1].description}',
+                        label: '${player.kit.skills[1].cost.toInt()} Ki',
                         hotkey: isDesktopOrWeb ? '2' : null,
                         color: const Color(0xFF00B0FF),
                         cooldownRemaining: player.skill2VisualCd,
-                        maxCooldown: PlayerComponent.skill2MaxCd,
-                        hasEnoughKi: player.currentKi >= 35,
+                        maxCooldown: player.kit.skills[1].cooldown,
+                        hasEnoughKi:
+                            player.currentKi >= player.kit.skills[1].cost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill2(),
                       ),
@@ -377,13 +428,16 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                       right: 84,
                       child: _ActionButton(
                         size: 52,
-                        icon: Icons.whatshot,
-                        label: '40 Ki',
+                        icon: player.kit.skills[2].icon,
+                        description:
+                            '${player.kit.skills[2].name}: ${player.kit.skills[2].description}',
+                        label: '${player.kit.skills[2].cost.toInt()} Ki',
                         hotkey: isDesktopOrWeb ? '3' : null,
                         color: const Color(0xFF7B1FA2),
                         cooldownRemaining: player.skill3VisualCd,
-                        maxCooldown: PlayerComponent.skill3MaxCd,
-                        hasEnoughKi: player.currentKi >= 40,
+                        maxCooldown: player.kit.skills[2].cooldown,
+                        hasEnoughKi:
+                            player.currentKi >= player.kit.skills[2].cost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill3(),
                       ),
@@ -402,7 +456,8 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                           color: const Color(0xFFFFB300),
                           cooldownRemaining:
                               widget.game.companion!.specialSkillCooldown,
-                          maxCooldown: CompanionComponent.specialSkillMaxCooldown,
+                          maxCooldown:
+                              CompanionComponent.specialSkillMaxCooldown,
                           hasEnoughKi: true,
                           onTap: () => widget.game.onCompanionSkill(),
                         ),
@@ -420,7 +475,10 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
               right: 16,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.75),
                     borderRadius: BorderRadius.circular(16),
@@ -431,7 +489,11 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.keyboard, color: Colors.amberAccent, size: 16),
+                        Icon(
+                          Icons.keyboard,
+                          color: Colors.amberAccent,
+                          size: 16,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] Bão Búa  [2] Nện Đất  [3] Cuồng Nộ  |  Đánh: SPACE / J',
@@ -556,6 +618,7 @@ class _ActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final String? hotkey;
+  final String? description;
   final Color color;
   final double cooldownRemaining;
   final double maxCooldown;
@@ -568,6 +631,7 @@ class _ActionButton extends StatefulWidget {
     required this.icon,
     required this.label,
     this.hotkey,
+    this.description,
     required this.color,
     this.cooldownRemaining = 0.0,
     this.maxCooldown = 1.0,
@@ -591,103 +655,117 @@ class _ActionButtonState extends State<_ActionButton> {
         ? const Color(0xFFFF1744)
         : (widget.hasEnoughKi ? const Color(0xFFFFD700) : Colors.white38);
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _isPressed ? 0.92 : 1.0,
-        duration: const Duration(milliseconds: 70),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.hasEnoughKi
-                    ? widget.color.withValues(alpha: 0.92)
-                    : widget.color.withValues(alpha: 0.45),
-                border: Border.all(color: borderColor, width: 2.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.color.withValues(alpha: widget.hasEnoughKi ? 0.5 : 0.15),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(widget.icon, color: Colors.white, size: size * 0.40),
-                        Text(
-                          widget.label,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: size * 0.16,
-                          ),
-                        ),
-                      ],
+    return Tooltip(
+      message: widget.description ?? widget.label,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _isPressed ? 0.92 : 1.0,
+          duration: const Duration(milliseconds: 70),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.hasEnoughKi
+                      ? widget.color.withValues(alpha: 0.92)
+                      : widget.color.withValues(alpha: 0.45),
+                  border: Border.all(color: borderColor, width: 2.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(
+                        alpha: widget.hasEnoughKi ? 0.5 : 0.15,
+                      ),
+                      blurRadius: 8,
+                      spreadRadius: 1,
                     ),
-                    if (onCd)
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: _HudCooldownSweepPainter(
-                            progress: (widget.cooldownRemaining / widget.maxCooldown)
-                                .clamp(0.0, 1.0),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            widget.icon,
+                            color: Colors.white,
+                            size: size * 0.40,
                           ),
-                          child: Center(
-                            child: Text(
-                              '${widget.cooldownRemaining.toStringAsFixed(1)}s',
-                              style: TextStyle(
-                                color: Colors.amberAccent,
-                                fontSize: size * 0.22,
-                                fontWeight: FontWeight.w900,
-                                shadows: const [
-                                  Shadow(color: Colors.black, blurRadius: 4),
-                                ],
+                          Text(
+                            widget.label,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: size * 0.16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (onCd)
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _HudCooldownSweepPainter(
+                              progress:
+                                  (widget.cooldownRemaining /
+                                          widget.maxCooldown)
+                                      .clamp(0.0, 1.0),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${widget.cooldownRemaining.toStringAsFixed(1)}s',
+                                style: TextStyle(
+                                  color: Colors.amberAccent,
+                                  fontSize: size * 0.22,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: const [
+                                    Shadow(color: Colors.black, blurRadius: 4),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            if (widget.hotkey != null)
-              Positioned(
-                top: -2,
-                right: -2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141926),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.amberAccent, width: 1.2),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black87, blurRadius: 4),
                     ],
                   ),
-                  child: Text(
-                    widget.hotkey!,
-                    style: const TextStyle(
-                      color: Colors.amberAccent,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (widget.hotkey != null)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141926),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.amberAccent, width: 1.2),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black87, blurRadius: 4),
+                      ],
+                    ),
+                    child: Text(
+                      widget.hotkey!,
+                      style: const TextStyle(
+                        color: Colors.amberAccent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -705,13 +783,7 @@ class _HudCooldownSweepPainter extends CustomPainter {
     final paint = Paint()
       ..color = Colors.black.withValues(alpha: 0.68)
       ..style = PaintingStyle.fill;
-    canvas.drawArc(
-      rect,
-      -pi / 2,
-      2 * pi * progress,
-      true,
-      paint,
-    );
+    canvas.drawArc(rect, -pi / 2, 2 * pi * progress, true, paint);
   }
 
   @override

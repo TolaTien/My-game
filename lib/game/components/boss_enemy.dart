@@ -1,3 +1,4 @@
+import '../combat/combat_status.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
@@ -41,7 +42,7 @@ class BossHpData {
 }
 
 class BossEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, CombatStatus, HasGameReference<GoldRushGame> {
   final PlayerComponent player;
 
   static const double defaultMaxHp = 600.0;
@@ -115,6 +116,8 @@ class BossEnemy extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    tickCombatStatus(dt);
+    if (isStunned) return;
     auraTimer += dt;
 
     if (isDefeated) {
@@ -219,7 +222,7 @@ class BossEnemy extends PositionComponent
           final toTarget = targetPt - position;
           if (toTarget.length2 > 0.001) {
             final dir = toTarget.normalized();
-            position.add(dir * currentSpeed * dt);
+            position.add(dir * currentSpeed * combatMoveFactor * dt);
             return;
           }
         }
@@ -227,7 +230,7 @@ class BossEnemy extends PositionComponent
 
       // Direct fallback
       final dir = (player.position - position).normalized();
-      position.add(dir * currentSpeed * dt);
+      position.add(dir * currentSpeed * combatMoveFactor * dt);
     }
   }
 
@@ -569,7 +572,7 @@ class BossEnemy extends PositionComponent
 }
 
 class BossFlameProjectile extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, CombatStatus, HasGameReference<GoldRushGame> {
   final Vector2 direction;
   final double speed;
   final double damage;
@@ -589,13 +592,15 @@ class BossFlameProjectile extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    tickCombatStatus(dt);
+    if (isStunned) return;
     if (hasHit) return;
     lifeTimer += dt;
     if (lifeTimer >= 4.0) {
       removeFromParent();
       return;
     }
-    position.add(direction * speed * dt);
+    position.add(direction * speed * combatMoveFactor * dt);
   }
 
   @override
@@ -680,7 +685,7 @@ class GroundSlamTelegraph extends PositionComponent {
 }
 
 class BossVictoryPortal extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, CombatStatus, HasGameReference<GoldRushGame> {
   double timer = 0.0;
   bool hasTriggered = false;
 

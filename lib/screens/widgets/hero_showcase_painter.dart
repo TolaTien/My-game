@@ -2,15 +2,18 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../registry/sprite_image_cache.dart';
+import '../../core/hero_skin_style.dart';
 
 class HeroShowcaseWidget extends StatefulWidget {
   final String heroId;
   final Color themeColor;
+  final String? skinId;
 
   const HeroShowcaseWidget({
     super.key,
     required this.heroId,
     required this.themeColor,
+    this.skinId,
   });
 
   @override
@@ -49,6 +52,7 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
               heroId: widget.heroId,
               themeColor: widget.themeColor,
               time: _animController.value * 2 * pi,
+              skinId: widget.skinId,
             ),
           ),
         );
@@ -60,11 +64,13 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
 class _HeroCanvasPainter extends CustomPainter {
   final String heroId;
   final Color themeColor;
+  final String? skinId;
   final double time;
 
   _HeroCanvasPainter({
     required this.heroId,
     required this.themeColor,
+    this.skinId,
     required this.time,
   });
 
@@ -103,6 +109,18 @@ class _HeroCanvasPainter extends CustomPainter {
     // 4. VẼ NHÂN VẬT TƯƠNG ỨNG VỚI HERO ID
     final breathOffset = sin(time * 2.2) * 4.0;
     final heroCenterY = cy + 6 + breathOffset;
+    final skin = HeroSkinStyle.resolve(heroId, skinId);
+    if (skin != null) {
+      canvas.saveLayer(null, Paint()..colorFilter = skin.filter);
+    }
+    try {
+      _paintHero(canvas, cx, heroCenterY);
+    } finally {
+      if (skin != null) canvas.restore();
+    }
+  }
+
+  void _paintHero(Canvas canvas, double cx, double heroCenterY) {
 
     // Ưu tiên hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 (giống 100% trong Shop)
     // kết hợp hiệu ứng chuyển động nhún thở (Squash & Stretch) và nghiêng nhịp nhàng 60 FPS
@@ -1525,6 +1543,7 @@ class _HeroCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _HeroCanvasPainter oldDelegate) {
     return oldDelegate.heroId != heroId ||
+        oldDelegate.skinId != skinId ||
         oldDelegate.themeColor != themeColor ||
         oldDelegate.time != time;
   }

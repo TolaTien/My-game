@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+
 import '../core/game_keyboard_controller.dart';
-import '../game/components/player.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
 import '../models/pvp_match.dart';
@@ -16,10 +17,7 @@ import '../services/player_storage.dart';
 class PvpArenaScreen extends StatefulWidget {
   final PvpGameMode initialMode;
 
-  const PvpArenaScreen({
-    super.key,
-    this.initialMode = PvpGameMode.solo1v1,
-  });
+  const PvpArenaScreen({super.key, this.initialMode = PvpGameMode.solo1v1});
 
   @override
   State<PvpArenaScreen> createState() => _PvpArenaScreenState();
@@ -58,8 +56,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     fn?.call();
     if (_isRebuildScheduled) return;
 
-    final isBuilding = WidgetsBinding.instance.buildOwner?.debugBuilding ?? false;
-    final isPersistent = WidgetsBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks;
+    final isBuilding =
+        WidgetsBinding.instance.buildOwner?.debugBuilding ?? false;
+    final isPersistent =
+        WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks;
 
     if (isBuilding || isPersistent) {
       _isRebuildScheduled = true;
@@ -122,7 +123,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         ? 'Đang tìm người chơi online...'
         : 'Firebase chưa cấu hình • sẽ chuyển sang đấu bot';
     _matchmakingTimer?.cancel();
-    _matchmakingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    _matchmakingTimer = Timer.periodic(const Duration(milliseconds: 100), (
+      timer,
+    ) {
       if (!mounted) return;
       _safeSetState(() {
         _elapsedSeconds += 0.1;
@@ -173,7 +176,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         return;
       }
       if (roomId == null) {
-        _safeSetState(() => _matchmakingStatus = 'Chưa tìm thấy đối thủ. Có thể chọn đấu bot.');
+        _safeSetState(
+          () => _matchmakingStatus =
+              'Chưa tìm thấy đối thủ. Có thể chọn đấu bot.',
+        );
         return;
       }
       await _joinOnlineRoom(roomId, service);
@@ -183,12 +189,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     }
   }
 
-  Future<void> _joinOnlineRoom(String roomId, FirebasePvpService service) async {
+  Future<void> _joinOnlineRoom(
+    String roomId,
+    FirebasePvpService service,
+  ) async {
     final room = await service.readRoom(roomId);
     final order = (room['playerOrder'] as List<dynamic>? ?? const [])
         .map((value) => value.toString())
         .toList();
-    if (order.length != 2) throw StateError('Phòng PvP thiếu danh sách hai người chơi.');
+    if (order.length != 2) {
+      throw StateError('Phòng PvP thiếu danh sách hai người chơi.');
+    }
 
     final profilesRaw = room['profiles'];
     final profiles = profilesRaw is Map
@@ -221,7 +232,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     await service.markReady(roomId);
   }
 
-  void _bindOnlineRoom(FirebasePvpService service, String roomId, String otherUid) {
+  void _bindOnlineRoom(
+    FirebasePvpService service,
+    String roomId,
+    String otherUid,
+  ) {
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
     _readyTimeoutTimer?.cancel();
@@ -236,7 +251,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       _abandonRoomAndResearch('Đối thủ không vào phòng. Đang tìm trận mới...');
     });
 
-    _roomSubscription = service.watchPlayer(roomId, otherUid).listen((snapshot) {
+    _roomSubscription = service.watchPlayer(roomId, otherUid).listen((
+      snapshot,
+    ) {
       final game = _arenaGame;
       if (game == null) return;
       if (snapshot.isEmpty) return;
@@ -249,7 +266,8 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       if (game.isWaitingForOpponent && ready && connected) {
         _readyTimeoutTimer?.cancel();
         game.startOnlineMatch();
-      } else if (!connected && opponentSeenConnected &&
+      } else if (!connected &&
+          opponentSeenConnected &&
           game.matchState != PvpMatchState.matchFinished) {
         if (game.isWaitingForOpponent) {
           _abandonRoomAndResearch('Đối thủ đã rời phòng. Đang tìm trận mới...');
@@ -263,7 +281,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _actionSubscription = service.watchActions(roomId).listen((event) {
       final actionRaw = event.snapshot.value;
       if (actionRaw is! Map) return;
-      final action = actionRaw.map((key, value) => MapEntry(key.toString(), value));
+      final action = actionRaw.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
       if (action['actorUid'] == otherUid) {
         _arenaGame?.applyOpponentAction(
           action['action'] as String? ?? '',
@@ -285,13 +305,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     if (game == null || service == null || roomId == null || !mounted) return;
     if (_isStateWritePending && !force) return;
     _isStateWritePending = true;
-    service.writePlayerState(roomId, game.localSnapshot).then((_) {
-      _syncTxCount++;
-    }).catchError((err) {
-      debugPrint('PvP State Sync Error: $err');
-    }).whenComplete(() {
-      _isStateWritePending = false;
-    });
+    service
+        .writePlayerState(roomId, game.localSnapshot)
+        .then((_) {
+          _syncTxCount++;
+        })
+        .catchError((err) {
+          debugPrint('PvP State Sync Error: $err');
+        })
+        .whenComplete(() {
+          _isStateWritePending = false;
+        });
   }
 
   void _onPlayerMoveDirectionChanged(Vector2 dir) {
@@ -314,8 +338,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _searchAttempt++;
     if (_onlineService != null) unawaited(_onlineService!.leaveQueue());
     final profile = PlayerStorage.currentProfile;
-    final partyAllies =
-        FriendPartyService.instance.getPartyAlliesForMode(_selectedMode);
+    final partyAllies = FriendPartyService.instance.getPartyAlliesForMode(
+      _selectedMode,
+    );
     final roster = PvpOpponentInfo.generateTeamRoster(
       playerRp: profile.rankPoints,
       mode: _selectedMode,
@@ -498,11 +523,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                     if (isDesktopOrWeb)
                       Container(
                         margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.75),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.7), width: 1),
+                          border: Border.all(
+                            color: Colors.amberAccent.withValues(alpha: 0.7),
+                            width: 1,
+                          ),
                         ),
                         child: const Text(
                           'W A S D',
@@ -523,7 +554,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                             _keyboardController!.currentDirection,
                           );
                         } else {
-                          _onPlayerMoveDirectionChanged(Vector2(offset.dx, offset.dy));
+                          _onPlayerMoveDirectionChanged(
+                            Vector2(offset.dx, offset.dy),
+                          );
                         }
                       },
                     ),
@@ -533,18 +566,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
 
             // 5. CỤM PHÍM HÀNH ĐỘNG (BÊN PHẢI)
             if (_showTouchControls || GamePlatformHelper.isMobile)
-              Positioned(
-                bottom: 24,
-                right: 24,
-                child: _buildActionButtons(),
-              ),
+              Positioned(bottom: 24, right: 24, child: _buildActionButtons()),
 
             // 6. NÚT QUICK CHAT VÀ MENU BÓNG THOẠI
-            Positioned(
-              bottom: 28,
-              left: 170,
-              child: _buildQuickChatControl(),
-            ),
+            Positioned(bottom: 28, left: 170, child: _buildQuickChatControl()),
 
             // 7. HINT BAR CHO PC/WEB (khi ẩn phím ảo)
             if (!_showTouchControls && isDesktopOrWeb)
@@ -554,7 +579,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 right: 16,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.75),
                       borderRadius: BorderRadius.circular(16),
@@ -565,7 +593,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.keyboard, color: Colors.amberAccent, size: 16),
+                          Icon(
+                            Icons.keyboard,
+                            color: Colors.amberAccent,
+                            size: 16,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] Bão Búa  [2] Nện Đất  [3] Cuồng Nộ  |  Đánh: SPACE / J',
@@ -620,7 +652,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 3),
                         child: InkWell(
-                          key: Key('pvp_mode_tab_${mode.shortLabel.toLowerCase()}'),
+                          key: Key(
+                            'pvp_mode_tab_${mode.shortLabel.toLowerCase()}',
+                          ),
                           borderRadius: BorderRadius.circular(10),
                           onTap: () => _selectMatchmakingMode(mode),
                           child: AnimatedContainer(
@@ -632,7 +666,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                             decoration: BoxDecoration(
                               gradient: isSelected
                                   ? const LinearGradient(
-                                      colors: [Color(0xFFFFD700), Color(0xFFFF8F00)],
+                                      colors: [
+                                        Color(0xFFFFD700),
+                                        Color(0xFFFF8F00),
+                                      ],
                                     )
                                   : null,
                               color: isSelected ? null : Colors.transparent,
@@ -645,16 +682,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                                   mode == PvpGameMode.solo1v1
                                       ? Icons.person
                                       : mode == PvpGameMode.duo2v2
-                                          ? Icons.group
-                                          : Icons.groups_rounded,
+                                      ? Icons.group
+                                      : Icons.groups_rounded,
                                   size: 16,
-                                  color: isSelected ? Colors.black : Colors.white70,
+                                  color: isSelected
+                                      ? Colors.black
+                                      : Colors.white70,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   mode.title.toUpperCase(),
                                   style: TextStyle(
-                                    color: isSelected ? Colors.black : Colors.white70,
+                                    color: isSelected
+                                        ? Colors.black
+                                        : Colors.white70,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 0.6,
@@ -712,14 +753,24 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.radar_rounded, size: 38, color: Colors.cyanAccent),
+                        const Icon(
+                          Icons.radar_rounded,
+                          size: 38,
+                          color: Colors.cyanAccent,
+                        ),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black54,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFFD700), width: 1),
+                            border: Border.all(
+                              color: const Color(0xFFFFD700),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             _selectedMode.shortLabel,
@@ -756,14 +807,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                   Text(
                     _matchmakingStatus!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 11),
+                    style: const TextStyle(
+                      color: Colors.cyanAccent,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 14),
 
                 // 3. SƠ ĐỒ ĐỘI HÌNH TRỰC QUAN (ĐỘI XANH VS ĐỘI ĐỎ)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF141C2B),
                     borderRadius: BorderRadius.circular(12),
@@ -779,11 +836,16 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                           final isLeader = idx == 0;
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 3),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: isLeader
-                                  ? const Color(0xFF00E676).withValues(alpha: 0.2)
-                                  : const Color(0xFF00B0FF).withValues(alpha: 0.14),
+                                  ? const Color(0xFF00E676)
+                                        .withValues(alpha: 0.2)
+                                  : const Color(0xFF00B0FF)
+                                        .withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: isLeader
@@ -796,7 +858,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  isLeader ? Icons.person : Icons.shield_outlined,
+                                  isLeader
+                                      ? Icons.person
+                                      : Icons.shield_outlined,
                                   size: 16,
                                   color: isLeader
                                       ? const Color(0xFF00E676)
@@ -833,9 +897,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         children: List.generate(teamSize, (idx) {
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 3),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF1744).withValues(alpha: 0.16),
+                              color: const Color(0xFFFF1744)
+                                  .withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: const Color(0xFFFF1744),
@@ -887,7 +955,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                   child: LinearProgressIndicator(
                     value: progress,
                     backgroundColor: Colors.white12,
-                    valueColor: const AlwaysStoppedAnimation(Colors.amberAccent),
+                    valueColor: const AlwaysStoppedAnimation(
+                      Colors.amberAccent,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -903,7 +973,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                       ),
                       onPressed: () {
                         _searchAttempt++;
-                        if (_onlineService != null) unawaited(_onlineService!.leaveQueue());
+                        if (_onlineService != null) {
+                          unawaited(_onlineService!.leaveQueue());
+                        }
                         Navigator.of(context).pop();
                       },
                       child: const Text('HỦY TÌM'),
@@ -965,7 +1037,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                   if (isTeamMode) ...[
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF00E676).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
@@ -986,7 +1061,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ],
               ),
               const SizedBox(height: 4),
-              _buildPvpStatBar(game.player.currentHp, game.player.maxHp, const Color(0xFF00E676)),
+              _buildPvpStatBar(
+                game.player.currentHp,
+                game.player.maxHp,
+                const Color(0xFF00E676),
+              ),
               if (game.allies.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Wrap(
@@ -1000,7 +1079,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.4), width: 0.8),
+                        border: Border.all(
+                          color: Colors.cyanAccent.withValues(alpha: 0.4),
+                          width: 0.8,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1009,14 +1091,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                             ally.opponentInfo.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.cyanAccent, fontSize: 7.5, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.cyanAccent,
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 1),
                           LinearProgressIndicator(
                             value: pct,
                             minHeight: 3,
                             backgroundColor: Colors.white12,
-                            valueColor: const AlwaysStoppedAnimation(Color(0xFF00E676)),
+                            valueColor: const AlwaysStoppedAnimation(
+                              Color(0xFF00E676),
+                            ),
                           ),
                         ],
                       ),
@@ -1062,7 +1150,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                   child: Text(
                     'LIVE TX:$_syncTxCount RX:$_syncRxCount',
                     style: TextStyle(
-                      color: _syncRxCount > 0 ? Colors.greenAccent : Colors.orangeAccent,
+                      color: _syncRxCount > 0
+                          ? Colors.greenAccent
+                          : Colors.orangeAccent,
                       fontSize: 8,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1084,7 +1174,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                   if (isTeamMode) ...[
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFF1744).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
@@ -1115,7 +1208,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ],
               ),
               const SizedBox(height: 4),
-              _buildPvpStatBar(game.bot.currentHp, game.bot.maxHp, const Color(0xFFFF1744)),
+              _buildPvpStatBar(
+                game.bot.currentHp,
+                game.bot.maxHp,
+                const Color(0xFFFF1744),
+              ),
               if (game.extraEnemies.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Wrap(
@@ -1130,7 +1227,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4), width: 0.8),
+                        border: Border.all(
+                          color: Colors.redAccent.withValues(alpha: 0.4),
+                          width: 0.8,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1139,14 +1239,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                             enemy.opponentInfo.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 7.5, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Color(0xFFFF8A80),
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 1),
                           LinearProgressIndicator(
                             value: pct,
                             minHeight: 3,
                             backgroundColor: Colors.white12,
-                            valueColor: const AlwaysStoppedAnimation(Color(0xFFFF1744)),
+                            valueColor: const AlwaysStoppedAnimation(
+                              Color(0xFFFF1744),
+                            ),
                           ),
                         ],
                       ),
@@ -1217,7 +1323,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
           SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.cyanAccent,
+            ),
           ),
           SizedBox(width: 12),
           Text(
@@ -1239,11 +1348,15 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     final isIntro = game.matchState == PvpMatchState.roundIntro;
     final text = isIntro
         ? 'HIỆP ${game.currentRound} — CHIẾN!'
-        : (game.player.currentHp > game.bot.currentHp ? 'THẮNG HIỆP!' : 'THUA HIỆP!');
+        : (game.player.currentHp > game.bot.currentHp
+              ? 'THẮNG HIỆP!'
+              : 'THUA HIỆP!');
 
     final color = isIntro
         ? Colors.amberAccent
-        : (game.player.currentHp > game.bot.currentHp ? Colors.greenAccent : Colors.redAccent);
+        : (game.player.currentHp > game.bot.currentHp
+              ? Colors.greenAccent
+              : Colors.redAccent);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
@@ -1293,13 +1406,15 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 0,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.cyclone,
-              label: '25 Ki',
+              icon: p.kit.skills[0].icon,
+              description:
+                  '${p.kit.skills[0].name}: ${p.kit.skills[0].description}',
+              label: '${p.kit.skills[0].cost.toInt()} Ki',
               hotkey: isDesktopOrWeb ? '1' : null,
               color: const Color(0xFFFF9800),
               cooldownRemaining: p.skill1VisualCd,
-              maxCooldown: PlayerComponent.skill1MaxCd,
-              hasEnoughKi: p.currentKi >= 25,
+              maxCooldown: p.kit.skills[0].cooldown,
+              hasEnoughKi: p.currentKi >= p.kit.skills[0].cost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill1(),
             ),
@@ -1309,13 +1424,15 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 66,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.landslide,
-              label: '35 Ki',
+              icon: p.kit.skills[1].icon,
+              description:
+                  '${p.kit.skills[1].name}: ${p.kit.skills[1].description}',
+              label: '${p.kit.skills[1].cost.toInt()} Ki',
               hotkey: isDesktopOrWeb ? '2' : null,
               color: const Color(0xFF00B0FF),
               cooldownRemaining: p.skill2VisualCd,
-              maxCooldown: PlayerComponent.skill2MaxCd,
-              hasEnoughKi: p.currentKi >= 35,
+              maxCooldown: p.kit.skills[1].cooldown,
+              hasEnoughKi: p.currentKi >= p.kit.skills[1].cost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill2(),
             ),
@@ -1325,13 +1442,15 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 84,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.whatshot,
-              label: '40 Ki',
+              icon: p.kit.skills[2].icon,
+              description:
+                  '${p.kit.skills[2].name}: ${p.kit.skills[2].description}',
+              label: '${p.kit.skills[2].cost.toInt()} Ki',
               hotkey: isDesktopOrWeb ? '3' : null,
               color: const Color(0xFF7B1FA2),
               cooldownRemaining: p.skill3VisualCd,
-              maxCooldown: PlayerComponent.skill3MaxCd,
-              hasEnoughKi: p.currentKi >= 40,
+              maxCooldown: p.kit.skills[2].cooldown,
+              hasEnoughKi: p.currentKi >= p.kit.skills[2].cost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill3(),
             ),
@@ -1366,14 +1485,21 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                     _safeSetState(() => _showQuickChatMenu = false);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E2838),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       phrase.text,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 );
@@ -1387,7 +1513,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00B0FF),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
               onPressed: () {
                 _safeSetState(() {
@@ -1395,7 +1523,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 });
               },
               icon: const Icon(Icons.chat_bubble_rounded, size: 16),
-              label: const Text('QUICK CHAT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'QUICK CHAT',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
             ),
             if (GamePlatformHelper.isDesktopOrWeb) ...[
               const SizedBox(width: 8),
@@ -1403,15 +1534,23 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E2838),
                   foregroundColor: Colors.amberAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 onPressed: () {
                   _safeSetState(() => _showTouchControls = !_showTouchControls);
                 },
-                icon: Icon(_showTouchControls ? Icons.gamepad : Icons.keyboard, size: 16),
+                icon: Icon(
+                  _showTouchControls ? Icons.gamepad : Icons.keyboard,
+                  size: 16,
+                ),
                 label: Text(
                   _showTouchControls ? 'NÚT ẢO: BẬT' : 'PHÍM PC: WASD',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -1427,6 +1566,7 @@ class _PvpActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? hotkey;
+  final String? description;
   final Color color;
   final double cooldownRemaining;
   final double maxCooldown;
@@ -1439,6 +1579,7 @@ class _PvpActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     this.hotkey,
+    this.description,
     required this.color,
     this.cooldownRemaining = 0.0,
     this.maxCooldown = 1.0,
@@ -1454,93 +1595,104 @@ class _PvpActionButton extends StatelessWidget {
         ? const Color(0xFFFF1744)
         : (hasEnoughKi ? const Color(0xFFFFD700) : Colors.white38);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: hasEnoughKi
-                  ? color.withValues(alpha: 0.92)
-                  : color.withValues(alpha: 0.45),
-              border: Border.all(color: borderColor, width: 2.2),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: hasEnoughKi ? 0.45 : 0.1),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, color: Colors.white, size: size * 0.40),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: size * 0.16,
-                        ),
-                      ),
-                    ],
+    return Tooltip(
+      message: description ?? label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hasEnoughKi
+                    ? color.withValues(alpha: 0.92)
+                    : color.withValues(alpha: 0.45),
+                border: Border.all(color: borderColor, width: 2.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: hasEnoughKi ? 0.45 : 0.1),
+                    blurRadius: 10,
                   ),
-                  if (onCd)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _CooldownArcPainter(
-                          progress: (cooldownRemaining / maxCooldown).clamp(0.0, 1.0),
+                ],
+              ),
+              child: ClipOval(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: Colors.white, size: size * 0.40),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: size * 0.16,
+                          ),
                         ),
-                        child: Center(
-                          child: Text(
-                            '${cooldownRemaining.toStringAsFixed(1)}s',
-                            style: TextStyle(
-                              color: Colors.amberAccent,
-                              fontSize: size * 0.22,
-                              fontWeight: FontWeight.w900,
-                              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+                      ],
+                    ),
+                    if (onCd)
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _CooldownArcPainter(
+                            progress: (cooldownRemaining / maxCooldown).clamp(
+                              0.0,
+                              1.0,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${cooldownRemaining.toStringAsFixed(1)}s',
+                              style: TextStyle(
+                                color: Colors.amberAccent,
+                                fontSize: size * 0.22,
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(color: Colors.black, blurRadius: 4),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          if (hotkey != null)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141926),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.amberAccent, width: 1.2),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black87, blurRadius: 4),
                   ],
                 ),
-                child: Text(
-                  hotkey!,
-                  style: const TextStyle(
-                    color: Colors.amberAccent,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (hotkey != null)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141926),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.amberAccent, width: 1.2),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black87, blurRadius: 4),
+                    ],
+                  ),
+                  child: Text(
+                    hotkey!,
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1557,13 +1709,7 @@ class _CooldownArcPainter extends CustomPainter {
     final paint = Paint()
       ..color = Colors.black.withValues(alpha: 0.68)
       ..style = PaintingStyle.fill;
-    canvas.drawArc(
-      rect,
-      -pi / 2,
-      2 * pi * progress,
-      true,
-      paint,
-    );
+    canvas.drawArc(rect, -pi / 2, 2 * pi * progress, true, paint);
   }
 
   @override
@@ -1586,8 +1732,12 @@ class _PvpResultModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = result.isWinner ? 'CHIẾN THẮNG!' : 'THẤT BẠI!';
-    final titleColor = result.isWinner ? const Color(0xFFFFD700) : const Color(0xFFFF1744);
-    final deltaStr = result.rpDelta >= 0 ? '+${result.rpDelta}' : '${result.rpDelta}';
+    final titleColor = result.isWinner
+        ? const Color(0xFFFFD700)
+        : const Color(0xFFFF1744);
+    final deltaStr = result.rpDelta >= 0
+        ? '+${result.rpDelta}'
+        : '${result.rpDelta}';
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -1599,7 +1749,10 @@ class _PvpResultModal extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: titleColor, width: 2.5),
           boxShadow: [
-            BoxShadow(color: titleColor.withValues(alpha: 0.35), blurRadius: 30),
+            BoxShadow(
+              color: titleColor.withValues(alpha: 0.35),
+              blurRadius: 30,
+            ),
           ],
         ),
         child: Column(
@@ -1607,12 +1760,21 @@ class _PvpResultModal extends StatelessWidget {
           children: [
             Text(
               title,
-              style: TextStyle(color: titleColor, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 3),
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 3,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               'TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
-              style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -1628,11 +1790,16 @@ class _PvpResultModal extends StatelessWidget {
                 children: [
                   Column(
                     children: [
-                      const Text('ĐIỂM RANK', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                      const Text(
+                        'ĐIỂM RANK',
+                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
                       Text(
                         '$deltaStr RP',
                         style: TextStyle(
-                          color: result.rpDelta >= 0 ? Colors.greenAccent : Colors.redAccent,
+                          color: result.rpDelta >= 0
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1641,10 +1808,17 @@ class _PvpResultModal extends StatelessWidget {
                   ),
                   Column(
                     children: [
-                      const Text('THƯỞNG VÀNG', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                      const Text(
+                        'THƯỞNG VÀNG',
+                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
                       Text(
                         '+${result.goldReward}',
-                        style: const TextStyle(color: Colors.amberAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -1654,7 +1828,10 @@ class _PvpResultModal extends StatelessWidget {
             if (result.isPromotion) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
@@ -1662,7 +1839,11 @@ class _PvpResultModal extends StatelessWidget {
                 ),
                 child: Text(
                   '🎉 CHÚC MỪNG BẠN ĐÃ THĂNG HẠNG: ${result.newRankTier.toUpperCase()}!',
-                  style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                  style: const TextStyle(
+                    color: Colors.amberAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
                 ),
               ),
             ],
@@ -1672,7 +1853,9 @@ class _PvpResultModal extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                  ),
                   onPressed: onReturnToLobby,
                   child: const Text('VỀ SẢNH'),
                 ),

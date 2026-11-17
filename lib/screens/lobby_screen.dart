@@ -1,5 +1,5 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+
 import '../models/database_models.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
@@ -12,7 +12,7 @@ import 'game_play_screen.dart';
 import 'lucky_wheel_dialog.dart';
 import 'pvp_arena_screen.dart';
 import 'shop_dialog.dart';
-import 'widgets/hero_showcase_painter.dart';
+import 'widgets/expedition_lobby.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -25,8 +25,6 @@ class _LobbyScreenState extends State<LobbyScreen>
     with TickerProviderStateMixin {
   bool _isPvpMode = false;
   PvpGameMode _selectedPvpMode = PvpGameMode.solo1v1;
-  late AnimationController _breatheController;
-  late Animation<double> _breatheAnimation;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -36,16 +34,6 @@ class _LobbyScreenState extends State<LobbyScreen>
   @override
   void initState() {
     super.initState();
-
-    // Hiệu ứng thở / nhấp nhô nhẹ nhàng
-    _breatheController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat(reverse: true);
-
-    _breatheAnimation = Tween<double>(begin: -5.0, end: 5.0).animate(
-      CurvedAnimation(parent: _breatheController, curve: Curves.easeInOut),
-    );
 
     // Hiệu ứng viền phát sáng nhấp nháy cho nút BẮT ĐẦU
     _pulseController = AnimationController(
@@ -72,7 +60,6 @@ class _LobbyScreenState extends State<LobbyScreen>
 
   @override
   void dispose() {
-    _breatheController.dispose();
     _pulseController.dispose();
     _shimmerController.dispose();
     super.dispose();
@@ -87,12 +74,12 @@ class _LobbyScreenState extends State<LobbyScreen>
     );
   }
 
-  void _openShop() {
+  void _openShop([int initialTab = 0]) {
     AudioService.instance.playSfx(SfxSound.uiClick);
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => const ShopDialog(),
+      builder: (context) => ShopDialog(initialTab: initialTab),
     );
   }
 
@@ -158,68 +145,28 @@ class _LobbyScreenState extends State<LobbyScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0E14),
+      backgroundColor: const Color(0xFF0C111E),
       body: SafeArea(
         child: ValueListenableBuilder<PlayerProfile>(
           valueListenable: PlayerStorage.profileNotifier,
           builder: (context, profile, _) {
-            final canSpin = profile.canSpinToday();
-
-            return Stack(
-              children: [
-                // 1. HÌNH NỀN DARK FANTASY DUNGEON SÂU THẲM
-                Positioned.fill(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment(0, -0.2),
-                        radius: 1.3,
-                        colors: [
-                          Color(0xFF1E2433),
-                          Color(0xFF121620),
-                          Color(0xFF090B10),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Hiệu ứng hạt bụi vàng lấp lánh và đuốc hầm ngục ma thuật
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _DungeonAmbiencePainter(),
-                  ),
-                ),
-
-                // 2. KHU VỰC TRUNG TÂM: NHÂN VẬT & BỆ THẦN THÁNH
-                Align(
-                  alignment: const Alignment(0.0, 0.28),
-                  child: _buildCenterStage(profile),
-                ),
-
-                // 3. TOP BAR: AVATAR, BẬC RANK, VÀNG & KIM CƯƠNG
-                Positioned(
-                  top: 10,
-                  left: 16,
-                  right: 16,
-                  child: _buildTopBar(profile),
-                ),
-
-                // 4. SIDEBAR TRÁI: VÒNG QUAY MAY MẮN, CỬA HÀNG, BXH
-                Positioned(
-                  left: 16,
-                  top: 76,
-                  bottom: 16,
-                  child: _buildLeftSidebar(canSpin),
-                ),
-
-                // 5. GÓC PHẢI DƯỚI: NÚT BẮT ĐẦU SIÊU TO KHỔNG LỒ ACTION RPG
-                Positioned(
-                  right: 20,
-                  bottom: 16,
-                  child: _buildStartButton(),
-                ),
-              ],
+            final hero = _getHeroDisplayInfo(profile.selectedHeroId);
+            return ExpeditionLobby(
+              profile: profile,
+              heroName: hero.name,
+              heroTitle: hero.title,
+              heroColor: hero.themeColor,
+              ambience: _shimmerController,
+              startAction: _buildStartButton(),
+              onShop: () => _openShop(),
+              onHeroes: () => _openShop(0),
+              onCompanions: () => _openShop(1),
+              onSkins: () => _openShop(2),
+              onWheel: _openLuckyWheel,
+              onParty: _openFriendsParty,
+              onChat: _openChatAi,
+              onLeaderboard: () => _openLeaderboard(profile),
+              onCodex: _openAssetCodex,
             );
           },
         ),
@@ -227,527 +174,6 @@ class _LobbyScreenState extends State<LobbyScreen>
     );
   }
 
-  // --- 1. TOP BAR ---
-  Widget _buildTopBar(PlayerProfile profile) {
-    return Row(
-      children: [
-        // Khung Profile + Avatar + Rank
-        GestureDetector(
-          onTap: () => _openLeaderboard(profile),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF222938).withValues(alpha: 0.9),
-                  const Color(0xFF141824).withValues(alpha: 0.95),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: profile.rankColor.withValues(alpha: 0.7),
-                width: 1.8,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: profile.rankColor.withValues(alpha: 0.25),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Khung tròn Avatar
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [profile.rankColor, Colors.deepPurpleAccent],
-                    ),
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: profile.rankColor.withValues(alpha: 0.5),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.shield_rounded, color: Colors.white, size: 22),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Tên & Bậc Rank
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      profile.playerName,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Icon(profile.rankIcon,
-                            size: 14, color: profile.rankColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${profile.rankTier.toUpperCase()} • ${profile.rankPoints} RP',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            color: profile.rankColor,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_ios_rounded,
-                    size: 11, color: Colors.white38),
-              ],
-            ),
-          ),
-        ),
-
-        const Spacer(),
-
-        // Đồng Xu (1 Xu = 1000 Vàng)
-        _buildCurrencyPill(
-          icon: Icons.toll_rounded,
-          value: profile.xu,
-          glowColor: const Color(0xFFFFAB40),
-          gradientColors: const [Color(0xFFFFD180), Color(0xFFFF6D00)],
-          onTap: _openShop,
-        ),
-        const SizedBox(width: 8),
-
-        // Hũ Vàng Hoàng Kim
-        _buildCurrencyPill(
-          icon: Icons.monetization_on_rounded,
-          value: profile.gold,
-          glowColor: const Color(0xFFFFD700),
-          gradientColors: const [Color(0xFFFFEA00), Color(0xFFFF9100)],
-          onTap: _openShop,
-        ),
-        const SizedBox(width: 12),
-
-        // Kim Cương Băng Lam
-        _buildCurrencyPill(
-          icon: Icons.diamond_rounded,
-          value: profile.diamonds,
-          glowColor: const Color(0xFF00E5FF),
-          gradientColors: const [Color(0xFF18FFFF), Color(0xFF0091EA)],
-          onTap: _openShop,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCurrencyPill({
-    required IconData icon,
-    required int value,
-    required Color glowColor,
-    required List<Color> gradientColors,
-    required VoidCallback onTap,
-  }) {
-    final formatted =
-        value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFF222938).withValues(alpha: 0.85),
-              const Color(0xFF141824).withValues(alpha: 0.95),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: glowColor.withValues(alpha: 0.65),
-            width: 1.6,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: glowColor.withValues(alpha: 0.22),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ShaderMask(
-              shaderCallback: (bounds) =>
-                  LinearGradient(colors: gradientColors).createShader(bounds),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              formatted,
-              style: TextStyle(
-                color: glowColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 13.5,
-                letterSpacing: 0.6,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: glowColor.withValues(alpha: 0.25),
-              ),
-              child: Icon(Icons.add, size: 13, color: glowColor),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- 2. BỆ PHÁT SÁNG & NHÂN VẬT TRUNG TÂM ---
-  Widget _buildCenterStage(PlayerProfile profile) {
-    final heroInfo = _getHeroDisplayInfo(profile.selectedHeroId);
-
-    return AnimatedBuilder(
-      animation: _breatheAnimation,
-      builder: (context, child) {
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // BỤC HÀO QUANG TOẢ SÁNG DƯỚI ĐÁY
-            Positioned(
-              bottom: -24,
-              child: Container(
-                width: 280,
-                height: 60,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.all(Radius.elliptical(280, 60)),
-                  gradient: RadialGradient(
-                    colors: [
-                      heroInfo.themeColor.withValues(alpha: 0.55),
-                      heroInfo.themeColor.withValues(alpha: 0.15),
-                      Colors.transparent,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: heroInfo.themeColor.withValues(alpha: 0.45),
-                      blurRadius: 36,
-                      spreadRadius: 8,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // NHÂN VẬT & CHI TIẾT
-            Transform.translate(
-              offset: Offset(0, _breatheAnimation.value),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Huy hiệu Trợ thủ hoặc Trang phục hiếm
-                  if (profile.selectedCompanionId != null ||
-                      profile.selectedSkinId != null) ...[
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (profile.selectedCompanionId != null)
-                          _buildMiniBadge(
-                            icon: Icons.smart_toy_rounded,
-                            label: 'TRỢ THỦ AI',
-                            color: Colors.cyanAccent,
-                          ),
-                        if (profile.selectedSkinId != null) ...[
-                          const SizedBox(width: 8),
-                          _buildMiniBadge(
-                            icon: Icons.auto_awesome_rounded,
-                            label: 'SKIN HUYỀN THOẠI',
-                            color: const Color(0xFFFFD700),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-
-                  // SHOWCASE NHÂN VẬT VỚI ĐỒ HỌA MỚI TOÀN DIỆN
-                  HeroShowcaseWidget(
-                    heroId: profile.selectedHeroId,
-                    themeColor: heroInfo.themeColor,
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Tên tướng + Danh hiệu
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF222836).withValues(alpha: 0.95),
-                          const Color(0xFF141722).withValues(alpha: 0.95),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: heroInfo.themeColor.withValues(alpha: 0.7),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: heroInfo.themeColor.withValues(alpha: 0.25),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          heroInfo.name.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: 2,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 10,
-                                color: heroInfo.themeColor,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${heroInfo.title} • LV.${profile.getHeroLevel()}/100',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            color: heroInfo.themeColor,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildMiniBadge({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.2),
-            blurRadius: 6,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- 3. SIDEBAR TRÁI ---
-  Widget _buildLeftSidebar(bool canSpin) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // 1. VÒNG QUAY MAY MẮN
-          _buildSidebarButton(
-            icon: Icons.casino_rounded,
-            label: 'VÒNG QUAY',
-            badgeText: canSpin ? 'QUAY NGAY' : null,
-            hasBadge: canSpin,
-            accentColor: const Color(0xFFFFB300),
-            onTap: _openLuckyWheel,
-          ),
-          const SizedBox(height: 8),
-
-          // 2. CỬA HÀNG VẬT PHẨM
-          _buildSidebarButton(
-            icon: Icons.shopping_bag_rounded,
-            label: 'CỬA HÀNG',
-            accentColor: const Color(0xFF00E5FF),
-            onTap: _openShop,
-          ),
-          const SizedBox(height: 8),
-
-          // 3. BẠN BÈ & TỔ ĐỘI PVP (1v1 / 2v2 / 4v4)
-          _buildSidebarButton(
-            icon: Icons.groups_rounded,
-            label: 'TỔ ĐỘI',
-            badgeText: 'TEAM',
-            hasBadge: true,
-            accentColor: const Color(0xFF00E676),
-            onTap: _openFriendsParty,
-          ),
-          const SizedBox(height: 8),
-
-          // 4. TRỢ LÝ CHAT AI (FAQ & NLP)
-          _buildSidebarButton(
-            icon: Icons.smart_toy_rounded,
-            label: 'CHAT AI',
-            accentColor: const Color(0xFF40C4FF),
-            onTap: _openChatAi,
-          ),
-          const SizedBox(height: 8),
-
-          // 5. BẢNG XẾP HẠNG RANK
-          _buildSidebarButton(
-            icon: Icons.leaderboard_rounded,
-            label: 'RANKING',
-            accentColor: const Color(0xFFFF5252),
-            onTap: () => _openLeaderboard(PlayerStorage.currentProfile),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarButton({
-    required IconData icon,
-    required String label,
-    required Color accentColor,
-    required VoidCallback onTap,
-    String? badgeText,
-    bool hasBadge = false,
-  }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 76,
-            height: 68,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF252D3D).withValues(alpha: 0.9),
-                  const Color(0xFF151924).withValues(alpha: 0.98),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.65),
-                width: 1.8,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accentColor.withValues(alpha: 0.2),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: accentColor, size: 28),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Huy hiệu nhắc nhở nổi bật
-        if (hasBadge)
-          Positioned(
-            top: -5,
-            right: -6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF1744), Color(0xFFD50000)],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white, width: 1.5),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.redAccent,
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: Text(
-                badgeText ?? '!',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // --- 4. GÓC PHẢI DƯỚI: NÚT BẮT ĐẦU SIÊU TO KHỔNG LỒ (ACTION RPG STYLE) ---
   Widget _buildStartButton() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -829,7 +255,9 @@ class _LobbyScreenState extends State<LobbyScreen>
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _isPvpMode ? const Color(0xFFFF1744) : const Color(0xFFFFD54F),
+                color: _isPvpMode
+                    ? const Color(0xFFFF1744)
+                    : const Color(0xFFFFD54F),
                 width: 1.6,
               ),
               boxShadow: [
@@ -848,14 +276,15 @@ class _LobbyScreenState extends State<LobbyScreen>
                       ? Icons.military_tech_rounded
                       : Icons.sports_kabaddi_rounded,
                   size: 16,
-                  color:
-                      _isPvpMode ? const Color(0xFFFF5252) : const Color(0xFFFFD54F),
+                  color: _isPvpMode
+                      ? const Color(0xFFFF5252)
+                      : const Color(0xFFFFD54F),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   _isPvpMode
                       ? 'CHẾ ĐỘ: ĐẤU TRƯỜNG PVP (RANK ${_selectedPvpMode.shortLabel})'
-                      : 'CHẾ ĐỘ: VƯỢT ẢI HẦM NGỤC (PVE)',
+                      : 'HẦM MỎ VÀNG • PvE',
                   style: TextStyle(
                     color: _isPvpMode
                         ? const Color(0xFFFF5252)
@@ -867,8 +296,10 @@ class _LobbyScreenState extends State<LobbyScreen>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(6),
@@ -906,14 +337,20 @@ class _LobbyScreenState extends State<LobbyScreen>
                   end: Alignment.bottomRight,
                 ),
                 border: Border.all(
-                  color: (_isPvpMode ? const Color(0xFFFF8A80) : const Color(0xFFFFD54F))
-                      .withValues(alpha: _pulseAnimation.value),
+                  color:
+                      (_isPvpMode
+                              ? const Color(0xFFFF8A80)
+                              : const Color(0xFFFFD54F))
+                          .withValues(alpha: _pulseAnimation.value),
                   width: 3,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: (_isPvpMode ? const Color(0xFFFF1744) : const Color(0xFFFF8F00))
-                        .withValues(alpha: 0.5 * _pulseAnimation.value),
+                    color:
+                        (_isPvpMode
+                                ? const Color(0xFFFF1744)
+                                : const Color(0xFFFF8F00))
+                            .withValues(alpha: 0.5 * _pulseAnimation.value),
                     blurRadius: 22 * _pulseAnimation.value,
                     spreadRadius: 2,
                   ),
@@ -969,7 +406,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          _isPvpMode ? 'TÌM TRẬN RANK' : 'BẮT ĐẦU',
+                          _isPvpMode ? 'TÌM TRẬN RANK' : 'KHÁM PHÁ',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
@@ -1142,8 +579,11 @@ class _LeaderboardDialog extends StatelessWidget {
               children: [
                 Row(
                   children: const [
-                    Icon(Icons.emoji_events_rounded,
-                        color: Colors.amberAccent, size: 24),
+                    Icon(
+                      Icons.emoji_events_rounded,
+                      color: Colors.amberAccent,
+                      size: 24,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'BẢNG XẾP HẠNG CHIẾN BINH (RANK)',
@@ -1168,18 +608,23 @@ class _LeaderboardDialog extends StatelessWidget {
             // Danh sách Top người chơi từ DatabaseService (Live stream)
             Expanded(
               child: StreamBuilder<List<LeaderboardEntry>>(
-                stream: DatabaseService.instance.streamTopLeaderboard(limit: 20),
+                stream: DatabaseService.instance.streamTopLeaderboard(
+                  limit: 20,
+                ),
                 builder: (context, snapshot) {
                   final entries = snapshot.data ?? [];
                   if (entries.isEmpty) {
                     return const Center(
-                      child: CircularProgressIndicator(color: Colors.amberAccent),
+                      child: CircularProgressIndicator(
+                        color: Colors.amberAccent,
+                      ),
                     );
                   }
 
                   return ListView.separated(
                     itemCount: entries.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 6),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 6),
                     itemBuilder: (context, index) {
                       final entry = entries[index];
                       final rank = entry.rankNumber;
@@ -1192,20 +637,22 @@ class _LeaderboardDialog extends StatelessWidget {
 
                       return Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: isLocal
                               ? Colors.amberAccent.withValues(alpha: 0.2)
                               : (isTop3
-                                  ? color.withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.04)),
+                                    ? color.withValues(alpha: 0.15)
+                                    : Colors.white.withValues(alpha: 0.04)),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: isLocal
                                 ? Colors.amberAccent
                                 : (isTop3
-                                    ? color.withValues(alpha: 0.6)
-                                    : Colors.white12),
+                                      ? color.withValues(alpha: 0.6)
+                                      : Colors.white12),
                             width: isLocal ? 1.5 : 1,
                           ),
                         ),
@@ -1241,10 +688,13 @@ class _LeaderboardDialog extends StatelessWidget {
                                     const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
+                                        horizontal: 5,
+                                        vertical: 1,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Colors.amberAccent
-                                            .withValues(alpha: 0.3),
+                                        color: Colors.amberAccent.withValues(
+                                          alpha: 0.3,
+                                        ),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: const Text(
@@ -1294,10 +744,7 @@ class _LeaderboardDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: playerProfile.rankColor.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: playerProfile.rankColor,
-                  width: 2,
-                ),
+                border: Border.all(color: playerProfile.rankColor, width: 2),
               ),
               child: Row(
                 children: [
@@ -1347,48 +794,6 @@ class _LeaderboardDialog extends StatelessWidget {
   }
 }
 
-/// Vẽ không gian hầm ngục hoàng gia huyền ảo với tàn tro và bụi vàng lơ lửng
-class _DungeonAmbiencePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. Ánh đuốc hầm ngục ấm áp tỏa ra từ hai góc trên
-    final torchGlow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFFFB300).withValues(alpha: 0.12),
-          const Color(0xFFFF6D00).withValues(alpha: 0.04),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: const Offset(40, 40), radius: 180));
-    canvas.drawCircle(const Offset(40, 40), 180, torchGlow);
-
-    final torchRight = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF00E5FF).withValues(alpha: 0.08),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: Offset(size.width - 40, 40), radius: 180));
-    canvas.drawCircle(Offset(size.width - 40, 40), 180, torchRight);
-
-    // 2. Các hạt bụi vàng lấp lánh cố định vị trí giả lập không gian RPG
-    final rand = Random(42);
-    final emberPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
-    for (int i = 0; i < 28; i++) {
-      final x = rand.nextDouble() * size.width;
-      final y = rand.nextDouble() * size.height;
-      final radius = 1.0 + rand.nextDouble() * 2.5;
-      final alpha = 0.2 + rand.nextDouble() * 0.45;
-      emberPaint.color = const Color(0xFFFFD54F).withValues(alpha: alpha);
-      canvas.drawCircle(Offset(x, y), radius, emberPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DungeonAmbiencePainter oldDelegate) => false;
-}
-
 /// Hộp thoại Thư Viện Concept Art & Thiết Kế Nhân Vật (Assets Codex)
 class _AssetCodexDialog extends StatefulWidget {
   const _AssetCodexDialog();
@@ -1405,29 +810,25 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
       title: 'Kaelen & Aegis-X9',
       subtitle: 'Kiếm Khách Lôi Quang & Tinh Linh Lôi Từ',
       assetPath: 'assets/images/asset_1.png',
-      desc:
-          'Concept Art chuẩn Golden-Cyber Fantasy: Kaelen dùng Song Kiếm Hoàng Kim & Lôi Quang (#00E5FF), đi kèm Trợ Thủ AI Aegis-X9 có kỹ năng Trường Trọng Lực Hoàng Kim.',
+      desc: 'Concept Art chuẩn Golden-Cyber Fantasy: Kaelen dùng Song Kiếm Hoàng Kim & Lôi Quang (#00E5FF), đi kèm Trợ Thủ AI Aegis-X9 có kỹ năng Trường Trọng Lực Hoàng Kim.',
     ),
     (
       title: 'Sprite Sheet 4 Trạng Thái',
       subtitle: 'Idle • Run • Attack • Hit & HUD Mobile',
       assetPath: 'assets/images/asset_2.png',
-      desc:
-          'Bảng phân tách Layer bộ phận (Cape, Body, Dual Swords, Greaves), hoạt ảnh lướt Lôi Ảnh Trảm và cụm nút kỹ năng hình cánh cung 90°.',
+      desc: 'Bảng phân tách Layer bộ phận (Cape, Body, Dual Swords, Greaves), hoạt ảnh lướt Lôi Ảnh Trảm và cụm nút kỹ năng hình cánh cung 90°.',
     ),
     (
       title: 'Biệt Đội Liên Minh (2v2 / 4v4)',
       subtitle: 'Kaelen • Valeria • Garrick',
       assetPath: 'assets/images/asset_3.png',
-      desc:
-          'Bộ 3 chiến binh chủ lực cho chế độ Song Đấu 2v2 và Quân Đoàn 4v4: Kiếm Khách Kaelen, Xạ Thủ Nỏ Thần Valeria và Pháo Đài Khiên Tháp Garrick.',
+      desc: 'Bộ 3 chiến binh chủ lực cho chế độ Song Đấu 2v2 và Quân Đoàn 4v4: Kiếm Khách Kaelen, Xạ Thủ Nỏ Thần Valeria và Pháo Đài Khiên Tháp Garrick.',
     ),
     (
       title: 'Phế Tích Thần Điện Hoàng Kim',
       subtitle: 'Bản Đồ Sunken Golden Sanctum & Vòng Ma Trận',
       assetPath: 'assets/images/asset_4.png',
-      desc:
-          'Gạch đá cổ đại rạn nứt nạm mạch quặng Vàng ròng (#D4AF37), Vòng Ma Trận Bát Giác trung tâm và 4 Cổng Không Gian Hắc Ám.',
+      desc: 'Gạch đá cổ đại rạn nứt nạm mạch quặng Vàng ròng (#D4AF37), Vòng Ma Trận Bát Giác trung tâm và 4 Cổng Không Gian Hắc Ám.',
     ),
   ];
 
@@ -1453,7 +854,11 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
           children: [
             Row(
               children: [
-                const Icon(Icons.auto_fix_high_rounded, color: Color(0xFFFFD700), size: 22),
+                const Icon(
+                  Icons.auto_fix_high_rounded,
+                  color: Color(0xFFFFD700),
+                  size: 22,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -1474,8 +879,16 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
                   ),
                   onPressed: () async {
                     final current = PlayerStorage.currentProfile;
-                    final unlockedHeroes = {...current.unlockedHeroIds, 'kaelen', 'valeria', 'garrick'}.toList();
-                    final unlockedComps = {...current.unlockedCompanionIds, 'aegis_x9'}.toList();
+                    final unlockedHeroes = {
+                      ...current.unlockedHeroIds,
+                      'kaelen',
+                      'valeria',
+                      'garrick',
+                    }.toList();
+                    final unlockedComps = {
+                      ...current.unlockedCompanionIds,
+                      'aegis_x9',
+                    }.toList();
                     await PlayerStorage.saveProfile(
                       current.copyWith(
                         unlockedHeroIds: unlockedHeroes,
@@ -1491,7 +904,10 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
                   icon: const Icon(Icons.bolt_rounded, size: 16),
                   label: const Text(
                     'TRẢI NGHIỆM KAELEN + AEGIS-X9',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -1514,14 +930,19 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
                       onTap: () => setState(() => _selectedSheet = idx),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 6,
+                          horizontal: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: active
                               ? const Color(0xFFFFD700).withValues(alpha: 0.2)
                               : Colors.white.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: active ? const Color(0xFFFFD700) : Colors.white12,
+                            color: active
+                                ? const Color(0xFFFFD700)
+                                : Colors.white12,
                           ),
                         ),
                         child: Text(
@@ -1530,7 +951,9 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: active ? const Color(0xFFFFD700) : Colors.white70,
+                            color: active
+                                ? const Color(0xFFFFD700)
+                                : Colors.white70,
                             fontSize: 10.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1554,9 +977,14 @@ class _AssetCodexDialogState extends State<_AssetCodexDialog> {
                         child: Image.asset(
                           sheet.assetPath,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const Center(
-                            child: Icon(Icons.image_not_supported, color: Colors.white38, size: 42),
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Center(
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.white38,
+                                  size: 42,
+                                ),
+                              ),
                         ),
                       ),
                     ),

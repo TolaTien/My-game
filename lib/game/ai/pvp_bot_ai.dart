@@ -1,26 +1,14 @@
 import 'dart:math';
+
 import 'package:flame/components.dart';
+
 import '../../models/pvp_match.dart';
 import '../components/player.dart';
 import '../components/pvp_bot_player.dart';
 
-enum BotCombatState {
-  approaching,
-  kiting,
-  dodging,
-  executingCombo,
-  retreating,
-}
+enum BotCombatState { approaching, kiting, dodging, executingCombo, retreating }
 
-enum BotActionType {
-  none,
-  move,
-  basicAttack,
-  skill1,
-  skill2,
-  skill3,
-  dodge,
-}
+enum BotActionType { none, move, basicAttack, skill1, skill2, skill3, dodge }
 
 /// Controller AI chiến đấu PvP thích ứng 3 bậc rank:
 /// - Bronze/Silver: 0.6s độ trễ phản xạ, 50% sai số góc, tiếp cận đơn giản và đánh thường.
@@ -55,11 +43,7 @@ class PvpBotAi extends Component {
   static const double kiCostSkill2 = 35.0;
   static const double kiCostSkill3 = 40.0;
 
-  PvpBotAi({
-    required this.difficulty,
-    this.bot,
-    this.targetPlayer,
-  });
+  PvpBotAi({required this.difficulty, this.bot, this.targetPlayer});
 
   /// Độ trễ phản xạ (Reflex Latency) theo bậc rank
   double get decisionInterval {
@@ -109,6 +93,10 @@ class PvpBotAi extends Component {
     tick(dt);
 
     if (bot == null || targetPlayer == null) return;
+    if (!(bot!.combatEnabled?.call() ?? true) || bot!.isStunned) {
+      bot!.moveDirection = Vector2.zero();
+      return;
+    }
     if (bot!.currentHp <= 0) return;
 
     // Xử lý đang né đòn (Dodge state)
@@ -227,6 +215,24 @@ class PvpBotAi extends Component {
       projectileSpeed: b.speed,
     );
 
+    if (b.isStunned) {
+      b.moveDirection = Vector2.zero();
+      return;
+    }
+    if (b.kit.ranged) {
+      currentState = BotCombatState.kiting;
+      b.moveDirection = dist < 150
+          ? -aimDir
+          : (dist > 280 ? aimDir : Vector2.zero());
+      if (dist <= b.kit.attackRange && canBasicAttack()) {
+        basicAttackCooldown = b.kit.attackInterval;
+        b.performBasicAttack();
+      }
+      if (dist <= 330 && b.kitCooldowns[0] <= 0) b.executeSkill1();
+      if (dist < 110 && b.kitCooldowns[1] <= 0) b.executeSkill2();
+      if (dist <= 360 && b.kitCooldowns[2] <= 0) b.executeSkill3();
+      return;
+    }
     final rng = Random();
 
     // 1. KIỂM TRA NÉ CHIÊU (DODGE TELEGRAPHED SKILLS)
@@ -337,7 +343,8 @@ class PvpBotAi extends Component {
   ) {
     // 1. Quản lý khoảng cách Thả diều (Kiting Distance Management)
     // Nếu Bot cạn Ki (< 40) hoặc mục tiêu đang Berserk: thả diều ở cự ly an toàn 130-180px
-    if ((b.currentKi < 40 && b.currentHp < 70) || (targetBerserk && !b.isBerserk)) {
+    if ((b.currentKi < 40 && b.currentHp < 70) ||
+        (targetBerserk && !b.isBerserk)) {
       currentState = BotCombatState.kiting;
       if (dist < 130) {
         b.moveDirection = -aimDir; // Lùi lại

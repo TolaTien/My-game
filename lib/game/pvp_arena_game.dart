@@ -1,6 +1,12 @@
+import 'combat/hero_combat.dart';
+import 'combat/hero_kit.dart';
+import 'combat/combat_targets.dart';
+
 import 'dart:math';
+
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
+
 import '../models/pvp_match.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
@@ -17,6 +23,24 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   final PvpGameMode gameMode;
   late final PvpTeamRoster teamRoster;
 
+  HeroCombat? _heroCombat;
+  HeroCombat get heroCombat => _heroCombat ??= HeroCombat(
+    owner: player,
+    heroId: player.heroId,
+    damage: () => player.attackDamage,
+    facing: () => player.attackDirection,
+    targets: () => allEnemies
+        .where((enemy) => enemy.currentHp > 0)
+        .map((enemy) => combatTarget(enemy))
+        .toList(),
+    canWalk: (point) => !isLoaded || pointInMap(point, arenaMap, 960, 640),
+    enabled: () => matchState == PvpMatchState.fighting && player.currentHp > 0,
+    rage: (duration) {
+      player.isBerserk = true;
+      player.berserkTimer = duration;
+    },
+    maxHp: player.maxHp,
+  );
   late PlayerComponent player;
   late PvpBotPlayerComponent bot;
   final List<PvpBotPlayerComponent> allies = [];
@@ -29,8 +53,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       (player.currentHp > 0 ? 1 : 0) +
       allies.where((a) => a.currentHp > 0).length;
 
-  int get redTeamAliveCount =>
-      allEnemies.where((e) => e.currentHp > 0).length;
+  int get redTeamAliveCount => allEnemies.where((e) => e.currentHp > 0).length;
 
   // Trạng thái trận đấu Bo3
   PvpMatchState matchState = PvpMatchState.roundIntro;
@@ -88,7 +111,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     if (isOnline) matchState = PvpMatchState.waiting;
 
     final localHero = PlayerStorage.currentProfile.selectedHeroId;
-    teamRoster = roster ??
+    teamRoster =
+        roster ??
         PvpOpponentInfo.generateTeamRoster(
           playerRp: playerCurrentRp,
           mode: gameMode,
@@ -98,6 +122,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player = PlayerComponent(
       position: _localSpawn,
       heroId: localHero,
+      skinId: PlayerStorage.currentProfile.selectedSkinId,
     );
     bot = PvpBotPlayerComponent(
       position: _opponentSpawn,
@@ -129,7 +154,10 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       for (int i = 0; i < extraCount; i++) {
         final enemyInfo = (i + 1 < teamRoster.enemies.length)
             ? teamRoster.enemies[i + 1]
-            : PvpOpponentInfo.generateBot(playerCurrentRp, playerHeroId: localHero);
+            : PvpOpponentInfo.generateBot(
+                playerCurrentRp,
+                playerHeroId: localHero,
+              );
         final spawnIdx = min(i + 1, _redSlotPositions.length - 1);
         final enemyBot = PvpBotPlayerComponent(
           position: _redSlotPositions[spawnIdx].clone(),
@@ -155,18 +183,22 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player.position = _localSpawn;
     player.onStatsChanged = () => onStateChanged?.call();
     await world.add(player);
+    await world.add(heroCombat);
 
     // 3. Đồng đội AI (nếu là 2v2 / 4v4)
     for (final ally in allies) {
       ally.onStatsChanged = () => onStateChanged?.call();
+      ally.combatEnabled = () => matchState == PvpMatchState.fighting;
       await world.add(ally);
     }
 
     // 4. Bot chính (Bên phải: X=760, Y=320) & các Bot địch phụ
     bot.onStatsChanged = () => onStateChanged?.call();
+    bot.combatEnabled = () => matchState == PvpMatchState.fighting;
     await world.add(bot);
     for (final enemy in extraEnemies) {
       enemy.onStatsChanged = () => onStateChanged?.call();
+      enemy.combatEnabled = () => matchState == PvpMatchState.fighting;
       await world.add(enemy);
     }
 
@@ -250,6 +282,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   }
 
   void _adjudicateRound() {
+    _heroCombat?.reset();
     matchState = PvpMatchState.roundEnd;
     stateTimer = 2.5;
 
@@ -257,10 +290,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
         player.currentHp + allies.fold<double>(0.0, (s, a) => s + a.currentHp);
     final blueMaxHp =
         player.maxHp + allies.fold<double>(0.0, (s, a) => s + a.maxHp);
-    final redHp =
-        allEnemies.fold<double>(0.0, (s, e) => s + e.currentHp);
-    final redMaxHp =
-        allEnemies.fold<double>(0.0, (s, e) => s + e.maxHp);
+    final redHp = allEnemies.fold<double>(0.0, (s, e) => s + e.currentHp);
+    final redMaxHp = allEnemies.fold<double>(0.0, (s, e) => s + e.maxHp);
 
     final playerHpPct = blueMaxHp > 0 ? (blueHp / blueMaxHp) : 0.0;
     final botHpPct = redMaxHp > 0 ? (redHp / redMaxHp) : 0.0;
@@ -286,6 +317,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player.position = _localSpawn;
     player.currentHp = player.maxHp;
     player.currentKi = player.maxKi;
+    player.resetCombat();
+    _heroCombat?.reset();
     player.isBerserk = false;
     player.isAttacking = false;
     player.moveDirection = Vector2.zero();
@@ -354,18 +387,24 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player.moveDirection = dir;
   }
 
-  void _damageEnemiesInRange(double dmg, double range, {CombatTextType type = CombatTextType.normalDamage}) {
+  void _damageEnemiesInRange(
+    double dmg,
+    double range, {
+    CombatTextType type = CombatTextType.normalDamage,
+  }) {
     for (final enemy in allEnemies) {
       if (enemy.currentHp <= 0) continue;
       final dist = player.position.distanceTo(enemy.position);
       if (dist <= range) {
         enemy.takeDamage(dmg);
         if (isMounted) {
-          world.add(FloatingCombatText(
-            text: '-${dmg.toInt()}',
-            position: enemy.position.clone()..y -= 20,
-            type: type,
-          ));
+          world.add(
+            FloatingCombatText(
+              text: '-${dmg.toInt()}',
+              position: enemy.position.clone()..y -= 20,
+              type: type,
+            ),
+          );
         }
       }
     }
@@ -373,7 +412,12 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
 
   void onBasicAttack() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
-    player.performBasicAttack();
+    if (!player.performBasicAttack()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.basic(player.comboStep);
+      onLocalAction?.call('basicAttack');
+      return;
+    }
 
     _damageEnemiesInRange(player.damage, 55, type: CombatTextType.normalDamage);
     onLocalAction?.call('basicAttack');
@@ -382,22 +426,45 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   void onSkill1() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     if (!player.useSkill1()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.skill(1);
+      onLocalAction?.call('skill1');
+      return;
+    }
 
-    _damageEnemiesInRange(player.damage * 1.8, 85, type: CombatTextType.skillDamage);
+    _damageEnemiesInRange(
+      player.damage * 1.8,
+      85,
+      type: CombatTextType.skillDamage,
+    );
     onLocalAction?.call('skill1');
   }
 
   void onSkill2() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     if (!player.useSkill2()) return;
+    if (HeroKit.isSpecialized(player.heroId)) {
+      heroCombat.skill(2);
+      onLocalAction?.call('skill2');
+      return;
+    }
 
-    _damageEnemiesInRange(player.damage * 2.5, 110, type: CombatTextType.skillDamage);
+    _damageEnemiesInRange(
+      player.damage * 2.5,
+      110,
+      type: CombatTextType.skillDamage,
+    );
     onLocalAction?.call('skill2');
   }
 
   void onSkill3() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     if (player.useSkill3()) {
+      if (HeroKit.isSpecialized(player.heroId)) {
+        heroCombat.skill(3);
+        onLocalAction?.call('skill3');
+        return;
+      }
       if (player.heroId != 'george' &&
           player.heroId != 'ranger' &&
           player.heroId != 'tanker' &&
@@ -511,6 +578,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
         }
         playerWins = remoteReceiverWins;
         opponentWins = remoteSenderWins;
+        _heroCombat?.reset();
         matchState = PvpMatchState.roundEnd;
         stateTimer = 2.5;
       }
@@ -586,7 +654,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       'matchState': matchState.name,
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
     };
-    if (player.speechBubbleText != null && player.speechBubbleText!.isNotEmpty) {
+    if (player.speechBubbleText != null &&
+        player.speechBubbleText!.isNotEmpty) {
       map['speech'] = player.speechBubbleText!;
     }
     return map;

@@ -1,14 +1,20 @@
 import 'dart:math';
+
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+
 import '../../core/constants.dart';
+import '../combat/hero_kit.dart';
+import '../combat/combat_status.dart';
 import '../../core/stat_growth_formula.dart';
+import '../../core/hero_skin_style.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import 'dungeon_map.dart';
 
-class PlayerComponent extends PositionComponent with CollisionCallbacks {
+class PlayerComponent extends PositionComponent
+    with CollisionCallbacks, CombatStatus {
   // Chỉ số nhân vật (giữ chuẩn baseline cho toàn bộ unit test)
   double maxHp = GameConstants.playerMaxHp;
   double currentHp = GameConstants.playerMaxHp;
@@ -16,6 +22,21 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double currentKi = GameConstants.playerMaxKi;
   double damage = GameConstants.playerBaseDamage;
   double speed = GameConstants.playerBaseSpeed;
+
+  HeroKit get kit => HeroKit.forHero(heroId);
+  double basicAttackCooldown = 0;
+  double get attackDamage => damage * (isBerserk ? 1.6 : 1);
+  Vector2 get attackDirection => moveDirection.length2 > 0
+      ? moveDirection.normalized()
+      : Vector2(isFacingRight ? 1 : -1, 0);
+  void resetCombat() {
+    basicAttackCooldown = skill1VisualCd = skill2VisualCd = skill3VisualCd = 0;
+    isBerserk = isAttacking = false;
+    berserkTimer = skill1TrailTimer = skill2VortexTimer = skill3JudgmentTimer =
+        0;
+    comboStep = 0;
+    clearCombatStatus();
+  }
 
   int level = 1;
   int currentExp = 0;
@@ -71,9 +92,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
   double damageAbsorption = 0.0;
   double goldenShieldTimer = 0.0;
-  double get shieldHp => goldenShieldTimer > 0
-      ? 50.0
-      : (damageAbsorption > 0 ? (damageAbsorption * 100.0) : 0.0);
+  double get shieldHp =>
+      barrierHp +
+      (goldenShieldTimer > 0
+          ? 50.0
+          : (damageAbsorption > 0 ? (damageAbsorption * 100.0) : 0.0));
 
   // Lưu vị trí trước đó để chặn xuyên tường
   Vector2 previousPosition = Vector2.zero();
@@ -86,25 +109,20 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   Function()? onStatsChanged;
 
   final String heroId;
+  final String? skinId;
   int userHeroLevel;
 
   PlayerComponent({
     required Vector2 position,
     this.heroId = 'george',
+    this.skinId,
     this.userHeroLevel = 1,
-  }) : super(
-          position: position,
-          size: Vector2(36, 40),
-          anchor: Anchor.center,
-        ) {
+  }) : super(position: position, size: Vector2(36, 40), anchor: Anchor.center) {
     if (userHeroLevel > 1) {
       applyUserHeroLevel(userHeroLevel);
     }
     // Hitbox va chạm với quái và tường
-    add(RectangleHitbox(
-      size: Vector2(24, 28),
-      position: Vector2(6, 10),
-    ));
+    add(RectangleHitbox(size: Vector2(24, 28), position: Vector2(6, 10)));
   }
 
   /// Áp dụng chỉ số cộng thêm từ cấp độ Nhân Vật của User (Level 1 -> 100)
@@ -128,6 +146,16 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void update(double dt) {
     super.update(dt);
+    final hadTimedCombatState =
+        skill1VisualCd > 0 ||
+        skill2VisualCd > 0 ||
+        skill3VisualCd > 0 ||
+        barrierRemaining > 0 ||
+        guardRemaining > 0 ||
+        isBerserk;
+    tickCombatStatus(dt);
+    if (hadTimedCombatState) onStatsChanged?.call();
+    basicAttackCooldown = max(0, basicAttackCooldown - dt);
     animTime += dt;
 
     // Hồi phục Ki theo thời gian
@@ -146,9 +174,15 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       swordWaveTimer = max(0.0, swordWaveTimer - dt);
       swordWaveDist += 280.0 * dt;
     }
-    if (skill1TrailTimer > 0) skill1TrailTimer = max(0.0, skill1TrailTimer - dt);
-    if (skill2VortexTimer > 0) skill2VortexTimer = max(0.0, skill2VortexTimer - dt);
-    if (skill3JudgmentTimer > 0) skill3JudgmentTimer = max(0.0, skill3JudgmentTimer - dt);
+    if (skill1TrailTimer > 0) {
+      skill1TrailTimer = max(0.0, skill1TrailTimer - dt);
+    }
+    if (skill2VortexTimer > 0) {
+      skill2VortexTimer = max(0.0, skill2VortexTimer - dt);
+    }
+    if (skill3JudgmentTimer > 0) {
+      skill3JudgmentTimer = max(0.0, skill3JudgmentTimer - dt);
+    }
     if (insufficientKiFlashTimer > 0) {
       insufficientKiFlashTimer = max(0.0, insufficientKiFlashTimer - dt);
     }
@@ -177,8 +211,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       berserkTimer -= dt;
       if (berserkTimer <= 0) {
         isBerserk = false;
-        speed = GameConstants.playerBaseSpeed;
-        damage = GameConstants.playerBaseDamage;
+
         onStatsChanged?.call();
       }
     }
@@ -194,10 +227,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
 
     // Di chuyển & lấy mẫu Afterimage Trail
-    if (!moveDirection.isZero()) {
+    if (!moveDirection.isZero() && !isStunned) {
       previousPosition = position.clone();
       final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
-      position.add(moveDirection * effectiveSpeed * dt);
+      position.add(moveDirection * effectiveSpeed * combatMoveFactor * dt);
 
       if (moveDirection.x > 0.1) isFacingRight = true;
       if (moveDirection.x < -0.1) isFacingRight = false;
@@ -230,25 +263,35 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   // --- ACTIONS & SKILLS ---
 
-  void performBasicAttack() {
-    if (isAttacking) return;
+  bool performBasicAttack() {
+    if (isAttacking ||
+        (HeroKit.isSpecialized(heroId) && basicAttackCooldown > 0) ||
+        isStunned ||
+        currentHp <= 0) {
+      return false;
+    }
     isAttacking = true;
     attackTimer = 0.0;
     comboStep = (comboStep % 3) + 1;
     comboResetTimer = 1.2;
+    basicAttackCooldown = kit.attackInterval;
 
-    if (comboStep == 3) {
+    if (comboStep == 3 && !kit.ranged) {
       swordWaveTimer = 0.28;
       swordWaveDist = 14.0;
     }
 
     attackAngle = isFacingRight ? -0.8 : 0.8;
-    AudioService.instance.playSfx(SfxSound.attackHammer);
+    AudioService.instance.playSfx(
+      kit.ranged ? SfxSound.attackArrow : SfxSound.attackHammer,
+    );
+    return true;
   }
 
   bool useSkill1() {
     // Búa Cuồng Phong / Lôi Ảnh Trảm - Tốn 25 Ki
-    const kiCost = 25.0;
+    if (skill1VisualCd > 0 || isStunned || currentHp <= 0) return false;
+    final kiCost = kit.skills[0].cost;
     if (currentKi < kiCost) {
       insufficientKiFlashTimer = 0.45;
       onStatsChanged?.call();
@@ -259,7 +302,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     attackTimer = -0.3; // Kéo dài đòn xoay
     skill1TrailTimer = 0.35;
     skill1StartOffset = Vector2(isFacingRight ? -55 : 55, 0);
-    skill1VisualCd = maxSkill1VisualCd;
+    skill1VisualCd = kit.skills[0].cooldown;
     onStatsChanged?.call();
     AudioService.instance.playSfx(SfxSound.skillHurricane);
     return true;
@@ -267,7 +310,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   bool useSkill2() {
     // Nện Đất / Lôi Điện Hộ Thể - Tốn 35 Ki
-    const kiCost = 35.0;
+    if (skill2VisualCd > 0 || isStunned || currentHp <= 0) return false;
+    final kiCost = kit.skills[1].cost;
     if (currentKi < kiCost) {
       insufficientKiFlashTimer = 0.45;
       onStatsChanged?.call();
@@ -275,7 +319,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
     currentKi -= kiCost;
     skill2VortexTimer = 4.0;
-    skill2VisualCd = maxSkill2VisualCd;
+    skill2VisualCd = kit.skills[1].cooldown;
     onStatsChanged?.call();
     AudioService.instance.playSfx(SfxSound.skillSmash);
     return true;
@@ -283,7 +327,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   bool useSkill3() {
     // Cơn Cuồng Nộ / Thiên Phạt Lôi Ngục - Tốn 40 Ki
-    const kiCost = 40.0;
+    if (skill3VisualCd > 0 || isStunned || currentHp <= 0) return false;
+    final kiCost = kit.skills[2].cost;
     if (currentKi < kiCost || isBerserk) {
       if (currentKi < kiCost) {
         insufficientKiFlashTimer = 0.45;
@@ -292,10 +337,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       return false;
     }
     currentKi -= kiCost;
-    isBerserk = true;
+    isBerserk = !HeroKit.isSpecialized(heroId) || heroId == 'george';
     berserkTimer = 8.0; // 8 giây cuồng nộ
     skill3JudgmentTimer = 3.0;
-    skill3VisualCd = maxSkill3VisualCd;
+    skill3VisualCd = kit.skills[2].cooldown;
     onStatsChanged?.call();
     AudioService.instance.playSfx(SfxSound.skillBerserk);
     return true;
@@ -329,6 +374,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void takeDamage(double dmg) {
+    dmg = absorbCombatDamage(dmg);
     final barrierFactor = (1.0 - damageAbsorption.clamp(0.0, 0.9));
     final effectiveDmg = isBerserk
         ? (dmg * barrierFactor * 0.6)
@@ -341,8 +387,29 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final skin = HeroSkinStyle.resolve(heroId, skinId);
+    if (skin != null) {
+      canvas.saveLayer(null, Paint()..colorFilter = skin.filter);
+    }
+    try {
+      _renderAppearance(canvas);
+    } finally {
+      if (skin != null) canvas.restore();
+    }
+  }
 
+  void _renderAppearance(Canvas canvas) {
     final center = Offset(size.x / 2, size.y / 2);
+    if (barrierHp > 0 || guardRemaining > 0) {
+      canvas.drawCircle(
+        center,
+        28,
+        Paint()
+          ..color = kit.color.withValues(alpha: .7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+    }
 
     // 0. Vẽ hiệu ứng Kỹ năng trên mặt đất (Skill 2 Vortex / Skill 3 Heaven's Judgment / Skill 1 Lightning Trail)
     _renderSkillEffectsUnderneath(canvas, center);
@@ -354,10 +421,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         final trailPos = afterimagePositions[i] - position;
         final alpha = i < opacities.length ? opacities[i] : 0.05;
         final ghostPaint = Paint()
-          ..color = (heroId == 'kaelen'
-                  ? const Color(0xFF00F0FF)
-                  : const Color(0xFFFFD700))
-              .withValues(alpha: alpha);
+          ..color =
+              (heroId == 'kaelen'
+                      ? const Color(0xFF00F0FF)
+                      : const Color(0xFFFFD700))
+                  .withValues(alpha: alpha);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromCenter(
@@ -431,7 +499,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
     final heroSprite = isAttacking
         ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
-            SpriteImageCache.instance.getHeroImage(heroId))
+              SpriteImageCache.instance.getHeroImage(heroId))
         : SpriteImageCache.instance.getHeroImage(heroId);
     if (heroSprite != null) {
       canvas.save();
@@ -475,7 +543,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
 
     // Vệt chém lưỡi liềm & Sóng kiếm đồng bộ theo đòn đánh của từng nhân vật (Combo 1-2-3)
-    if (isAttacking) {
+    if (isAttacking && !kit.ranged) {
       final slashColor = _heroPrimaryColor;
       final secondarySlash = _heroSecondaryColor;
       final sweepStart = comboStep == 2 ? -pi / 1.4 : -pi / 2.2;
@@ -553,12 +621,18 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   /// Vẽ Kaelen & Nova Blade với đầy đủ Cổ, Khuôn mặt sáng rõ, Vai, 2 Tay cầm Song Đao, Thắt lưng, Đùi & Giày
-  void _renderKaelenThunderblade(Canvas canvas, double breathOffset, double legSwing) {
+  void _renderKaelenThunderblade(
+    Canvas canvas,
+    double breathOffset,
+    double legSwing,
+  ) {
     final isNova = heroId == 'nova_blade';
     final isMoving = !moveDirection.isZero();
     final leftLift = isMoving ? max(0.0, sin(animTime * 15.0)) * 2.5 : 0.0;
     final rightLift = isMoving ? max(0.0, -sin(animTime * 15.0)) * 2.5 : 0.0;
-    final armSwing = isMoving ? sin(animTime * 15.0) * 0.30 : sin(animTime * 3.0) * 0.08;
+    final armSwing = isMoving
+        ? sin(animTime * 15.0) * 0.30
+        : sin(animTime * 3.0) * 0.08;
 
     // 1. CapeLayer (Áo choàng bay phía sau)
     final capeWave = sin(animTime * 4.0 - 0.5) * 2.8 + (isMoving ? -5.5 : 0.0);
@@ -579,7 +653,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
     // 2. Đùi & Giày giáp nối liền hông (FootLeft & FootRight có viền sáng rõ)
     final legPaint = Paint()..color = const Color(0xFF334155);
-    final trimColor = isNova ? const Color(0xFF00E5FF) : const Color(0xFFFFD700);
+    final trimColor = isNova
+        ? const Color(0xFF00E5FF)
+        : const Color(0xFFFFD700);
     final lLeg = RRect.fromRectAndRadius(
       Rect.fromLTWH(9 + legSwing * 0.7, 26 - leftLift, 7.5, 12),
       const Radius.circular(2.5),
@@ -628,7 +704,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     final bodyRect = Rect.fromLTWH(8, 14 + breathOffset, 20, 16);
     canvas.drawRRect(
       RRect.fromRectAndRadius(bodyRect, const Radius.circular(4)),
-      Paint()..color = isNova ? const Color(0xFF3730A3) : const Color(0xFF1E3A8A),
+      Paint()
+        ..color = isNova ? const Color(0xFF3730A3) : const Color(0xFF1E3A8A),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(bodyRect, const Radius.circular(4)),
@@ -770,7 +847,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     final isMoving = !moveDirection.isZero();
     final leftLift = isMoving ? max(0.0, sin(animTime * 15.0)) * 2.5 : 0.0;
     final rightLift = isMoving ? max(0.0, -sin(animTime * 15.0)) * 2.5 : 0.0;
-    final armSwing = isMoving ? sin(animTime * 15.0) * 0.32 : sin(animTime * 3.0) * 0.06;
+    final armSwing = isMoving
+        ? sin(animTime * 15.0) * 0.32
+        : sin(animTime * 3.0) * 0.06;
 
     Color bootsColor;
     Color armorColor;
@@ -856,7 +935,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       ..quadraticBezierTo(9 + capeWave, 26, 3 + capeWave, 35)
       ..lineTo(16 + capeWave * 0.5, 34)
       ..close();
-    canvas.drawPath(capePath, Paint()..color = capeColor.withValues(alpha: 0.85));
+    canvas.drawPath(
+      capePath,
+      Paint()..color = capeColor.withValues(alpha: 0.85),
+    );
 
     // 2. Đùi & Giày nối liền hông có viền sáng
     final bootsPaint = Paint()..color = bootsColor;
@@ -966,7 +1048,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     canvas.save();
     canvas.translate(size.x - 4, 19 + breathOffset);
     if (isAttacking) {
-      final swingRot = comboStep == 2 ? -attackAngle * 1.15 : attackAngle * 1.25;
+      final swingRot = comboStep == 2
+          ? -attackAngle * 1.15
+          : attackAngle * 1.25;
       canvas.rotate(swingRot);
     } else {
       canvas.rotate(armSwing * 0.8);
@@ -991,24 +1075,37 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         ..strokeWidth = 3;
       const arcRect = Rect.fromLTWH(-10, -22, 14, 28);
       canvas.drawArc(arcRect, -pi / 2, pi, false, bowPaint);
-      final stringPaint = Paint()..color = const Color(0xFF00E676)..strokeWidth = 1.5;
+      final stringPaint = Paint()
+        ..color = const Color(0xFF00E676)
+        ..strokeWidth = 1.5;
       canvas.drawLine(const Offset(-3, -22), const Offset(-3, 6), stringPaint);
-      final arrowPaint = Paint()..color = const Color(0xFFFFEB3B)..strokeWidth = 2;
+      final arrowPaint = Paint()
+        ..color = const Color(0xFFFFEB3B)
+        ..strokeWidth = 2;
       canvas.drawLine(const Offset(-10, -8), const Offset(12, -8), arrowPaint);
     } else if (heroId == 'tanker') {
       final shieldPaint = Paint()..color = const Color(0xFF0D47A1);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(-10, -22, 18, 22), const Radius.circular(5)),
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-10, -22, 18, 22),
+          const Radius.circular(5),
+        ),
         shieldPaint,
       );
-      final crossPaint = Paint()..color = const Color(0xFFFFD54F)..strokeWidth = 2;
+      final crossPaint = Paint()
+        ..color = const Color(0xFFFFD54F)
+        ..strokeWidth = 2;
       canvas.drawLine(const Offset(-1, -20), const Offset(-1, -2), crossPaint);
       canvas.drawLine(const Offset(-8, -11), const Offset(6, -11), crossPaint);
     } else if (heroId == 'ninja' || heroId == 'shadow_01') {
       final bladePaint = Paint()
-        ..color = heroId == 'shadow_01' ? const Color(0xFFE040FB) : const Color(0xFFE0E0E0)
+        ..color = heroId == 'shadow_01'
+            ? const Color(0xFFE040FB)
+            : const Color(0xFFE0E0E0)
         ..strokeWidth = 2.8;
-      final hiltPaint = Paint()..color = const Color(0xFFD50000)..strokeWidth = 3.5;
+      final hiltPaint = Paint()
+        ..color = const Color(0xFFD50000)
+        ..strokeWidth = 3.5;
       canvas.drawLine(const Offset(-2, 6), const Offset(-2, 0), hiltPaint);
       canvas.drawLine(const Offset(-2, 0), const Offset(7, -24), bladePaint);
       canvas.drawLine(const Offset(-7, 5), const Offset(-14, -18), bladePaint);
@@ -1017,7 +1114,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.drawLine(
         const Offset(0, 8),
         const Offset(0, -22),
-        Paint()..color = const Color(0xFF90CAF9)..strokeWidth = 2.8,
+        Paint()
+          ..color = const Color(0xFF90CAF9)
+          ..strokeWidth = 2.8,
       );
       canvas.drawCircle(
         const Offset(0, -24),
@@ -1034,7 +1133,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.drawLine(
         const Offset(0, 8),
         const Offset(0, -20),
-        Paint()..color = const Color(0xFF78350F)..strokeWidth = 2.8,
+        Paint()
+          ..color = const Color(0xFF78350F)
+          ..strokeWidth = 2.8,
       );
       canvas.drawCircle(
         Offset(2, -24 + sin(animTime * 6) * 2),
@@ -1069,11 +1170,16 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       );
     } else {
       // Warhammer khổng lồ của George
-      final handlePaint = Paint()..color = const Color(0xFF5D4037)..strokeWidth = 3;
+      final handlePaint = Paint()
+        ..color = const Color(0xFF5D4037)
+        ..strokeWidth = 3;
       canvas.drawLine(const Offset(0, 8), const Offset(0, -18), handlePaint);
       final hammerHeadPaint = Paint()..color = const Color(0xFF546E7A);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(-8, -26, 16, 12), const Radius.circular(3)),
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-8, -26, 16, 12),
+          const Radius.circular(3),
+        ),
         hammerHeadPaint,
       );
       final runePaint = Paint()..color = const Color(0xFFFFEB3B);
@@ -1085,6 +1191,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   /// Vẽ hiệu ứng 3 Kỹ năng riêng biệt chuẩn theo từng nhân vật trong Asset 1 -> Asset 4
   void _renderSkillEffectsUnderneath(Canvas canvas, Offset center) {
+    if (HeroKit.isSpecialized(heroId) && heroId != 'george') return;
     final primary = _heroPrimaryColor;
     final secondary = _heroSecondaryColor;
     final dirSign = isFacingRight ? 1.0 : -1.0;
@@ -1250,8 +1357,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         );
         for (int i = 0; i < 6; i++) {
           final a = animTime * 6.0 + i * (pi / 3);
-          final orbColor =
-              i.isEven ? const Color(0xFF00E5FF) : const Color(0xFFFF3D00);
+          final orbColor = i.isEven
+              ? const Color(0xFF00E5FF)
+              : const Color(0xFFFF3D00);
           canvas.drawCircle(
             Offset(center.dx + cos(a) * 47, center.dy + sin(a) * 47),
             5.5,
@@ -1260,11 +1368,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         }
       } else if (heroId == 'garrick' || heroId == 'tanker') {
         // Garrick Skill 2: Hộ Thể Hoàng Kim (Giáp đá vàng kim rực rỡ + 6 khiên đá xoay)
-        canvas.drawCircle(
-          center,
-          42,
-          Paint()..color = const Color(0x33FFD700),
-        );
+        canvas.drawCircle(center, 42, Paint()..color = const Color(0x33FFD700));
         canvas.drawCircle(
           center,
           42,
@@ -1357,11 +1461,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
       if (heroId == 'valeria') {
         // Valeria Skill 3: Mưa Thiên Thạch Băng Hỏa (6 tảng đá Băng & Lửa rơi từ trời)
-        canvas.drawCircle(
-          center,
-          62,
-          Paint()..color = const Color(0x2200E5FF),
-        );
+        canvas.drawCircle(center, 62, Paint()..color = const Color(0x2200E5FF));
         for (int i = 0; i < 6; i++) {
           final angle = i * (pi / 3) + animTime * 2.0;
           final dist = 22.0 + (i % 2) * 26.0;
@@ -1384,11 +1484,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         }
       } else if (heroId == 'garrick') {
         // Garrick Skill 3: Nội Địa Chấn (Mặt đất nứt toác 8 hướng màu vàng thổ)
-        canvas.drawCircle(
-          center,
-          64,
-          Paint()..color = const Color(0x33FFB300),
-        );
+        canvas.drawCircle(center, 64, Paint()..color = const Color(0x33FFB300));
         for (int i = 0; i < 8; i++) {
           final a = i * (pi / 4);
           canvas.drawLine(
@@ -1405,7 +1501,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           canvas.drawOval(
             Rect.fromCenter(center: center, width: r * 2, height: r * 1.15),
             Paint()
-              ..color = const Color(0xFFE040FB).withValues(alpha: progress * 0.85)
+              ..color = const Color(0xFFE040FB)
+                  .withValues(alpha: progress * 0.85)
               ..style = PaintingStyle.stroke
               ..strokeWidth = 2.4,
           );
@@ -1416,7 +1513,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             width: 14 * progress,
             height: 120,
           ),
-          Paint()..color = const Color(0xFFE040FB).withValues(alpha: progress * 0.8),
+          Paint()
+            ..color = const Color(0xFFE040FB).withValues(alpha: progress * 0.8),
         );
       } else {
         // Kaelen Thiên Phạt Lôi Ngục / Ember-02 Thái Dương Bộc Phá / George Cuồng Nộ

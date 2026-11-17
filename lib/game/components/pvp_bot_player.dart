@@ -1,14 +1,75 @@
+import '../combat/hero_combat.dart';
+import '../combat/hero_kit.dart';
+import '../combat/combat_targets.dart';
+import 'pvp_arena_map.dart';
+import '../combat/combat_status.dart';
+
 import 'dart:math';
+
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+
 import '../../models/pvp_match.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../ai/pvp_bot_ai.dart';
 import 'dungeon_map.dart';
 import 'player.dart';
 
-class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
+class PvpBotPlayerComponent extends PositionComponent
+    with CollisionCallbacks, CombatStatus {
+  bool Function()? combatEnabled;
+  HeroCombat? _heroCombat;
+  final List<double> kitCooldowns = [0, 0, 0];
+  double kitBasicCooldown = 0;
+  HeroKit get kit => HeroKit.forHero(opponentInfo.heroId);
+  HeroCombat get heroCombat => _heroCombat ??= HeroCombat(
+    owner: this,
+    heroId: opponentInfo.heroId,
+    damage: () => damage * (isBerserk ? 1.6 : 1),
+    facing: () => moveDirection.length2 > 0
+        ? moveDirection
+        : Vector2(isFacingRight ? 1 : -1, 0),
+    targets: () => (getHostileTargets?.call() ?? [targetPlayer])
+        .map((target) => combatTarget(target))
+        .toList(),
+    canWalk: (point) {
+      final map = parent?.children
+          .whereType<PvpArenaMapComponent>()
+          .firstOrNull;
+      return map == null || pointInMap(point, map, 960, 640);
+    },
+    enabled: () => currentHp > 0 && (combatEnabled?.call() ?? true),
+    rage: (duration) {
+      isBerserk = true;
+      berserkTimer = duration;
+    },
+    maxHp: maxHp,
+  );
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    if (HeroKit.isSpecialized(opponentInfo.heroId)) {
+      await parent?.add(heroCombat);
+    }
+  }
+
+  bool _useKitSkill(int slot, bool force) {
+    if (!HeroKit.isSpecialized(opponentInfo.heroId)) return false;
+    final skill = kit.skills[slot - 1];
+    if (currentHp <= 0 ||
+        !(combatEnabled?.call() ?? true) ||
+        isStunned ||
+        (!force && (kitCooldowns[slot - 1] > 0 || currentKi < skill.cost))) {
+      return true;
+    }
+    currentKi = max(0, currentKi - skill.cost);
+    kitCooldowns[slot - 1] = skill.cooldown;
+    heroCombat.skill(slot);
+    onStatsChanged?.call();
+    return true;
+  }
+
   final PvpOpponentInfo opponentInfo;
   final PlayerComponent targetPlayer;
   final bool enableAi;
@@ -48,16 +109,9 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     required this.targetPlayer,
     this.enableAi = true,
     this.getHostileTargets,
-  }) : super(
-          position: position,
-          size: Vector2(36, 40),
-          anchor: Anchor.center,
-        ) {
+  }) : super(position: position, size: Vector2(36, 40), anchor: Anchor.center) {
     isFacingRight = opponentInfo.isAlly;
-    add(RectangleHitbox(
-      size: Vector2(24, 28),
-      position: Vector2(6, 10),
-    ));
+    add(RectangleHitbox(size: Vector2(24, 28), position: Vector2(6, 10)));
 
     aiController = PvpBotAi(
       difficulty: opponentInfo.difficulty,
@@ -76,8 +130,11 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         return false;
       }).toList();
       if (candidates.isEmpty) return null;
-      candidates.sort((a, b) =>
-          position.distanceToSquared(a.position).compareTo(position.distanceToSquared(b.position)));
+      candidates.sort(
+        (a, b) => position
+            .distanceToSquared(a.position)
+            .compareTo(position.distanceToSquared(b.position)),
+      );
       return candidates.first;
     }
     return targetPlayer;
@@ -86,6 +143,12 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void update(double dt) {
     super.update(dt);
+    tickCombatStatus(dt);
+    kitBasicCooldown = max(0, kitBasicCooldown - dt);
+    for (var i = 0; i < 3; i++) {
+      kitCooldowns[i] = max(0, kitCooldowns[i] - dt);
+    }
+    if (isStunned) return;
 
     if (currentHp <= 0) return;
 
@@ -100,8 +163,6 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       berserkTimer -= dt;
       if (berserkTimer <= 0) {
         isBerserk = false;
-        speed = 160.0;
-        damage = 20.0;
       }
     }
 
@@ -127,7 +188,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     if (!moveDirection.isZero()) {
       previousPosition = position.clone();
       final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
-      position.add(moveDirection * effectiveSpeed * dt);
+      position.add(moveDirection * effectiveSpeed * combatMoveFactor * dt);
 
       if (moveDirection.x > 0.1) isFacingRight = true;
       if (moveDirection.x < -0.1) isFacingRight = false;
@@ -184,6 +245,16 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void performBasicAttack({bool force = false}) {
+    if (!(combatEnabled?.call() ?? true)) return;
+    if (isStunned || (!force && kitBasicCooldown > 0)) return;
+    if (HeroKit.isSpecialized(opponentInfo.heroId)) {
+      if (currentHp <= 0 || (!force && isAttacking)) return;
+      kitBasicCooldown = kit.attackInterval;
+      isAttacking = true;
+      attackTimer = 0;
+      heroCombat.basic(1);
+      return;
+    }
     if ((!force && isAttacking) || currentHp <= 0) return;
     isAttacking = true;
     attackTimer = 0.0;
@@ -193,6 +264,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void executeSkill1({bool force = false}) {
+    if (_useKitSkill(1, force)) return;
     if (currentHp <= 0) return;
     if (!force && currentKi < 25) return;
     currentKi = max(0, currentKi - 25);
@@ -203,6 +275,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void executeSkill2({bool force = false}) {
+    if (_useKitSkill(2, force)) return;
     if (currentHp <= 0) return;
     if (!force && currentKi < 35) return;
     currentKi = max(0, currentKi - 35);
@@ -211,6 +284,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void executeSkill3({bool force = false}) {
+    if (_useKitSkill(3, force)) return;
     if (currentHp <= 0) return;
     if (!force && (currentKi < 40 || isBerserk)) return;
     currentKi = max(0, currentKi - 40);
@@ -226,12 +300,14 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void takeDamage(double dmg) {
-    final effectiveDmg = isBerserk ? dmg * 0.6 : dmg;
+    final effectiveDmg = absorbCombatDamage(isBerserk ? dmg * 0.6 : dmg);
     currentHp = max(0, currentHp - effectiveDmg);
     onStatsChanged?.call();
 
     // Phản xạ chat khi bị dính đòn đau
-    if (effectiveDmg > 30 && Random().nextDouble() < 0.25 && speechBubbleText == null) {
+    if (effectiveDmg > 30 &&
+        Random().nextDouble() < 0.25 &&
+        speechBubbleText == null) {
       say(QuickChatPhrase.help.text);
     }
   }
@@ -242,6 +318,12 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void resetRound(Vector2 spawnPos) {
+    _heroCombat?.reset();
+    clearCombatStatus();
+    kitBasicCooldown = 0;
+    for (var i = 0; i < 3; i++) {
+      kitCooldowns[i] = 0;
+    }
     position = spawnPos.clone();
     currentHp = maxHp;
     currentKi = maxKi;
@@ -268,10 +350,15 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     super.render(canvas);
 
     // Vòng định danh phe dưới chân (Xanh lam/lục cho Đồng đội, Đỏ rực cho Đối thủ)
-    final teamRingColor =
-        opponentInfo.isAlly ? const Color(0xFF00E676) : const Color(0xFFFF1744);
+    final teamRingColor = opponentInfo.isAlly
+        ? const Color(0xFF00E676)
+        : const Color(0xFFFF1744);
     canvas.drawOval(
-      Rect.fromCenter(center: Offset(size.x / 2, size.y - 2), width: 30, height: 10),
+      Rect.fromCenter(
+        center: Offset(size.x / 2, size.y - 2),
+        width: 30,
+        height: 10,
+      ),
       Paint()
         ..color = teamRingColor.withValues(alpha: currentHp > 0 ? 0.35 : 0.12)
         ..style = PaintingStyle.stroke
@@ -299,13 +386,17 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     // 1. Bóng đổ
     final shadowPaint = Paint()..color = const Color(0x55000000);
     canvas.drawOval(
-      Rect.fromCenter(center: Offset(size.x / 2, size.y - 2), width: 24, height: 8),
+      Rect.fromCenter(
+        center: Offset(size.x / 2, size.y - 2),
+        width: 24,
+        height: 8,
+      ),
       shadowPaint,
     );
 
     final botSprite = isAttacking
         ? (SpriteImageCache.instance.getHeroAttackImage(opponentInfo.heroId) ??
-            SpriteImageCache.instance.getHeroImage(opponentInfo.heroId))
+              SpriteImageCache.instance.getHeroImage(opponentInfo.heroId))
         : SpriteImageCache.instance.getHeroImage(opponentInfo.heroId);
     if (botSprite != null) {
       final srcRect = Rect.fromLTWH(
@@ -393,7 +484,10 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     // 3. Giáp
     final armor = Paint()..color = armorColor;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(8, 14, 20, 18), const Radius.circular(4)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(8, 14, 20, 18),
+        const Radius.circular(4),
+      ),
       armor,
     );
     final border = Paint()..color = borderGold;
@@ -402,7 +496,10 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     // 4. Mũ sắt / Tóc bạc Kaelen
     final helmet = Paint()..color = helmetColor;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(9, 4, 18, 14), const Radius.circular(5)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(9, 4, 18, 14),
+        const Radius.circular(5),
+      ),
       helmet,
     );
     final crest = Paint()..color = crestColor;
@@ -420,24 +517,82 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     }
     if (opponentInfo.heroId == 'kaelen') {
       // Song kiếm Lôi Quang Hoàng Kim
-      canvas.drawLine(const Offset(0, 6), const Offset(8, -22), Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 3.0);
-      canvas.drawLine(const Offset(-2, 4), const Offset(5, -18), Paint()..color = const Color(0xFFFFD700)..strokeWidth = 2.0);
-    } else if (opponentInfo.heroId == 'ranger' || opponentInfo.heroId == 'valeria') {
-      final bowPaint = Paint()..color = const Color(0xFF6D4C41)..style = PaintingStyle.stroke..strokeWidth = 3;
-      canvas.drawArc(const Rect.fromLTWH(-10, -22, 14, 28), -pi / 2, pi, false, bowPaint);
-      canvas.drawLine(const Offset(-3, -22), const Offset(-3, 6), Paint()..color = const Color(0xFF00E676)..strokeWidth = 1.5);
-    } else if (opponentInfo.heroId == 'tanker' || opponentInfo.heroId == 'garrick') {
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-10, -22, 18, 22), const Radius.circular(5)), Paint()..color = const Color(0xFF0D47A1));
-      canvas.drawLine(const Offset(-1, -20), const Offset(-1, -2), Paint()..color = const Color(0xFFFFD54F)..strokeWidth = 2);
+      canvas.drawLine(
+        const Offset(0, 6),
+        const Offset(8, -22),
+        Paint()
+          ..color = const Color(0xFF00E5FF)
+          ..strokeWidth = 3.0,
+      );
+      canvas.drawLine(
+        const Offset(-2, 4),
+        const Offset(5, -18),
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..strokeWidth = 2.0,
+      );
+    } else if (opponentInfo.heroId == 'ranger' ||
+        opponentInfo.heroId == 'valeria') {
+      final bowPaint = Paint()
+        ..color = const Color(0xFF6D4C41)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      canvas.drawArc(
+        const Rect.fromLTWH(-10, -22, 14, 28),
+        -pi / 2,
+        pi,
+        false,
+        bowPaint,
+      );
+      canvas.drawLine(
+        const Offset(-3, -22),
+        const Offset(-3, 6),
+        Paint()
+          ..color = const Color(0xFF00E676)
+          ..strokeWidth = 1.5,
+      );
+    } else if (opponentInfo.heroId == 'tanker' ||
+        opponentInfo.heroId == 'garrick') {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-10, -22, 18, 22),
+          const Radius.circular(5),
+        ),
+        Paint()..color = const Color(0xFF0D47A1),
+      );
+      canvas.drawLine(
+        const Offset(-1, -20),
+        const Offset(-1, -2),
+        Paint()
+          ..color = const Color(0xFFFFD54F)
+          ..strokeWidth = 2,
+      );
     } else if (opponentInfo.heroId == 'ninja') {
-      canvas.drawLine(const Offset(-2, 6), const Offset(-2, 0), Paint()..color = const Color(0xFFD50000)..strokeWidth = 3.5);
-      canvas.drawLine(const Offset(-2, 0), const Offset(6, -24), Paint()..color = const Color(0xFFE0E0E0)..strokeWidth = 2.5);
+      canvas.drawLine(
+        const Offset(-2, 6),
+        const Offset(-2, 0),
+        Paint()
+          ..color = const Color(0xFFD50000)
+          ..strokeWidth = 3.5,
+      );
+      canvas.drawLine(
+        const Offset(-2, 0),
+        const Offset(6, -24),
+        Paint()
+          ..color = const Color(0xFFE0E0E0)
+          ..strokeWidth = 2.5,
+      );
     } else {
-      final handle = Paint()..color = const Color(0xFF3E2723)..strokeWidth = 3;
+      final handle = Paint()
+        ..color = const Color(0xFF3E2723)
+        ..strokeWidth = 3;
       canvas.drawLine(const Offset(0, 8), const Offset(0, -18), handle);
       final head = Paint()..color = const Color(0xFF311B92);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(-8, -26, 16, 12), const Radius.circular(3)),
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(-8, -26, 16, 12),
+          const Radius.circular(3),
+        ),
         head,
       );
     }
@@ -460,18 +615,27 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     const by = -12.0;
 
     // Nền máu
-    canvas.drawRect(Rect.fromLTWH(bx, by, barW, barH), Paint()..color = Colors.black54);
+    canvas.drawRect(
+      Rect.fromLTWH(bx, by, barW, barH),
+      Paint()..color = Colors.black54,
+    );
     // Vạch máu: Xanh lục cho đồng đội, Đỏ cho kẻ địch
     final hpColor = opponentInfo.isAlly
         ? const Color(0xFF00E676)
         : const Color(0xFFFF1744);
     final fillW = (currentHp / maxHp).clamp(0.0, 1.0) * barW;
-    canvas.drawRect(Rect.fromLTWH(bx, by, fillW, barH), Paint()..color = hpColor);
+    canvas.drawRect(
+      Rect.fromLTWH(bx, by, fillW, barH),
+      Paint()..color = hpColor,
+    );
 
     // Vạch Ki xanh tím nhỏ bên dưới
     const kiH = 2.0;
     final fillKi = (currentKi / maxKi).clamp(0.0, 1.0) * barW;
-    canvas.drawRect(Rect.fromLTWH(bx, by + barH + 1, fillKi, kiH), Paint()..color = const Color(0xFFBA68C8));
+    canvas.drawRect(
+      Rect.fromLTWH(bx, by + barH + 1, fillKi, kiH),
+      Paint()..color = const Color(0xFFBA68C8),
+    );
 
     // Vẽ tên Bot nhỏ
     final nameColor = opponentInfo.isAlly
@@ -489,7 +653,10 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    textPainter.paint(canvas, Offset((size.x - textPainter.width) / 2, by - 11));
+    textPainter.paint(
+      canvas,
+      Offset((size.x - textPainter.width) / 2, by - 11),
+    );
   }
 
   void _renderSpeechBubble(Canvas canvas, String msg) {

@@ -1,3 +1,4 @@
+import '../combat/combat_status.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
@@ -11,7 +12,7 @@ import '../ai/astar_pathfinder.dart';
 import '../gold_rush_game.dart';
 
 class SkeletonEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, CombatStatus, HasGameReference<GoldRushGame> {
   double maxHp = 45.0;
   double currentHp = 45.0;
   double speed = 50.0;
@@ -44,6 +45,8 @@ class SkeletonEnemy extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    tickCombatStatus(dt);
+    if (isStunned) return;
     if (shootCooldown > 0) shootCooldown -= dt;
 
     final distanceToPlayer = position.distanceTo(player.position);
@@ -58,7 +61,7 @@ class SkeletonEnemy extends PositionComponent
       _currentWaypointIndex = 0;
       previousPosition = position.clone();
       final awayDir = (position - player.position).normalized();
-      position.add(awayDir * speed * dt);
+      position.add(awayDir * speed * combatMoveFactor * dt);
     } else if (distanceToPlayer > 240) {
       // 2. Khoảng cách > 240px: Tiến lại gần
       if (distanceToPlayer < 500) {
@@ -77,7 +80,7 @@ class SkeletonEnemy extends PositionComponent
         } else {
           previousPosition = position.clone();
           final towardDir = (player.position - position).normalized();
-          position.add(towardDir * speed * dt);
+          position.add(towardDir * speed * combatMoveFactor * dt);
         }
       }
     } else {
@@ -122,7 +125,7 @@ class SkeletonEnemy extends PositionComponent
     if (_waypoints.isEmpty || _currentWaypointIndex >= _waypoints.length) {
       previousPosition = position.clone();
       final towardDir = (player.position - position).normalized();
-      position.add(towardDir * speed * dt);
+      position.add(towardDir * speed * combatMoveFactor * dt);
       return;
     }
 
@@ -143,7 +146,7 @@ class SkeletonEnemy extends PositionComponent
     if (toTarget.length2 > 0.0001) {
       previousPosition = position.clone();
       final dir = toTarget.normalized();
-      position.add(dir * speed * dt);
+      position.add(dir * speed * combatMoveFactor * dt);
     }
   }
 
