@@ -1,0 +1,290 @@
+{
+  "version": "2.0.0",
+  "heroes": [
+    {
+      "id": "george",
+      "name": "George — Chiến Thần Búa Tạ",
+      "role": "Đấu Sĩ / Cận Chiến",
+      "classType": "warrior",
+      "priceGold": 0,
+      "unlockedByDefault": true,
+      "baseStats": {
+        "hp": 100,
+        "ki": 100,
+        "attack": 25,
+        "speed": 150
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 14.0,
+        "kiPerLevel": 3.5,
+        "attackPerLevel": 2.2
+      },
+      "skillIds": ["george_hurricane", "george_earth_smash", "george_berserk"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/george_idle.png",
+        "runSheet": "assets/images/heroes/Tien-run-trimmed.png",
+        "attackSheet": "assets/images/heroes/george_attack.png",
+        "skill1Sheet": "assets/images/heroes/Tien-asm_hammer_hammer_hurricane.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "nova_blade",
+      "name": "Nova Blade (NOVA-07) — Chiến Binh Neon",
+      "role": "Fighter • Melee (Asset 1 & 2)",
+      "classType": "warrior",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 120,
+        "ki": 110,
+        "attack": 32,
+        "speed": 175
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 15.0,
+        "kiPerLevel": 4.2,
+        "attackPerLevel": 2.9
+      },
+      "skillIds": ["nova_energy_slash", "nova_shadow_dash", "nova_quantum_burst"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/nova_blade_portrait.png",
+        "runSheet": "assets/images/heroes/nova_blade_sheet.png",
+        "attackSheet": "assets/images/heroes/nova_blade_sheet.png",
+        "skill1Sheet": "assets/images/skills/nova_energy_slash.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "shadow_01",
+      "name": "SHADOW-01 — Sát Thủ Hư Không",
+      "role": "Assassin • Ranged (Asset 2)",
+      "classType": "assassin",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 95,
+        "ki": 120,
+        "attack": 35,
+        "speed": 185
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 11.0,
+        "kiPerLevel": 4.5,
+        "attackPerLevel": 3.4
+      },
+      "skillIds": ["shadow_plasma_shot", "shadow_cyber_spin", "shadow_phantom_dash"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/shadow_01_portrait.png",
+        "runSheet": "assets/images/heroes/shadow_01_sheet.png",
+        "attackSheet": "assets/images/heroes/shadow_01_sheet.png",
+        "skill1Sheet": "assets/images/skills/cyber_skill_effects.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "ember_02",
+      "name": "EMBER-02 — Phù Thủy Hỏa Cầu",
+      "role": "Mage • AoE (Asset 2)",
+      "classType": "mage",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 95,
+        "ki": 145,
+        "attack": 34,
+        "speed": 160
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 11.5,
+        "kiPerLevel": 5.8,
+        "attackPerLevel": 3.2
+      },
+      "skillIds": ["ember_fireball", "ember_flame_pillar", "ember_supernova"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/ember_02_portrait.png",
+        "runSheet": "assets/images/heroes/ember_02_sheet.png",
+        "attackSheet": "assets/images/heroes/ember_02_sheet.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "valeria",
+      "name": "Valeria — Pháp Sư Băng Hỏa",
+      "role": "Elementalist • Băng Hỏa (Asset 3)",
+      "classType": "mage",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 100,
+        "ki": 150,
+        "attack": 33,
+        "speed": 160
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 12.0,
+        "kiPerLevel": 6.0,
+        "attackPerLevel": 3.1
+      },
+      "skillIds": ["valeria_frost_fire_slash", "valeria_elemental_vortex", "valeria_ice_meteor"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/valeria_portrait.png",
+        "runSheet": "assets/images/heroes/valeria_sheet.png",
+        "attackSheet": "assets/images/heroes/valeria_sheet.png",
+        "skill1Sheet": "assets/images/skills/valeria_skills.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "garrick",
+      "name": "Garrick — Chiến Binh Cổ Đại",
+      "role": "Stone Guardian • Đỡ Đòn (Asset 3)",
+      "classType": "tank",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 150,
+        "ki": 105,
+        "attack": 28,
+        "speed": 145
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 21.0,
+        "kiPerLevel": 3.5,
+        "attackPerLevel": 2.4
+      },
+      "skillIds": ["garrick_landslide", "garrick_golden_aegis", "garrick_earth_shatter"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/garrick_portrait.png",
+        "runSheet": "assets/images/heroes/garrick_sheet.png",
+        "attackSheet": "assets/images/heroes/garrick_sheet.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "kaelen",
+      "name": "Kaelen — Kiếm Khách Lôi Quang",
+      "role": "Thunderblade • Sát Thủ (Asset 4)",
+      "classType": "assassin",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 110,
+        "ki": 120,
+        "attack": 32,
+        "speed": 175
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 11.5,
+        "kiPerLevel": 4.5,
+        "attackPerLevel": 3.0
+      },
+      "skillIds": ["kaelen_thunder_flash", "kaelen_storm_vortex", "kaelen_heaven_judgment"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/kaelen_portrait.png",
+        "runSheet": "assets/images/heroes/kaelen_sheet.png",
+        "attackSheet": "assets/images/heroes/kaelen_sheet.png",
+        "skill1Sheet": "assets/images/skills/kaelen_thunder_flash.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "ranger",
+      "name": "Lyra — Xạ Thủ Tinh Anh",
+      "role": "Xạ Thủ / Tầm Xa",
+      "classType": "marksman",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 90,
+        "ki": 115,
+        "attack": 30,
+        "speed": 165
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 10.0,
+        "kiPerLevel": 4.2,
+        "attackPerLevel": 3.1
+      },
+      "skillIds": ["ranger_multishot", "ranger_trap_roll", "ranger_star_rain"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/ranger_idle.png",
+        "runSheet": "assets/images/heroes/ranger_run.png",
+        "attackSheet": "assets/images/heroes/ranger_attack.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "tanker",
+      "name": "Braum — Hiệp Sĩ Khiên Thép",
+      "role": "Đỡ Đòn / Khống Chế",
+      "classType": "tank",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 145,
+        "ki": 95,
+        "attack": 22,
+        "speed": 140
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 20.0,
+        "kiPerLevel": 3.0,
+        "attackPerLevel": 1.8
+      },
+      "skillIds": ["tanker_shield_bash", "tanker_iron_fortress", "tanker_earthquake"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/tanker_idle.png",
+        "runSheet": "assets/images/heroes/tanker_run.png",
+        "attackSheet": "assets/images/heroes/tanker_attack.png",
+        "useProceduralFallback": true
+      }
+    },
+    {
+      "id": "ninja",
+      "name": "Hayate — Ảnh Vũ Sát Thủ",
+      "role": "Sát Thủ / Bạo Kích",
+      "classType": "assassin",
+      "priceGold": 100,
+      "unlockedByDefault": false,
+      "baseStats": {
+        "hp": 95,
+        "ki": 110,
+        "attack": 34,
+        "speed": 180
+      },
+      "growthPerLevel": {
+        "hpPerLevel": 10.5,
+        "kiPerLevel": 4.0,
+        "attackPerLevel": 3.3
+      },
+      "skillIds": ["ninja_shuriken_dash", "ninja_smoke_veil", "ninja_shadow_execution"],
+      "sprites": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "idleSheet": "assets/images/heroes/ninja_idle.png",
+        "runSheet": "assets/images/heroes/ninja_run.png",
+        "attackSheet": "assets/images/heroes/ninja_attack.png",
+        "useProceduralFallback": true
+      }
+    }
+  ]
+}

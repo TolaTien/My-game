@@ -1,0 +1,70 @@
+name: Build iOS Deliverables
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS (Unsigned IPA & Runner.app)
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (for Android/Flutter tooling compatibility)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter Installation
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      - name: Install Project Dependencies
+        run: flutter pub get
+
+      - name: Run Dart Static Analysis
+        run: dart analyze lib test
+
+      - name: Build iOS IPA (Unsigned Release)
+        run: |
+          flutter build ipa --no-codesign --release
+
+      - name: Package Unsigned IPA and Runner.app
+        run: |
+          # Package Payload into standalone installable unsigned IPA
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -r -y GoldRush_unsigned.ipa Payload/
+          
+          # Package Runner.app.zip for Simulator / Xcode testing
+          zip -r -y Runner.app.zip build/ios/iphoneos/Runner.app
+
+          # Output verification
+          ls -lh GoldRush_unsigned.ipa Runner.app.zip
+          shasum -a 256 GoldRush_unsigned.ipa Runner.app.zip
+
+      - name: Upload iOS Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldRush-iOS-Deliverables
+          path: |
+            GoldRush_unsigned.ipa
+            Runner.app.zip
+            build/ios/archive/Runner.xcarchive
+          retention-days: 30

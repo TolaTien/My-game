@@ -1,0 +1,39 @@
+name: my_game
+description: "Gold Rush — 2D Pixel-Art Action RPG Mobile (Flutter + Flame Engine)."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flame: ^1.38.2
+  flame_audio: ^2.12.2
+  shared_preferences: ^2.5.6
+  firebase_core: ^5.1.0
+  firebase_auth: ^7.0.1
+  firebase_database: ^13.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/
+    - assets/images/
+    - assets/images/heroes/
+    - assets/images/skills/
+    - assets/images/companions/
+    - assets/images/enemies/
+    - assets/images/maps/
+    - assets/images/pickups/
+    - assets/images/ui/
+    - assets/audio/

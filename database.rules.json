@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "matchmaking": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "directory": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "parties": {
+      "$partyCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "leaderboard": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "players": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    }
+  }
+}
