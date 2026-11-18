@@ -149,7 +149,7 @@ void main() {
     });
 
     test('BgmTrack enum provides exact filenames and descriptions', () {
-      expect(BgmTrack.lobby.fileName, equals('lobby_bgm.mp3'));
+      expect(BgmTrack.lobby.fileName, equals('nhac-sanh-cho.mp3'));
       expect(BgmTrack.dungeon.fileName, equals('dungeon_bgm.mp3'));
       expect(BgmTrack.boss.fileName, equals('boss_bgm.mp3'));
       expect(BgmTrack.pvp.fileName, equals('pvp_bgm.mp3'));

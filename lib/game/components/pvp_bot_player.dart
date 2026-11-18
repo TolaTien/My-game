@@ -22,9 +22,11 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   double speed = 160.0;
 
   bool isFacingRight = false;
+  int facingRow = 0;
   bool isAttacking = false;
   double attackTimer = 0.0;
   double attackAngle = 0.0;
+  double animTime = 0.0;
 
   bool isBerserk = false;
   double berserkTimer = 0.0;
@@ -89,6 +91,8 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
 
     if (currentHp <= 0) return;
 
+    animTime += dt;
+
     // Hồi Ki (+5 Ki/s)
     if (currentKi < maxKi) {
       currentKi = min(maxKi, currentKi + 5 * dt);
@@ -129,8 +133,32 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
       position.add(moveDirection * effectiveSpeed * dt);
 
-      if (moveDirection.x > 0.1) isFacingRight = true;
-      if (moveDirection.x < -0.1) isFacingRight = false;
+      final mx = moveDirection.x;
+      final my = moveDirection.y;
+      final absX = mx.abs();
+      final absY = my.abs();
+
+      if (absX > 0.05) isFacingRight = mx > 0;
+
+      if (my > 0.08) {
+        if (absX < 0.414 * absY) {
+          facingRow = 0;
+        } else if (absY < 0.414 * absX) {
+          facingRow = 2;
+        } else {
+          facingRow = 1;
+        }
+      } else if (my < -0.08) {
+        if (absX < 0.414 * absY) {
+          facingRow = 4;
+        } else if (absY < 0.414 * absX) {
+          facingRow = 2;
+        } else {
+          facingRow = 3;
+        }
+      } else if (absX > 0.08) {
+        facingRow = 2;
+      }
     } else if (!enableAi) {
       previousPosition = position.clone();
       // 1. Dead Reckoning: tiếp tục di chuyển thời gian thực theo vận tốc đối thủ
@@ -278,12 +306,20 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         ..strokeWidth = 2.0,
     );
 
+    final heroId = opponentInfo.heroId;
+    final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
+    final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
+    final bool isKale = heroId == 'kaelen' || heroId == 'kale';
+    final isMoving =
+        !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
+    final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
+
     canvas.save();
     if (currentHp <= 0) {
       // Mờ đi khi bị hạ gục trong 2v2 / 4v4
       canvas.translate(0, 6);
     }
-    if (!isFacingRight) {
+    if (!isFacingRight && !novaMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
@@ -303,33 +339,257 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       shadowPaint,
     );
 
-    final botSprite = isAttacking
-        ? (SpriteImageCache.instance.getHeroAttackImage(opponentInfo.heroId) ??
-            SpriteImageCache.instance.getHeroImage(opponentInfo.heroId))
-        : SpriteImageCache.instance.getHeroImage(opponentInfo.heroId);
-    if (botSprite != null) {
-      final srcRect = Rect.fromLTWH(
-        0,
-        0,
-        botSprite.width.toDouble(),
-        botSprite.height.toDouble(),
-      );
-      final dstRect = Rect.fromCenter(
-        center: Offset(size.x / 2, size.y / 2 - 3),
-        width: 46,
-        height: 50,
-      );
-      canvas.drawImageRect(
-        botSprite,
-        srcRect,
-        dstRect,
-        Paint()..filterQuality = FilterQuality.none,
-      );
-      canvas.restore();
-      if (speechBubbleText != null) {
-        _renderSpeechBubble(canvas, speechBubbleText!);
+    if (isShadow) {
+      final String action = isAttacking
+          ? 'attack'
+          : (isMoving ? 'run' : 'idle');
+      final int frameIndex;
+      if (isAttacking) {
+        final progress =
+            (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+        frameIndex = (progress * 16).floor().clamp(0, 15);
+      } else if (isMoving) {
+        frameIndex = (animTime * 14.0).floor() % 16;
+      } else {
+        frameIndex = (animTime * 11.0).floor() % 16;
       }
-      return;
+
+      final shadowImg = SpriteImageCache.instance
+          .getHeroSequenceFrame('shadow_01', action, frameIndex);
+      if (shadowImg != null) {
+        const dstW = 52.0;
+        const dstH = 52.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - dstH;
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+        final srcRect = Rect.fromLTWH(
+          0,
+          0,
+          shadowImg.width.toDouble(),
+          shadowImg.height.toDouble(),
+        );
+        canvas.drawImageRect(
+          shadowImg,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
+    } else if (isKale) {
+      if (isAttacking) {
+        final atkSheet =
+            SpriteImageCache.instance.getHeroAttackImage('kaelen');
+        if (atkSheet != null && atkSheet.width >= 2000) {
+          final row = facingRow.clamp(0, 4);
+          final progress =
+              (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+          final col = (progress * 5).floor().clamp(0, 4);
+          const cellW = 512.0;
+          const cellH = 512.0;
+          const dstW = 96.0;
+          const dstH = 96.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (478.0 / 512.0 * dstH);
+          final srcRect =
+              Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          canvas.drawImageRect(
+            atkSheet,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+          canvas.restore();
+          if (speechBubbleText != null) {
+            _renderSpeechBubble(canvas, speechBubbleText!);
+          }
+          return;
+        }
+      } else if (isMoving) {
+        final frameIndex = (animTime * 14.0).floor() % 16;
+        final runImg = SpriteImageCache.instance
+            .getHeroSequenceFrame('kaelen', 'run', frameIndex);
+        if (runImg != null) {
+          const dstW = 52.0;
+          const dstH = 52.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - dstH;
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          final srcRect = Rect.fromLTWH(
+            0,
+            0,
+            runImg.width.toDouble(),
+            runImg.height.toDouble(),
+          );
+          canvas.drawImageRect(
+            runImg,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+          canvas.restore();
+          if (speechBubbleText != null) {
+            _renderSpeechBubble(canvas, speechBubbleText!);
+          }
+          return;
+        }
+      } else {
+        final frameIndex = (animTime * 11.0).floor() % 16;
+        final idleImg = SpriteImageCache.instance
+            .getHeroSequenceFrame('kaelen', 'idle', frameIndex);
+        if (idleImg != null) {
+          const dstW = 52.0;
+          const dstH = 52.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - dstH;
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          final srcRect = Rect.fromLTWH(
+            0,
+            0,
+            idleImg.width.toDouble(),
+            idleImg.height.toDouble(),
+          );
+          canvas.drawImageRect(
+            idleImg,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+          canvas.restore();
+          if (speechBubbleText != null) {
+            _renderSpeechBubble(canvas, speechBubbleText!);
+          }
+          return;
+        }
+      }
+    } else if (isNova) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('nova_blade') ??
+              SpriteImageCache.instance.getHeroImage('nova_blade'))
+          : (isMoving
+              ? (SpriteImageCache.instance.getHeroRunImage('nova_blade') ??
+                  SpriteImageCache.instance.getHeroImage('nova_blade'))
+              : (SpriteImageCache.instance.getHeroIdleImage('nova_blade') ??
+                  SpriteImageCache.instance.getHeroImage('nova_blade')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final vx = !moveDirection.isZero()
+              ? moveDirection.x
+              : (!enableAi ? targetVelocity.x : 0.0);
+          final vy = !moveDirection.isZero()
+              ? moveDirection.y
+              : (!enableAi ? targetVelocity.y : 0.0);
+          final absX = vx.abs();
+          final absY = vy.abs();
+
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = vy > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = vx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = vx > 0 ? 5 : 4; // 5: Diagonal Right, 4: Diagonal Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect =
+              Rect.fromLTWH(col * cellW, runRow * cellH, cellW, cellH);
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final row = facingRow.clamp(0, 4);
+          final int col;
+          if (isAttacking) {
+            final progress =
+                (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            col = (animTime * 11.0).floor() % 5;
+          } else {
+            col = (animTime * 4.5).floor() % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (477.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
+    } else {
+      final botSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+              SpriteImageCache.instance.getHeroImage(heroId))
+          : SpriteImageCache.instance.getHeroImage(heroId);
+      if (botSprite != null) {
+        final srcRect = Rect.fromLTWH(
+          0,
+          0,
+          botSprite.width.toDouble(),
+          botSprite.height.toDouble(),
+        );
+        final dstRect = Rect.fromCenter(
+          center: Offset(size.x / 2, size.y / 2 - 3),
+          width: 46,
+          height: 50,
+        );
+        canvas.drawImageRect(
+          botSprite,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
     }
 
     Color bootsColor;

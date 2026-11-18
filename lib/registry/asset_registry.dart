@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -236,6 +237,9 @@ class MapAssetConfig {
   final List<List<int>> buffNodes;
   final String tilesetImage;
   final String tiledMapFile;
+  final String imageAsset;
+  final String theme;
+  final String description;
 
   const MapAssetConfig({
     required this.id,
@@ -251,6 +255,9 @@ class MapAssetConfig {
     required this.buffNodes,
     required this.tilesetImage,
     required this.tiledMapFile,
+    this.imageAsset = '',
+    this.theme = 'golden_sanctum',
+    this.description = '',
   });
 
   factory MapAssetConfig.fromJson(Map<String, dynamic> json) {
@@ -275,15 +282,18 @@ class MapAssetConfig {
       stage: (json['stage'] as num?)?.toInt() ?? 1,
       name: json['name'] as String? ?? 'Phế Tích Hoàng Kim',
       mode: json['mode'] as String? ?? 'pve',
-      cols: (json['cols'] as num?)?.toInt() ?? 40,
-      rows: (json['rows'] as num?)?.toInt() ?? 28,
+      cols: (json['cols'] as num?)?.toInt() ?? 36,
+      rows: (json['rows'] as num?)?.toInt() ?? 24,
       tileSize: (json['tileSize'] as num?)?.toInt() ?? 32,
-      playerSpawn: parseCoord(json['playerSpawn'], const [20, 24]),
-      bossSpawn: parseCoord(json['bossSpawn'], const [20, 14]),
+      playerSpawn: parseCoord(json['playerSpawn'], const [12, 9]),
+      bossSpawn: parseCoord(json['bossSpawn'], const [28, 12]),
       monsterPortals: parseCoordList(json['monsterPortals']),
       buffNodes: parseCoordList(json['buffNodes']),
       tilesetImage: json['tilesetImage'] as String? ?? '',
       tiledMapFile: json['tiledMapFile'] as String? ?? '',
+      imageAsset: json['imageAsset'] as String? ?? '',
+      theme: json['theme'] as String? ?? (json['id'] as String? ?? 'golden_sanctum'),
+      description: json['description'] as String? ?? '',
     );
   }
 }
@@ -353,12 +363,25 @@ class GameAssetRegistry {
   List<EnemyAssetConfig> get enemies => _enemies.values.toList(growable: false);
 
   HeroAssetConfig getHero(String heroId) {
+    if (heroId == 'nova') {
+      return _heroes['nova'] ?? _heroes['nova_blade'] ?? _heroes['george']!;
+    }
+    if (heroId == 'kale') {
+      return _heroes['kale'] ?? _heroes['kaelen'] ?? _heroes['george']!;
+    }
+    if (heroId == 'shadow') {
+      return _heroes['shadow'] ?? _heroes['shadow_01'] ?? _heroes['george']!;
+    }
     return _heroes[heroId] ?? _heroes['george']!;
   }
 
   List<SkillAssetConfig> getSkillsForHero(String heroId) {
+    var effectiveId = heroId;
+    if (effectiveId == 'nova') effectiveId = 'nova_blade';
+    if (effectiveId == 'kale') effectiveId = 'kaelen';
+    if (effectiveId == 'shadow') effectiveId = 'shadow_01';
     final list = _skills.values
-        .where((s) => s.heroId == heroId)
+        .where((s) => s.heroId == effectiveId)
         .toList()
       ..sort((a, b) => a.slot.compareTo(b.slot));
     if (list.isNotEmpty) return list;
@@ -373,11 +396,34 @@ class GameAssetRegistry {
     return _companions[companionId];
   }
 
+  MapAssetConfig? getMap(String id) => _maps[id];
+
+  List<MapAssetConfig> get availableMatchMaps {
+    final list = _maps.values.where((m) =>
+      m.id == 'sunken_golden_sanctum' ||
+      m.id == 'map_bang' ||
+      m.id == 'map_dao_bang_gia'
+    ).toList();
+    if (list.isNotEmpty) return list;
+    if (_maps.isNotEmpty) return _maps.values.toList();
+    return const [defaultSanctumMap];
+  }
+
+  MapAssetConfig getRandomMap({String? excludeId}) {
+    final pool = availableMatchMaps;
+    if (pool.length <= 1) return pool.first;
+    final candidates = excludeId != null
+        ? pool.where((m) => m.id != excludeId).toList()
+        : pool;
+    final effectivePool = candidates.isNotEmpty ? candidates : pool;
+    return effectivePool[Random().nextInt(effectivePool.length)];
+  }
+
   MapAssetConfig getMapForStage(int stage) {
     for (final m in _maps.values) {
-      if (m.mode == 'pve' && m.stage == stage) return m;
+      if (m.stage == stage) return m;
     }
-    return _maps['sunken_golden_sanctum']!;
+    return _maps['sunken_golden_sanctum'] ?? defaultSanctumMap;
   }
 
   /// Nạp toàn bộ file cấu hình từ `assets/data/*.json`
@@ -639,29 +685,182 @@ class GameAssetRegistry {
       _heroes[h.id] = h;
     }
 
-    _maps['sunken_golden_sanctum'] = const MapAssetConfig(
-      id: 'sunken_golden_sanctum',
-      stage: 1,
-      name: 'Phế Tích Thần Điện Hoàng Kim',
-      mode: 'pve',
+    _maps['sunken_golden_sanctum'] = defaultSanctumMap;
+    _maps['volcanic_frost_ruins'] = const MapAssetConfig(
+      id: 'volcanic_frost_ruins',
+      stage: 2,
+      name: 'Phế Tích Núi Lửa & Băng Giá',
+      mode: 'all',
       cols: 40,
       rows: 28,
       tileSize: 32,
       playerSpawn: [20, 24],
       bossSpawn: [20, 14],
-      monsterPortals: [
-        [5, 5],
-        [34, 5],
-        [5, 22],
-        [34, 22],
-      ],
-      buffNodes: [
-        [20, 4],
-        [10, 14],
-        [30, 14],
-      ],
-      tilesetImage: 'assets/images/maps/sanctum_tileset.png',
-      tiledMapFile: 'assets/images/maps/sunken_golden_sanctum.json',
+      monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
+      buffNodes: [[20, 4], [10, 14], [30, 14]],
+      tilesetImage: 'assets/images/maps/volcanic_frost_tileset.png',
+      tiledMapFile: 'assets/images/maps/volcanic_frost_ruins_map.png',
+      imageAsset: '',
+      theme: 'volcanic',
+      description: 'Vùng phế tích núi lửa đan xen hàn băng cổ xưa.',
     );
+    _maps['neon_city'] = const MapAssetConfig(
+      id: 'neon_city',
+      stage: 3,
+      name: 'Neon City — Sci-Fi Dungeon',
+      mode: 'all',
+      cols: 40,
+      rows: 28,
+      tileSize: 32,
+      playerSpawn: [20, 24],
+      bossSpawn: [20, 14],
+      monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
+      buffNodes: [[20, 4], [10, 14], [30, 14]],
+      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
+      tiledMapFile: 'assets/images/maps/neon_city_map.png',
+      imageAsset: '',
+      theme: 'neon',
+      description: 'Đô thị tương lai ánh sáng neon rực rỡ.',
+    );
+    _maps['cyber_factory'] = const MapAssetConfig(
+      id: 'cyber_factory',
+      stage: 4,
+      name: 'Cyber Factory',
+      mode: 'all',
+      cols: 40,
+      rows: 28,
+      tileSize: 32,
+      playerSpawn: [20, 24],
+      bossSpawn: [20, 14],
+      monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
+      buffNodes: [[20, 4], [10, 14], [30, 14]],
+      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
+      tiledMapFile: 'assets/images/maps/cyber_factory_map.png',
+      imageAsset: '',
+      theme: 'cyber',
+      description: 'Nhà máy cơ khí và robot công nghệ cao.',
+    );
+    _maps['space_station'] = const MapAssetConfig(
+      id: 'space_station',
+      stage: 5,
+      name: 'Space Station',
+      mode: 'all',
+      cols: 40,
+      rows: 28,
+      tileSize: 32,
+      playerSpawn: [20, 24],
+      bossSpawn: [20, 14],
+      monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
+      buffNodes: [[20, 4], [10, 14], [30, 14]],
+      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
+      tiledMapFile: 'assets/images/maps/space_station_map.png',
+      imageAsset: '',
+      theme: 'space',
+      description: 'Trạm không gian ngoài quỹ đạo Trái Đất.',
+    );
+    _maps['alien_ruins'] = const MapAssetConfig(
+      id: 'alien_ruins',
+      stage: 6,
+      name: 'Alien Ruins',
+      mode: 'all',
+      cols: 40,
+      rows: 28,
+      tileSize: 32,
+      playerSpawn: [20, 24],
+      bossSpawn: [20, 14],
+      monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
+      buffNodes: [[20, 4], [10, 14], [30, 14]],
+      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
+      tiledMapFile: 'assets/images/maps/alien_ruins_map.png',
+      imageAsset: '',
+      theme: 'alien',
+      description: 'Di tích sinh vật ngoài hành tinh cổ xưa.',
+    );
+    _maps['map_bang'] = defaultFrostArenaMap;
+    _maps['map_dao_bang_gia'] = defaultFrostIslandMap;
   }
+
+  static const MapAssetConfig defaultSanctumMap = MapAssetConfig(
+    id: 'sunken_golden_sanctum',
+    stage: 1,
+    name: 'Phế Tích Thần Điện Hoàng Kim',
+    mode: 'all',
+    cols: 36,
+    rows: 24,
+    tileSize: 32,
+    playerSpawn: [12, 9],
+    bossSpawn: [28, 12],
+    monsterPortals: [
+      [4, 4],
+      [31, 4],
+      [4, 19],
+      [31, 19],
+    ],
+    buffNodes: [
+      [18, 4],
+      [9, 12],
+      [27, 12],
+    ],
+    tilesetImage: '',
+    tiledMapFile: '',
+    imageAsset: '',
+    theme: 'golden_sanctum',
+    description: 'Thần điện cổ đại ngập tràn kho báu và linh khí hoàng kim.',
+  );
+
+  static const MapAssetConfig defaultFrostArenaMap = MapAssetConfig(
+    id: 'map_bang',
+    stage: 2,
+    name: 'Đấu Trường Băng Giá',
+    mode: 'all',
+    cols: 36,
+    rows: 24,
+    tileSize: 32,
+    playerSpawn: [12, 9],
+    bossSpawn: [28, 12],
+    monsterPortals: [
+      [4, 4],
+      [31, 4],
+      [4, 19],
+      [31, 19],
+    ],
+    buffNodes: [
+      [18, 4],
+      [9, 12],
+      [27, 12],
+    ],
+    tilesetImage: '',
+    tiledMapFile: '',
+    imageAsset: 'assets/images/maps/map-bang.png',
+    theme: 'ice_arena',
+    description: 'Chiến trường băng phong vĩnh cửu với các khối tinh thể hàn băng sắc nhọn.',
+  );
+
+  static const MapAssetConfig defaultFrostIslandMap = MapAssetConfig(
+    id: 'map_dao_bang_gia',
+    stage: 3,
+    name: 'Đảo Băng Tuyết',
+    mode: 'all',
+    cols: 36,
+    rows: 24,
+    tileSize: 32,
+    playerSpawn: [12, 9],
+    bossSpawn: [28, 12],
+    monsterPortals: [
+      [4, 4],
+      [31, 4],
+      [4, 19],
+      [31, 19],
+    ],
+    buffNodes: [
+      [18, 4],
+      [9, 12],
+      [27, 12],
+    ],
+    tilesetImage: '',
+    tiledMapFile: '',
+    imageAsset: 'assets/images/maps/map-dao-bang-gia.png',
+    theme: 'frost_island',
+    description: 'Quần đảo băng trôi tráng lệ giữa vùng biển bắc cực huyền bí.',
+  );
 }

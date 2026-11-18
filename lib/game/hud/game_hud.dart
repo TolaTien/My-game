@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
+import '../../screens/settings_dialog.dart';
 import '../components/companion_component.dart';
 import '../components/player.dart';
 import '../gold_rush_game.dart';
@@ -24,10 +25,21 @@ class GameHudOverlay extends StatefulWidget {
   State<GameHudOverlay> createState() => _GameHudOverlayState();
 }
 
-class _GameHudOverlayState extends State<GameHudOverlay> {
+class _GameHudOverlayState extends State<GameHudOverlay>
+    with SingleTickerProviderStateMixin {
   // Mặc định luôn hiện nút cảm ứng; trên Desktop/Web có thể bật/tắt để quan sát toàn màn hình
   bool _showTouchControls = true;
   bool _isRebuildScheduled = false;
+
+  late final AnimationController _bannerController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3500),
+  );
+  late final Animation<double> _bannerOpacityAnim = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 15),
+    TweenSequenceItem(tween: ConstantTween(1.0), weight: 60),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 25),
+  ]).animate(_bannerController);
 
   void _safeSetState([VoidCallback? fn]) {
     if (!mounted) return;
@@ -51,10 +63,23 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
   @override
   void initState() {
     super.initState();
+    _bannerController.forward();
     // Đăng ký lắng nghe thay đổi chỉ số của player
     widget.game.onPlayerStatsChanged = () {
       _safeSetState();
     };
+    // Đăng ký lắng nghe thay đổi bản đồ khi sang tầng mới -> kích hoạt lại banner chào mừng map mới
+    widget.game.onMapChanged = () {
+      _safeSetState(() {
+        _bannerController.forward(from: 0.0);
+      });
+    };
+  }
+
+  @override
+  void dispose() {
+    _bannerController.dispose();
+    super.dispose();
   }
 
   @override
@@ -65,6 +90,88 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
     return SafeArea(
       child: Stack(
         children: [
+          // Banner thông báo chiến trường ngẫu nhiên khi vào trận
+          Positioned(
+            top: 22,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: AnimatedBuilder(
+                animation: _bannerController,
+                builder: (context, child) {
+                  if (_bannerController.isCompleted) return const SizedBox.shrink();
+                  final map = widget.game.currentMapConfig;
+                  final isIceTheme = map.theme == 'ice_arena' || map.theme == 'frost_island';
+                  return Opacity(
+                    opacity: _bannerOpacityAnim.value,
+                    child: Transform.translate(
+                      offset: Offset(0, (1.0 - _bannerOpacityAnim.value) * -16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isIceTheme
+                                ? [
+                                    const Color(0xFF002244).withValues(alpha: 0.92),
+                                    const Color(0xFF005588).withValues(alpha: 0.92),
+                                  ]
+                                : [
+                                    const Color(0xFF2C1E0A).withValues(alpha: 0.92),
+                                    const Color(0xFF4A3410).withValues(alpha: 0.92),
+                                  ],
+                          ),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: isIceTheme
+                                ? const Color(0xFF00E5FF)
+                                : const Color(0xFFFFD700),
+                            width: 1.6,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isIceTheme
+                                      ? const Color(0xFF00E5FF)
+                                      : const Color(0xFFFFD700))
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 14,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isIceTheme
+                                  ? Icons.ac_unit_rounded
+                                  : Icons.account_balance_rounded,
+                              color: isIceTheme
+                                  ? const Color(0xFF00E5FF)
+                                  : const Color(0xFFFFD700),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'CHIẾN TRƯỜNG: ${map.name.toUpperCase()}',
+                              style: TextStyle(
+                                color: isIceTheme
+                                    ? const Color(0xFFE0F7FA)
+                                    : const Color(0xFFFFF8E1),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
           // 1. TOP BAR: Chỉ số HP, Ki, EXP, Giáp Hoàng Kim và Level
           Positioned(
             top: 12,
@@ -174,12 +281,55 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
             ),
           ),
 
-          // 2. TOP RIGHT: Tầng hiện tại, Xu nhặt được, Nút bật/tắt phím ảo (trên PC/Web) & Nút Pause
+          // 2. TOP RIGHT: Bản đồ ngẫu nhiên, Tầng hiện tại, Xu nhặt được, Nút bật/tắt phím ảo (trên PC/Web) & Nút Pause
           Positioned(
             top: 12,
             right: 16,
             child: Row(
               children: [
+                // Huy hiệu bản đồ hiện tại
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2838),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
+                              widget.game.currentMapConfig.theme == 'frost_island')
+                          ? const Color(0xFF00E5FF)
+                          : const Color(0xFFFFD700),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        (widget.game.currentMapConfig.theme == 'ice_arena' ||
+                                widget.game.currentMapConfig.theme == 'frost_island')
+                            ? Icons.ac_unit_rounded
+                            : Icons.account_balance_rounded,
+                        color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
+                                widget.game.currentMapConfig.theme == 'frost_island')
+                            ? const Color(0xFF00E5FF)
+                            : const Color(0xFFFFD700),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        widget.game.currentMapConfig.name,
+                        style: TextStyle(
+                          color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
+                                  widget.game.currentMapConfig.theme == 'frost_island')
+                              ? const Color(0xFF80DEEA)
+                              : const Color(0xFFFFE082),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   margin: const EdgeInsets.only(right: 8),
@@ -245,6 +395,14 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                   ),
                 ],
                 const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 30),
+                  tooltip: 'Cài đặt âm lượng & trò chơi',
+                  onPressed: () {
+                    SettingsDialog.show(context);
+                  },
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 36),
                   onPressed: () {

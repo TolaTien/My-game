@@ -64,6 +64,8 @@ class PartyRoomState {
   final String partyCode;
   final String leaderCode;
   final String leaderName;
+  final String leaderHeroId;
+  final int leaderHeroLevel;
   final PvpGameMode mode;
   final List<FriendInfo> members;
 
@@ -71,6 +73,8 @@ class PartyRoomState {
     required this.partyCode,
     required this.leaderCode,
     required this.leaderName,
+    this.leaderHeroId = 'george',
+    this.leaderHeroLevel = 10,
     required this.mode,
     required this.members,
   });
@@ -83,6 +87,8 @@ class PartyRoomState {
     String? partyCode,
     String? leaderCode,
     String? leaderName,
+    String? leaderHeroId,
+    int? leaderHeroLevel,
     PvpGameMode? mode,
     List<FriendInfo>? members,
   }) {
@@ -90,8 +96,87 @@ class PartyRoomState {
       partyCode: partyCode ?? this.partyCode,
       leaderCode: leaderCode ?? this.leaderCode,
       leaderName: leaderName ?? this.leaderName,
+      leaderHeroId: leaderHeroId ?? this.leaderHeroId,
+      leaderHeroLevel: leaderHeroLevel ?? this.leaderHeroLevel,
       mode: mode ?? this.mode,
       members: members ?? this.members,
+    );
+  }
+}
+
+class PartyInvitation {
+  final String id;
+  final String partyCode;
+  final String fromCode;
+  final String fromName;
+  final String toCode;
+  final String toName;
+  final PvpGameMode mode;
+  final int timestamp;
+  final String status; // 'pending', 'accepted', 'declined'
+  final String? declineReason;
+
+  const PartyInvitation({
+    required this.id,
+    required this.partyCode,
+    required this.fromCode,
+    required this.fromName,
+    required this.toCode,
+    required this.toName,
+    required this.mode,
+    required this.timestamp,
+    this.status = 'pending',
+    this.declineReason,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'partyCode': partyCode,
+        'fromCode': fromCode,
+        'fromName': fromName,
+        'toCode': toCode,
+        'toName': toName,
+        'mode': mode.code,
+        'timestamp': timestamp,
+        'status': status,
+        'declineReason': declineReason,
+      };
+
+  factory PartyInvitation.fromJson(Map<String, dynamic> json) {
+    final modeCode = json['mode'] as String? ?? '4v4';
+    final mode = PvpGameMode.values.firstWhere(
+      (m) => m.code == modeCode,
+      orElse: () => PvpGameMode.squad4v4,
+    );
+    return PartyInvitation(
+      id: json['id'] as String? ?? '',
+      partyCode: json['partyCode'] as String? ?? '',
+      fromCode: json['fromCode'] as String? ?? '',
+      fromName: json['fromName'] as String? ?? 'Chủ Phòng',
+      toCode: json['toCode'] as String? ?? '',
+      toName: json['toName'] as String? ?? '',
+      mode: mode,
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+      status: json['status'] as String? ?? 'pending',
+      declineReason: json['declineReason'] as String?,
+    );
+  }
+
+  PartyInvitation copyWith({
+    String? status,
+    String? declineReason,
+  }) {
+    return PartyInvitation(
+      id: id,
+      partyCode: partyCode,
+      fromCode: fromCode,
+      fromName: fromName,
+      toCode: toCode,
+      toName: toName,
+      mode: mode,
+      timestamp: timestamp,
+      status: status ?? this.status,
+      declineReason: declineReason ?? this.declineReason,
     );
   }
 }

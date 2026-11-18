@@ -6,11 +6,15 @@ import '../../registry/sprite_image_cache.dart';
 class HeroShowcaseWidget extends StatefulWidget {
   final String heroId;
   final Color themeColor;
+  final double width;
+  final double height;
 
   const HeroShowcaseWidget({
     super.key,
     required this.heroId,
     required this.themeColor,
+    this.width = 260,
+    this.height = 270,
   });
 
   @override
@@ -26,7 +30,7 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
   }
 
@@ -42,13 +46,14 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
       animation: _animController,
       builder: (context, _) {
         return SizedBox(
-          width: 260,
-          height: 270,
+          width: widget.width,
+          height: widget.height,
           child: CustomPaint(
             painter: _HeroCanvasPainter(
               heroId: widget.heroId,
               themeColor: widget.themeColor,
               time: _animController.value * 2 * pi,
+              animProgress: _animController.value,
             ),
           ),
         );
@@ -61,11 +66,13 @@ class _HeroCanvasPainter extends CustomPainter {
   final String heroId;
   final Color themeColor;
   final double time;
+  final double animProgress;
 
   _HeroCanvasPainter({
     required this.heroId,
     required this.themeColor,
     required this.time,
+    required this.animProgress,
   });
 
   @override
@@ -103,6 +110,38 @@ class _HeroCanvasPainter extends CustomPainter {
     // 4. VẼ NHÂN VẬT TƯƠNG ỨNG VỚI HERO ID
     final breathOffset = sin(time * 2.2) * 4.0;
     final heroCenterY = cy + 6 + breathOffset;
+
+    // 4.1 SHADOW (shadow_01 / shadow): Chạy đầy đủ 16 frames IDLE trong sảnh
+    if (heroId == 'shadow_01' || heroId == 'shadow') {
+      final frameIndex = (animProgress * 16).floor().clamp(0, 15);
+      final shadowImg = SpriteImageCache.instance
+          .getHeroSequenceFrame('shadow_01', 'idle', frameIndex);
+      if (shadowImg != null) {
+        _drawShadowIdleAnimation(canvas, shadowImg, cx, daisCenter.dy, size);
+        return;
+      }
+    }
+
+    // 4.2 NOVA (nova_blade / nova): Chạy animation IDLE trong sảnh (5 frames nhìn thẳng)
+    if (heroId == 'nova_blade' || heroId == 'nova') {
+      final novaSheet = SpriteImageCache.instance.getHeroIdleImage(heroId) ??
+          SpriteImageCache.instance.getHeroIdleImage('nova_blade');
+      if (novaSheet != null) {
+        _drawNovaIdleAnimation(canvas, novaSheet, cx, daisCenter.dy, size, animProgress);
+        return;
+      }
+    }
+
+    // 4.3 KALE / KAELEN (kaelen / kale): Chạy đầy đủ 16 frames IDLE trong sảnh
+    if (heroId == 'kaelen' || heroId == 'kale') {
+      final frameIndex = (animProgress * 16).floor().clamp(0, 15);
+      final kaleImg = SpriteImageCache.instance
+          .getHeroSequenceFrame('kaelen', 'idle', frameIndex);
+      if (kaleImg != null) {
+        _drawKaleIdleAnimation(canvas, kaleImg, cx, daisCenter.dy, size);
+        return;
+      }
+    }
 
     // Ưu tiên hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 (giống 100% trong Shop)
     // kết hợp hiệu ứng chuyển động nhún thở (Squash & Stretch) và nghiêng nhịp nhàng 60 FPS
@@ -145,6 +184,136 @@ class _HeroCanvasPainter extends CustomPainter {
         _drawHeroGeorge(canvas, cx, heroCenterY);
         break;
     }
+  }
+
+  /// Hiển thị Shadow lặp 16 frame IDLE từ assets/images/heroes/shadow/idle/
+  void _drawShadowIdleAnimation(
+    Canvas canvas,
+    ui.Image img,
+    double cx,
+    double daisY,
+    Size size,
+  ) {
+    // Hào quang tím hư không phía sau lưng Shadow
+    final auraPaint = Paint()
+      ..color = const Color(0xFF9C27B0)
+          .withValues(alpha: 0.32 + 0.12 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    final feetY = 256.0 * (dstSize / img.height);
+    final centerX = (img.width / 2.0) * (dstSize / img.width);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final srcRect =
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      img,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
+  }
+
+  /// Hiển thị Nova Blade chạy 5 frames IDLE mặt trước (Row 0) từ assets/images/heroes/nova/nova.png
+  void _drawNovaIdleAnimation(
+    Canvas canvas,
+    ui.Image sheet,
+    double cx,
+    double daisY,
+    Size size,
+    double animProgress,
+  ) {
+    // Phòng thủ an toàn: Nếu ảnh chưa phải spritesheet 5x5 (ví dụ ảnh chân dung < 1000px), hiển thị trọn vẹn ảnh
+    if (sheet.width < 1000 || sheet.height < 1000) {
+      _drawAnimatedAssetHero(canvas, sheet, cx, daisY - 90);
+      return;
+    }
+
+    const double cellW = 256.0;
+    const double cellH = 256.0;
+
+    // Chạy tuần tự đầy đủ 5 frames IDLE mặt trước (Hàng 0: 5 ô cột 0 -> 4)
+    final int col = (animProgress * 5).floor() % 5;
+    const int row = 0;
+
+    final srcRect = Rect.fromLTWH(
+      col * cellW,
+      row * cellH,
+      cellW,
+      cellH,
+    );
+
+    // Hào quang năng lượng phía sau lưng Nova
+    final auraPaint = Paint()
+      ..color = const Color(0xFF00E5FF)
+          .withValues(alpha: 0.30 + 0.12 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    // Tỉ lệ scale sao cho chân Nova đặt chuẩn xác trên bệ đá sảnh chờ
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    // Trong cell 256x256 của nova.png, chân nằm ở y ≈ 229, tâm x ≈ 117.5
+    final feetY = 229.0 * (dstSize / cellW);
+    final centerX = 117.5 * (dstSize / cellW);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      sheet,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
+  }
+
+  /// Hiển thị Kale (Kaelen) chạy tuần tự 16 frames IDLE với hào quang sấm sét
+  void _drawKaleIdleAnimation(
+    Canvas canvas,
+    ui.Image img,
+    double cx,
+    double daisY,
+    Size size,
+  ) {
+    // Hào quang sấm sét vàng kim phía sau lưng Kale
+    final auraPaint = Paint()
+      ..color = const Color(0xFFFFD700)
+          .withValues(alpha: 0.32 + 0.14 * sin(time * 3.5))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    // Căn chuẩn pivot bàn chân chạm mặt bệ đá sảnh chờ
+    final feetY = 256.0 * (dstSize / img.height);
+    final centerX = (img.width / 2.0) * (dstSize / img.width);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final srcRect =
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      img,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
   }
 
   /// Hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 với chuyển động 60 FPS mượt mà
@@ -1526,6 +1695,7 @@ class _HeroCanvasPainter extends CustomPainter {
   bool shouldRepaint(covariant _HeroCanvasPainter oldDelegate) {
     return oldDelegate.heroId != heroId ||
         oldDelegate.themeColor != themeColor ||
-        oldDelegate.time != time;
+        oldDelegate.time != time ||
+        oldDelegate.animProgress != animProgress;
   }
 }

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/stat_growth_formula.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
+import 'friend_party_service.dart';
 
 class PlayerStorage {
   static const String _storageKey = 'gold_rush_player_profile';
@@ -24,7 +27,33 @@ class PlayerStorage {
       final jsonString = prefs.getString(_storageKey);
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> map = jsonDecode(jsonString);
-        final profile = PlayerProfile.fromJson(map);
+        var profile = PlayerProfile.fromJson(map);
+
+        // Nâng cấp khỏi mã ID tĩnh cũ GR8899 nếu chưa có mã riêng
+        if (profile.playerCode == 'GR8899' || profile.playerCode.isEmpty) {
+          final rand = 1000 + Random().nextInt(8999);
+          final newCode = 'GR$rand';
+          final newName = profile.playerName == 'Chiến Binh #88'
+              ? 'Chiến Binh #$rand'
+              : profile.playerName;
+          profile = profile.copyWith(
+            playerCode: newCode,
+            playerName: newName,
+          );
+          unawaited(saveProfile(profile));
+        }
+
+        if (profile.selectedHeroId == 'aria' || profile.unlockedHeroIds.contains('aria')) {
+          final cleanUnlocked =
+              profile.unlockedHeroIds.where((id) => id != 'aria').toList();
+          final cleanSelected =
+              profile.selectedHeroId == 'aria' ? 'george' : profile.selectedHeroId;
+          profile = profile.copyWith(
+            selectedHeroId: cleanSelected,
+            unlockedHeroIds: cleanUnlocked,
+          );
+          unawaited(saveProfile(profile));
+        }
         profileNotifier.value = profile;
         return profile;
       }
@@ -34,7 +63,23 @@ class PlayerStorage {
 
     final defaultProf = PlayerProfile.defaultProfile();
     profileNotifier.value = defaultProf;
+    unawaited(saveProfile(defaultProf));
     return defaultProf;
+  }
+
+  /// Cập nhật Tên và Mã ID người chơi
+  static Future<void> updateNameAndCode(String newName, String newCode) async {
+    final cleanName = newName.trim();
+    final cleanCode = newCode.trim().toUpperCase();
+    if (cleanName.isEmpty || cleanCode.isEmpty) return;
+
+    final updated = currentProfile.copyWith(
+      playerName: cleanName,
+      playerCode: cleanCode,
+    );
+    await saveProfile(updated);
+    // Đồng bộ ngay lập tức lên directory
+    unawaited(FriendPartyService.instance.syncOwnProfileToDirectory(updated));
   }
 
   /// Lưu hồ sơ người chơi vào SharedPreferences và cập nhật notifier
@@ -191,10 +236,13 @@ class PlayerStorage {
     await saveProfile(updated);
   }
 
-  /// Cập nhật kết quả sau trận đấu PvP
+  /// Cập nhật kết quả sau trận đấu PvP (áp dụng chung mức Rank & Sao cho cả 1v1, 2v2, 4v4)
   static Future<void> applyPvpResult(PvpMatchResult result) async {
     final updated = currentProfile.copyWith(
       rankPoints: result.newRankPoints,
+      rankStars: result.newTotalStars,
+      isChallengerTop10: result.isChallengerTop10,
+      serverRank: result.serverRank,
       gold: currentProfile.gold + result.goldReward,
     );
     await saveProfile(updated);

@@ -26,6 +26,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   // Trạng thái hành động & 60 FPS Procedural Animation
   Vector2 moveDirection = Vector2.zero();
   bool isFacingRight = true;
+  int facingRow = 0; // 0: Down, 1: Down-Right, 2: Right, 3: Up-Right, 4: Up
   bool isAttacking = false;
   double attackTimer = 0.0;
   double attackAngle = 0.0;
@@ -199,8 +200,32 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
       position.add(moveDirection * effectiveSpeed * dt);
 
-      if (moveDirection.x > 0.1) isFacingRight = true;
-      if (moveDirection.x < -0.1) isFacingRight = false;
+      final mx = moveDirection.x;
+      final my = moveDirection.y;
+      final absX = mx.abs();
+      final absY = my.abs();
+
+      if (absX > 0.05) isFacingRight = mx > 0;
+
+      if (my > 0.08) {
+        if (absX < 0.414 * absY) {
+          facingRow = 0; // Down (Nam / Trước mặt)
+        } else if (absY < 0.414 * absX) {
+          facingRow = 2; // Side (Ngang)
+        } else {
+          facingRow = 1; // Down-Diagonal (Chéo trước)
+        }
+      } else if (my < -0.08) {
+        if (absX < 0.414 * absY) {
+          facingRow = 4; // Up (Bắc / Sau lưng)
+        } else if (absY < 0.414 * absX) {
+          facingRow = 2; // Side (Ngang)
+        } else {
+          facingRow = 3; // Up-Diagonal (Chéo sau)
+        }
+      } else if (absX > 0.08) {
+        facingRow = 2; // Side (Ngang)
+      }
 
       _afterimageSampleTimer += dt;
       if (_afterimageSampleTimer >= 0.04) {
@@ -372,22 +397,28 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       }
     }
 
-    canvas.save();
-    if (!isFacingRight) {
-      canvas.scale(-1, 1);
-      canvas.translate(-size.x, 0);
-    }
+    final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
+    final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
+    final bool isKale = heroId == 'kaelen' || heroId == 'kale';
+    final bool isCustomAnimated = isNova || isShadow || isKale;
 
     // Hiệu ứng nghiêng thân khi chạy, nhún bước chân và lao người khi tấn công
     final isMoving = !moveDirection.isZero();
+    final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
+
+    canvas.save();
+    if (!isFacingRight && !novaMultiDirRun) {
+      canvas.scale(-1, 1);
+      canvas.translate(-size.x, 0);
+    }
     final runBounce = isMoving
         ? (sin(animTime * 15.0).abs() * -2.2)
         : (sin(animTime * 3.2) * 1.4);
-    final breathOffset = runBounce;
+    final breathOffset = isCustomAnimated ? 0.0 : runBounce;
     final legSwing = isMoving ? sin(animTime * 15.0) * 4.8 : 0.0;
     final attackLunge = isAttacking ? 3.5 : 0.0;
 
-    if (isMoving || isAttacking) {
+    if (!isCustomAnimated && (isMoving || isAttacking)) {
       canvas.translate(size.x / 2 + attackLunge, size.y / 2);
       canvas.rotate(isAttacking ? 0.18 : 0.13);
       canvas.translate(-size.x / 2, -size.y / 2);
@@ -429,49 +460,253 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       shadowPaint,
     );
 
-    final heroSprite = isAttacking
-        ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
-            SpriteImageCache.instance.getHeroImage(heroId))
-        : SpriteImageCache.instance.getHeroImage(heroId);
-    if (heroSprite != null) {
-      canvas.save();
-      final pivotX = size.x / 2;
-      final pivotY = size.y - 2;
-      final strideTilt = isMoving ? sin(animTime * 16.0) * 0.12 : 0.0;
-      final scaleX = isMoving
-          ? (1.0 + sin(animTime * 16.0).abs() * 0.05)
-          : (1.0 - sin(animTime * 3.2) * 0.02);
-      final scaleY = isMoving
-          ? (1.0 - sin(animTime * 16.0).abs() * 0.05)
-          : (1.0 + sin(animTime * 3.2) * 0.025);
+    if (isShadow) {
+      final String action = isAttacking
+          ? 'attack'
+          : (isMoving ? 'run' : 'idle');
+      final int frameIndex;
+      if (isAttacking) {
+        final progress =
+            (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+        frameIndex = (progress * 16).floor().clamp(0, 15);
+      } else if (isMoving) {
+        frameIndex = (animTime * 14.0).floor() % 16;
+      } else {
+        frameIndex = (animTime * 11.0).floor() % 16;
+      }
 
-      canvas.translate(pivotX, pivotY);
-      canvas.rotate(isAttacking ? 0.16 : strideTilt);
-      canvas.scale(scaleX, scaleY);
-      canvas.translate(-pivotX, -pivotY);
+      final shadowImg = SpriteImageCache.instance
+          .getHeroSequenceFrame('shadow_01', action, frameIndex);
+      if (shadowImg != null) {
+        const dstW = 52.0;
+        const dstH = 52.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - dstH;
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+        final srcRect = Rect.fromLTWH(
+          0,
+          0,
+          shadowImg.width.toDouble(),
+          shadowImg.height.toDouble(),
+        );
+        canvas.drawImageRect(
+          shadowImg,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
+    } else if (isKale) {
+      if (isAttacking) {
+        final atkSheet =
+            SpriteImageCache.instance.getHeroAttackImage('kaelen');
+        if (atkSheet != null && atkSheet.width >= 2000) {
+          final row = facingRow.clamp(0, 4);
+          final progress =
+              (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+          final col = (progress * 5).floor().clamp(0, 4);
+          const cellW = 512.0;
+          const cellH = 512.0;
+          const dstW = 96.0;
+          const dstH = 96.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (478.0 / 512.0 * dstH);
+          final srcRect =
+              Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          canvas.drawImageRect(
+            atkSheet,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          _renderClassicHero(canvas, breathOffset, legSwing);
+        }
+      } else if (isMoving) {
+        final frameIndex = (animTime * 14.0).floor() % 16;
+        final runImg = SpriteImageCache.instance
+            .getHeroSequenceFrame('kaelen', 'run', frameIndex);
+        if (runImg != null) {
+          const dstW = 52.0;
+          const dstH = 52.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - dstH;
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          final srcRect = Rect.fromLTWH(
+            0,
+            0,
+            runImg.width.toDouble(),
+            runImg.height.toDouble(),
+          );
+          canvas.drawImageRect(
+            runImg,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          _renderClassicHero(canvas, breathOffset, legSwing);
+        }
+      } else {
+        // Kale đứng yên: Chạy đầy đủ chu kỳ 16 frames IDLE
+        final frameIndex = (animTime * 11.0).floor() % 16;
+        final idleImg = SpriteImageCache.instance
+            .getHeroSequenceFrame('kaelen', 'idle', frameIndex);
+        if (idleImg != null) {
+          const dstW = 52.0;
+          const dstH = 52.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - dstH;
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          final srcRect = Rect.fromLTWH(
+            0,
+            0,
+            idleImg.width.toDouble(),
+            idleImg.height.toDouble(),
+          );
+          canvas.drawImageRect(
+            idleImg,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          _renderClassicHero(canvas, breathOffset, legSwing);
+        }
+      }
+    } else if (isNova) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('nova_blade') ??
+              SpriteImageCache.instance.getHeroImage('nova_blade'))
+          : (isMoving
+              ? (SpriteImageCache.instance.getHeroRunImage('nova_blade') ??
+                  SpriteImageCache.instance.getHeroImage('nova_blade'))
+              : (SpriteImageCache.instance.getHeroIdleImage('nova_blade') ??
+                  SpriteImageCache.instance.getHeroImage('nova_blade')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          final absX = mx.abs();
+          final absY = my.abs();
 
-      final srcRect = Rect.fromLTWH(
-        0,
-        0,
-        heroSprite.width.toDouble(),
-        heroSprite.height.toDouble(),
-      );
-      final dstRect = Rect.fromCenter(
-        center: Offset(size.x / 2, size.y / 2 - 3 + breathOffset),
-        width: 46,
-        height: 50,
-      );
-      canvas.drawImageRect(
-        heroSprite,
-        srcRect,
-        dstRect,
-        Paint()..filterQuality = FilterQuality.none,
-      );
-      canvas.restore();
-    } else if (heroId == 'kaelen' || heroId == 'nova_blade') {
-      _renderKaelenThunderblade(canvas, breathOffset, legSwing);
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = mx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = mx > 0 ? 5 : 4; // 5: Diagonal Right, 4: Diagonal Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect =
+              Rect.fromLTWH(col * cellW, runRow * cellH, cellW, cellH);
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final row = facingRow.clamp(0, 4);
+          final int col;
+          if (isAttacking) {
+            final progress =
+                (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            col = (animTime * 11.0).floor() % 5;
+          } else {
+            col = (animTime * 4.5).floor() % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (477.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
     } else {
-      _renderClassicHero(canvas, breathOffset, legSwing);
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+              SpriteImageCache.instance.getHeroImage(heroId))
+          : SpriteImageCache.instance.getHeroImage(heroId);
+      if (heroSprite != null) {
+        canvas.save();
+        final pivotX = size.x / 2;
+        final pivotY = size.y - 2;
+        final strideTilt = isMoving ? sin(animTime * 16.0) * 0.12 : 0.0;
+        final scaleX = isMoving
+            ? (1.0 + sin(animTime * 16.0).abs() * 0.05)
+            : (1.0 - sin(animTime * 3.2) * 0.02);
+        final scaleY = isMoving
+            ? (1.0 - sin(animTime * 16.0).abs() * 0.05)
+            : (1.0 + sin(animTime * 3.2) * 0.025);
+
+        canvas.translate(pivotX, pivotY);
+        canvas.rotate(isAttacking ? 0.16 : strideTilt);
+        canvas.scale(scaleX, scaleY);
+        canvas.translate(-pivotX, -pivotY);
+
+        final srcRect = Rect.fromLTWH(
+          0,
+          0,
+          heroSprite.width.toDouble(),
+          heroSprite.height.toDouble(),
+        );
+        final dstRect = Rect.fromCenter(
+          center: Offset(size.x / 2, size.y / 2 - 3 + breathOffset),
+          width: 46,
+          height: 50,
+        );
+        canvas.drawImageRect(
+          heroSprite,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        canvas.restore();
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
     }
 
     // Vệt chém lưỡi liềm & Sóng kiếm đồng bộ theo đòn đánh của từng nhân vật (Combo 1-2-3)

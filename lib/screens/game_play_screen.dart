@@ -4,10 +4,13 @@ import '../core/game_keyboard_controller.dart';
 import '../core/stat_growth_formula.dart';
 import '../game/gold_rush_game.dart';
 import '../game/hud/game_hud.dart';
+import '../registry/asset_registry.dart';
 import '../services/player_storage.dart';
 
 class GamePlayScreen extends StatefulWidget {
-  const GamePlayScreen({super.key});
+  final MapAssetConfig? initialMapConfig;
+
+  const GamePlayScreen({super.key, this.initialMapConfig});
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
@@ -23,7 +26,10 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _game = GoldRushGame(playerProfile: PlayerStorage.currentProfile);
+    _game = GoldRushGame(
+      playerProfile: PlayerStorage.currentProfile,
+      selectedMapConfig: widget.initialMapConfig,
+    );
     _keyboardController = GameKeyboardController(
       onMoveDirectionChanged: (dir) => _game.setPlayerMoveDirection(dir),
       onBasicAttack: () => _game.onBasicAttack(),

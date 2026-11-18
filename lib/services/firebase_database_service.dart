@@ -85,6 +85,12 @@ class FirebaseDatabaseService implements DatabaseService {
   }
 
   @override
+  Future<({int serverRank, bool isChallengerTop10, int top10CutoffStars})>
+      evaluatePlayerServerRank(PlayerProfile profile) async {
+    return _fallback.evaluatePlayerServerRank(profile);
+  }
+
+  @override
   Future<void> joinMatchmakingQueue(PvpQueueTicket ticket) async {
     if (_isOnline) {
       try {

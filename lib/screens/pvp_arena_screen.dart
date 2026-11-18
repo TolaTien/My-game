@@ -8,10 +8,12 @@ import '../game/components/player.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
 import '../models/pvp_match.dart';
+import '../services/database_service.dart';
 import '../services/firebase_bootstrap.dart';
 import '../services/firebase_pvp_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
+import 'settings_dialog.dart';
 
 class PvpArenaScreen extends StatefulWidget {
   final PvpGameMode initialMode;
@@ -52,6 +54,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   final FocusNode _focusNode = FocusNode(debugLabel: 'pvp_focus');
   bool _showTouchControls = true;
   bool _isRebuildScheduled = false;
+  bool _hasHandledMatchFinish = false;
 
   void _safeSetState([VoidCallback? fn]) {
     if (!mounted) return;
@@ -112,6 +115,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _radarController.dispose();
     _keyboardController?.detach();
     _focusNode.dispose();
+    FriendPartyService.instance.leaveParty();
     super.dispose();
   }
 
@@ -348,10 +352,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     bool isPlayerOne = true,
     PvpTeamRoster? roster,
   }) {
+    _hasHandledMatchFinish = false;
     final profile = PlayerStorage.currentProfile;
     _arenaGame = PvpArenaGame(
       opponentInfo: opponent,
       playerCurrentRp: profile.rankPoints,
+      playerCurrentStars: profile.rankStars,
+      isCurrentChallengerTop10: profile.isChallengerTop10,
       isOnline: isOnline,
       isPlayerOne: isPlayerOne,
       gameMode: _selectedMode,
@@ -406,29 +413,60 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     }
   }
 
-  void _handleMatchFinished(PvpMatchResult result) {
+  Future<void> _handleMatchFinished(PvpMatchResult result) async {
+    if (_hasHandledMatchFinish) return;
+    _hasHandledMatchFinish = true;
+
     final current = PlayerStorage.currentProfile;
-    final updated = current.copyWith(
+    final tentativeProfile = current.copyWith(
       rankPoints: result.newRankPoints,
+      rankStars: result.newTotalStars,
       gold: current.gold + result.goldReward,
     );
-    PlayerStorage.saveProfile(updated);
+
+    // Đánh giá vị trí trên BXH Server để xác định Top 10 Thách Đấu (nhiều sao nhất server)
+    final serverEval = await DatabaseService.instance.evaluatePlayerServerRank(
+      tentativeProfile,
+    );
+
+    final resolvedTier = PvpRankSystem.getTierFromStars(
+      result.newTotalStars,
+      isTop10Challenger: serverEval.isChallengerTop10,
+    );
+
+    final enrichedResult = result.copyWithChallengerStatus(
+      isChallengerTop10: serverEval.isChallengerTop10,
+      resolvedNewTier: resolvedTier,
+      serverRank: serverEval.serverRank,
+      top10CutoffStars: serverEval.top10CutoffStars,
+    );
+
+    final finalProfile = tentativeProfile.copyWith(
+      isChallengerTop10: serverEval.isChallengerTop10,
+      serverRank: serverEval.serverRank,
+    );
+
+    await PlayerStorage.saveProfile(finalProfile);
+    await DatabaseService.instance.updateLeaderboard(finalProfile);
+
     unawaited(
       PlayerStorage.addHeroExpAfterMatch(
-        isVictory: result.isWinner,
+        isVictory: enrichedResult.isWinner,
         isPvp: true,
-        floorOrRounds: result.playerRoundsWon + result.opponentRoundsWon,
-        coinsOrKills: result.goldReward,
+        floorOrRounds:
+            enrichedResult.playerRoundsWon + enrichedResult.opponentRoundsWon,
+        coinsOrKills: enrichedResult.goldReward,
       ),
     );
 
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => _PvpResultModal(
-          result: result,
+          result: enrichedResult,
           onReturnToLobby: () {
             Navigator.of(context).pop(); // Đóng modal
             Navigator.of(context).pop(); // Thoát về Lobby
@@ -747,9 +785,19 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${_selectedMode.subtitle} • Phạm vi ±150 RP (Bậc: ${profile.rankTier})',
+                  '${_selectedMode.subtitle} • Rank Chung (1v1/2v2/4v4): ${profile.rankDisplayLabel}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Thắng +1 ⭐ • Thua -1 ⭐ • Đồng → Kim Cương: 3 ⭐/bậc • Huyền Thoại: 0 ⭐+ • Thách Đấu: Top 10 Server',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFFFD54F),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (_matchmakingStatus != null) ...[
                   const SizedBox(height: 4),
@@ -1028,48 +1076,59 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
           ),
         ),
 
-        // Ở GIỮA: CHẾ ĐỘ, ĐỒNG HỒ 90S & ROUND
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0D111A).withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
-                style: const TextStyle(
-                  color: Colors.amberAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+        // Ở GIỮA: CHẾ ĐỘ, ĐỒNG HỒ 90S & NÚT CÀI ĐẶT
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              margin: const EdgeInsets.only(left: 8, right: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D111A).withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
               ),
-              Text(
-                '${max(0, game.roundTimeRemaining.toInt())}s',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (_roomId != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    'LIVE TX:$_syncTxCount RX:$_syncRxCount',
-                    style: TextStyle(
-                      color: _syncRxCount > 0 ? Colors.greenAccent : Colors.orangeAccent,
-                      fontSize: 8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-            ],
-          ),
+                  Text(
+                    '${max(0, game.roundTimeRemaining.toInt())}s',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (_roomId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'LIVE TX:$_syncTxCount RX:$_syncRxCount',
+                        style: TextStyle(
+                          color: _syncRxCount > 0 ? Colors.greenAccent : Colors.orangeAccent,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 26),
+              tooltip: 'Cài đặt âm lượng & trò chơi',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => SettingsDialog.show(context),
+            ),
+          ],
         ),
 
         // BÊN PHẢI: ĐỘI ĐỎ (ĐỐI THỦ BOT + ĐỒNG BỌN)
@@ -1239,28 +1298,85 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     final isIntro = game.matchState == PvpMatchState.roundIntro;
     final text = isIntro
         ? 'HIỆP ${game.currentRound} — CHIẾN!'
-        : (game.player.currentHp > game.bot.currentHp ? 'THẮNG HIỆP!' : 'THUA HIỆP!');
+        : (game.lastRoundPlayerWon ? 'THẮNG HIỆP!' : 'THUA HIỆP!');
 
     final color = isIntro
         ? Colors.amberAccent
-        : (game.player.currentHp > game.bot.currentHp ? Colors.greenAccent : Colors.redAccent);
+        : (game.lastRoundPlayerWon ? Colors.greenAccent : Colors.redAccent);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color, width: 2),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 26,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 2,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+            ),
+          ),
         ),
-      ),
+        if (isIntro) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E2838).withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (game.currentMapConfig.theme == 'ice_arena' ||
+                        game.currentMapConfig.theme == 'frost_island')
+                    ? const Color(0xFF00E5FF)
+                    : const Color(0xFFFFD700),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  (game.currentMapConfig.theme == 'ice_arena' ||
+                          game.currentMapConfig.theme == 'frost_island')
+                      ? Icons.ac_unit_rounded
+                      : Icons.account_balance_rounded,
+                  color: (game.currentMapConfig.theme == 'ice_arena' ||
+                          game.currentMapConfig.theme == 'frost_island')
+                      ? const Color(0xFF00E5FF)
+                      : const Color(0xFFFFD700),
+                  size: 14,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'CHIẾN TRƯỜNG: ${game.currentMapConfig.name.toUpperCase()}',
+                  style: TextStyle(
+                    color: (game.currentMapConfig.theme == 'ice_arena' ||
+                            game.currentMapConfig.theme == 'frost_island')
+                        ? const Color(0xFFE0F7FA)
+                        : const Color(0xFFFFF8E1),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -1571,7 +1687,7 @@ class _CooldownArcPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// --- MODAL KẾT QUẢ TRẬN ĐẤU ---
+// --- MODAL KẾT QUẢ TRẬN ĐẤU & TÍNH RANK THEO SAO (DÙNG CHUNG 1V1 • 2V2 • 4V4) ---
 class _PvpResultModal extends StatelessWidget {
   final PvpMatchResult result;
   final VoidCallback onReturnToLobby;
@@ -1583,111 +1699,482 @@ class _PvpResultModal extends StatelessWidget {
     required this.onPlayAgain,
   });
 
+  static Color _tierColor(String tier) {
+    switch (tier) {
+      case 'Thách Đấu':
+        return const Color(0xFFFF1744);
+      case 'Huyền Thoại':
+        return const Color(0xFFE040FB);
+      case 'Kim Cương':
+        return const Color(0xFF00E5FF);
+      case 'Bạch Kim':
+        return const Color(0xFF00E676);
+      case 'Vàng':
+        return const Color(0xFFFFD700);
+      case 'Bạc':
+        return const Color(0xFFCFD8DC);
+      default:
+        return const Color(0xFFCD7F32);
+    }
+  }
+
+  static IconData _tierIcon(String tier) {
+    switch (tier) {
+      case 'Thách Đấu':
+        return Icons.local_fire_department_rounded;
+      case 'Huyền Thoại':
+        return Icons.auto_awesome_rounded;
+      case 'Kim Cương':
+        return Icons.diamond_rounded;
+      case 'Bạch Kim':
+        return Icons.shield_rounded;
+      case 'Vàng':
+        return Icons.military_tech_rounded;
+      case 'Bạc':
+        return Icons.star_rounded;
+      default:
+        return Icons.shield_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = result.isWinner ? 'CHIẾN THẮNG!' : 'THẤT BẠI!';
-    final titleColor = result.isWinner ? const Color(0xFFFFD700) : const Color(0xFFFF1744);
-    final deltaStr = result.rpDelta >= 0 ? '+${result.rpDelta}' : '${result.rpDelta}';
+    final titleColor =
+        result.isWinner ? const Color(0xFFFFD700) : const Color(0xFFFF1744);
+    final newTierColor = _tierColor(result.newRankTier);
+    final oldTierColor = _tierColor(result.oldRankTier);
+    final starDeltaText = result.starDelta > 0
+        ? '+${result.starDelta} ⭐'
+        : (result.starDelta < 0 ? '${result.starDelta} ⭐' : '0 ⭐ (Bảo hộ Đồng)');
+    final starDeltaColor = result.starDelta > 0
+        ? const Color(0xFF00E676)
+        : (result.starDelta < 0
+            ? const Color(0xFFFF5252)
+            : Colors.amberAccent);
+
+    final nextTierName = PvpRankSystem.getNextTierName(
+      result.newTotalStars,
+      isTop10Challenger: result.isChallengerTop10,
+    );
+
+    final cutoffLegendaryStars = max(
+      1,
+      (result.top10CutoffStars ?? (PvpRankSystem.legendaryStartTotalStars + 1)) -
+          PvpRankSystem.legendaryStartTotalStars,
+    );
 
     return Dialog(
       backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Container(
-        width: 380,
-        padding: const EdgeInsets.all(24),
+        width: 430,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
         decoration: BoxDecoration(
-          color: const Color(0xFF141926),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1A2235), Color(0xFF101522)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: titleColor, width: 2.5),
           boxShadow: [
-            BoxShadow(color: titleColor.withValues(alpha: 0.35), blurRadius: 30),
+            BoxShadow(
+              color: titleColor.withValues(alpha: 0.35),
+              blurRadius: 30,
+            ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: TextStyle(color: titleColor, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 3),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
-              style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // Điểm Rank
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Tiêu đề Chiến Thắng / Thất Bại + Chế độ Đấu
+              Text(
+                title,
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.5,
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      const Text('ĐIỂM RANK', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(
+                  '${result.gameMode.title} • TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 2. KHUNG TIẾN TRÌNH RANK & NGÔI SAO (DÙNG CHUNG 1V1 • 2V2 • 4V4)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0C101A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: newTierColor.withValues(alpha: 0.75),
+                    width: 1.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: newTierColor.withValues(alpha: 0.18),
+                      blurRadius: 14,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // Nhãn Rank Chung 3 Chế Độ + Biến động Sao (+1 ⭐ / -1 ⭐)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'RANK CHUNG (1V1 • 2V2 • 4V4)',
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: starDeltaColor.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: starDeltaColor),
+                          ),
+                          child: Text(
+                            starDeltaText,
+                            style: TextStyle(
+                              color: starDeltaColor,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Huy hiệu Bậc Rank (Nếu đổi bậc thì hiện Rank Cũ -> Rank Mới)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (result.oldRankTier != result.newRankTier) ...[
+                          Icon(
+                            _tierIcon(result.oldRankTier),
+                            color: oldTierColor,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            result.oldRankTier.toUpperCase(),
+                            style: TextStyle(
+                              color: oldTierColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(
+                              Icons.double_arrow_rounded,
+                              color: Colors.amberAccent,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: newTierColor.withValues(alpha: 0.2),
+                            border: Border.all(color: newTierColor, width: 1.8),
+                          ),
+                          child: Icon(
+                            _tierIcon(result.newRankTier),
+                            color: newTierColor,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              result.newRankTier.toUpperCase(),
+                              style: TextStyle(
+                                color: newTierColor,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            if (result.serverRank != null)
+                              Text(
+                                'Hạng Server hiện tại: #${result.serverRank}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // HIỂN THỊ SAO TRỰC QUAN:
+                    // - Từ Đồng đến Kim Cương: 3 Ngôi Sao (★ ★ ☆ - đủ 3 sao lên rank tiếp theo)
+                    // - Từ Huyền Thoại đến Thách Đấu: Cộng sao tích lũy từ 0s -> Top 10 Server
+                    if (!result.isLegendaryOrAbove) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          PvpRankSystem.starsPerStandardTier,
+                          (idx) {
+                            final filled = idx < result.newStarsInTier;
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              child: Icon(
+                                filled
+                                    ? Icons.star_rounded
+                                    : Icons.star_border_rounded,
+                                size: 34,
+                                color: filled
+                                    ? const Color(0xFFFFD700)
+                                    : Colors.white24,
+                                shadows: filled
+                                    ? const [
+                                        Shadow(
+                                          color: Color(0xFFFFA000),
+                                          blurRadius: 12,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
-                        '$deltaStr RP',
-                        style: TextStyle(
-                          color: result.rpDelta >= 0 ? Colors.greenAccent : Colors.redAccent,
-                          fontSize: 18,
+                        '${result.newStarsInTier} / ${PvpRankSystem.starsPerStandardTier} SAO • Còn ${PvpRankSystem.starsPerStandardTier - result.newStarsInTier} sao để lên $nextTierName',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFFFD54F),
+                          fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      const Text('THƯỞNG VÀNG', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                    ] else ...[
+                      // Bậc Huyền Thoại (0s+) -> Thách Đấu (Top 10 nhiều sao nhất server)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              newTierColor.withValues(alpha: 0.25),
+                              Colors.amber.withValues(alpha: 0.15),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFFD700),
+                            width: 1.4,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFFFD700),
+                              size: 30,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0xFFFF8F00),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${result.newStarsInTier} SAO',
+                              style: const TextStyle(
+                                color: Color(0xFFFFD700),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
-                        '+${result.goldReward}',
-                        style: const TextStyle(color: Colors.amberAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                        result.isChallengerTop10
+                            ? '🏆 THÁCH ĐẤU ĐỈNH CAO — TOP #${result.serverRank ?? 1} NHIỀU SAO NHẤT SERVER!'
+                            : 'Huyền Thoại cộng sao từ 0⭐ • Đạt Top 10 Server (≥ $cutoffLegendaryStars⭐) để lên THÁCH ĐẤU',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: result.isChallengerTop10
+                              ? const Color(0xFFFF5252)
+                              : const Color(0xFFE040FB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
+                  ],
+                ),
+              ),
+
+              // Banner Thăng Hạng / Giáng Hạng
+              if (result.isPromotion) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amberAccent, width: 1.4),
+                  ),
+                  child: Text(
+                    result.newRankTier == 'Thách Đấu'
+                        ? '🔥 CHÚC MỪNG! BẠN ĐÃ LỌT TOP 10 SERVER — THĂNG HẠNG THÁCH ĐẤU!'
+                        : '🎉 ĐỦ 3 SAO! CHÚC MỪNG BẠN ĐÃ THĂNG HẠNG: ${result.newRankTier.toUpperCase()}!',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ),
+              ] else if (result.isDemotion) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.redAccent),
+                  ),
+                  child: Text(
+                    '⚠️ BẠN ĐÃ LÙI BẬC RANK VỀ: ${result.newRankTier.toUpperCase()} (${result.newStarsInTier} ⭐)',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFFF8A80),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 12),
+
+              // 3. Thưởng Vàng & Tổng Sao Tích Lũy
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text(
+                          'SAO TÍCH LŨY',
+                          style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        ),
+                        Text(
+                          '${result.newTotalStars} ⭐ (${result.newRankPoints} RP)',
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text(
+                          'THƯỞNG VÀNG',
+                          style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        ),
+                        Text(
+                          '+${result.goldReward}',
+                          style: const TextStyle(
+                            color: Colors.amberAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Nút Điều Hướng
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                    ),
+                    onPressed: onReturnToLobby,
+                    child: const Text('VỀ SẢNH'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: titleColor,
+                      foregroundColor: Colors.black,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: onPlayAgain,
+                    child: const Text('TÌM TRẬN TIẾP'),
                   ),
                 ],
               ),
-            ),
-            if (result.isPromotion) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amberAccent),
-                ),
-                child: Text(
-                  '🎉 CHÚC MỪNG BẠN ĐÃ THĂNG HẠNG: ${result.newRankTier.toUpperCase()}!',
-                  style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
             ],
-            const SizedBox(height: 24),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
-                  onPressed: onReturnToLobby,
-                  child: const Text('VỀ SẢNH'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: titleColor,
-                    foregroundColor: Colors.black,
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: onPlayAgain,
-                  child: const Text('TÌM TRẬN TIẾP'),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

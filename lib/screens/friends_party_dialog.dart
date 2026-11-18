@@ -5,6 +5,7 @@ import '../models/pvp_match.dart';
 import '../services/audio_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
+import 'widgets/edit_profile_dialog.dart';
 
 class FriendsPartyDialog extends StatefulWidget {
   final PvpGameMode initialMode;
@@ -72,6 +73,13 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
     if (added != null) {
       _searchController.clear();
       _showToast('Đã kết bạn với ${added.name} (${added.code})!');
+    } else {
+      if (query.toUpperCase() ==
+          PlayerStorage.currentProfile.playerCode.toUpperCase()) {
+        _showToast('Không thể kết bạn với chính mình!', isSuccess: false);
+      } else {
+        _showToast('Không tìm thấy người chơi có mã $query!', isSuccess: false);
+      }
     }
   }
 
@@ -142,13 +150,13 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.groups_rounded,
+                        Icons.people_alt_rounded,
                         color: Colors.amberAccent,
                         size: 26,
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'KẾT BẠN & TỔ ĐỘI PVP (2V2 / 4V4)',
+                        'DANH SÁCH BẠN BÈ & TÌM KIẾM KẾT BẠN',
                         style: TextStyle(
                           color: Colors.amberAccent,
                           fontSize: 16,
@@ -157,22 +165,48 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
                         ),
                       ),
                       const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          'MÃ ID CỦA BẠN: ${profile.playerCode}',
-                          style: const TextStyle(
-                            color: Colors.cyanAccent,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w900,
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => EditProfileDialog.show(context, profile),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.cyanAccent.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'MÃ ID CỦA BẠN: ${profile.playerCode}',
+                                style: const TextStyle(
+                                  color: Colors.cyanAccent,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.edit_rounded,
+                                size: 13,
+                                color: Color(0xFFFFD54F),
+                              ),
+                              const SizedBox(width: 2),
+                              const Text(
+                                'ĐỔI ID/TÊN',
+                                style: TextStyle(
+                                  color: Color(0xFFFFD54F),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -291,7 +325,33 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
+
+          // Mẹo kết bạn 2 tab
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.cyan.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.cyan.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: Color(0xFF00E5FF), size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Kiểm thử 2 tab: Mở Tab 1 xem mã ID (ở góc trên phải), sang Tab 2 nhập mã đó và bấm KẾT BẠN! Bấm nút "ĐỔI ID/TÊN" để cài đặt nhanh Tab 1 và Tab 2.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
 
           // Danh sách bạn bè
           Expanded(

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import '../models/pvp_match.dart';
+import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
 import 'components/floating_combat_text.dart';
@@ -12,9 +13,13 @@ import 'components/pvp_bot_player.dart';
 class PvpArenaGame extends FlameGame with HasCollisionDetection {
   final PvpOpponentInfo opponentInfo;
   final int playerCurrentRp;
+  final int? playerCurrentStars;
+  final bool isCurrentChallengerTop10;
   final bool isOnline;
   final bool isPlayerOne;
   final PvpGameMode gameMode;
+  final MapAssetConfig? selectedMapConfig;
+  late MapAssetConfig currentMapConfig;
   late final PvpTeamRoster teamRoster;
 
   late PlayerComponent player;
@@ -37,6 +42,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   int currentRound = 1;
   int playerWins = 0;
   int opponentWins = 0;
+  bool lastRoundPlayerWon = true;
   double roundTimeRemaining = 90.0;
   double stateTimer = 3.0; // 3s cho roundIntro / 2.5s cho roundEnd
   DateTime matchStartTime = DateTime.now();
@@ -76,13 +82,19 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   PvpArenaGame({
     required this.opponentInfo,
     required this.playerCurrentRp,
+    this.playerCurrentStars,
+    this.isCurrentChallengerTop10 = false,
     this.isOnline = false,
     this.isPlayerOne = true,
     this.gameMode = PvpGameMode.solo1v1,
     PvpTeamRoster? roster,
+    this.selectedMapConfig,
   }) {
     // Không bao giờ pause khi chạy đa tab/cửa sổ không focus (Multi-window PvP)
     pauseWhenBackgrounded = false;
+
+    currentMapConfig =
+        selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
 
     // Trận online chỉ bắt đầu khi CẢ HAI bên đã vào phòng (xem startOnlineMatch)
     if (isOnline) matchState = PvpMatchState.waiting;
@@ -147,8 +159,11 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // 1. Bản đồ đấu trường Thần Điện Hoàng Kim đối xứng 960x640
-    arenaMap = PvpArenaMapComponent(gameMode: gameMode);
+    // 1. Bản đồ đấu trường đối xứng 960x640 (Ngẫu nhiên theo currentMapConfig)
+    arenaMap = PvpArenaMapComponent(
+      gameMode: gameMode,
+      mapConfig: currentMapConfig,
+    );
     await world.add(arenaMap);
 
     // 2. Player (Bên trái: X=200, Y=320)
@@ -267,11 +282,14 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
 
     if (playerHpPct > botHpPct) {
       playerWins++;
+      lastRoundPlayerWon = true;
     } else if (botHpPct > playerHpPct) {
       opponentWins++;
+      lastRoundPlayerWon = false;
     } else {
       // Hòa: nếu % bằng nhau thì ưu tiên người chơi
       playerWins++;
+      lastRoundPlayerWon = true;
     }
 
     onStateChanged?.call();
@@ -310,6 +328,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
 
     final result = PvpEloCalculator.calculateResult(
       playerCurrentRp: playerCurrentRp,
+      playerCurrentStars: playerCurrentStars,
+      isCurrentChallengerTop10: isCurrentChallengerTop10,
       playerRoundsWon: playerWins,
       opponentRoundsWon: opponentWins,
       matchDuration: duration,
@@ -506,8 +526,10 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
           matchState == PvpMatchState.fighting) {
         if (remoteSenderWins > opponentWins) {
           player.currentHp = 0;
+          lastRoundPlayerWon = false;
         } else if (remoteReceiverWins > playerWins) {
           bot.currentHp = 0;
+          lastRoundPlayerWon = true;
         }
         playerWins = remoteReceiverWins;
         opponentWins = remoteSenderWins;
@@ -522,18 +544,21 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
         opponentWins = remoteSenderWins;
         if (opponentWins > playerWins) {
           player.currentHp = 0;
+          lastRoundPlayerWon = false;
         } else {
           bot.currentHp = 0;
+          lastRoundPlayerWon = true;
         }
         _concludeMatch();
         return;
       }
     }
 
-    // Nếu máu của mình hoặc đối thủ vừa giảm về 0 trong hiệp đang đánh -> phân định hiệp ngay
-    if (matchState == PvpMatchState.fighting &&
-        (player.currentHp <= 0 || bot.currentHp <= 0) &&
-        gameMode == PvpGameMode.solo1v1) {
+    // Nếu toàn bộ đội xanh hoặc đội đỏ vừa bị hạ gục về 0 HP trong hiệp đang đánh -> phân định hiệp ngay (1v1, 2v2, 4v4)
+    final blueWiped =
+        player.currentHp <= 0 && allies.every((a) => a.currentHp <= 0);
+    final redWiped = allEnemies.every((e) => e.currentHp <= 0);
+    if (matchState == PvpMatchState.fighting && (blueWiped || redWiped)) {
       _adjudicateRound();
       return;
     }

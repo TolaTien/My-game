@@ -5,7 +5,10 @@ import 'package:my_game/game/ai/pvp_bot_ai.dart';
 import 'package:my_game/game/components/player.dart';
 import 'package:my_game/game/components/pvp_bot_player.dart';
 import 'package:my_game/game/pvp_arena_game.dart';
+import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/models/pvp_match.dart';
+import 'package:my_game/services/database_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Group 1: Bot Generator & Polish', () {
@@ -654,6 +657,143 @@ void main() {
       expect(kaelen.useSkill3(), isTrue);
       expect(kaelen.isBerserk, isTrue);
       expect(kaelen.skill3JudgmentTimer, greaterThan(0));
+    });
+  });
+
+  group('Group 9: Shared Star-Based Rank System (1v1 / 2v2 / 4v4) & Top 10 Challenger', () {
+    test('Winning in 1v1, 2v2, and 4v4 each adds +1 Star to the same shared rank (3 stars per tier from Đồng to Kim Cương)', () {
+      var profile = PlayerProfile.defaultProfile();
+      expect(profile.rankTier, equals('Đồng'));
+      expect(profile.rankStars, equals(0));
+      expect(profile.starsInTier, equals(0));
+      expect(profile.maxStarsInTier, equals(3));
+
+      // Win 1 in 1v1 -> Đồng 1/3 sao
+      final win1v1 = PvpEloCalculator.calculateResult(
+        playerCurrentRp: profile.rankPoints,
+        playerCurrentStars: profile.rankStars,
+        playerRoundsWon: 2,
+        opponentRoundsWon: 1,
+        matchDuration: const Duration(seconds: 60),
+        gameMode: PvpGameMode.solo1v1,
+      );
+      expect(win1v1.starDelta, equals(1));
+      expect(win1v1.newTotalStars, equals(1));
+      expect(win1v1.newRankTier, equals('Đồng'));
+      expect(win1v1.newStarsInTier, equals(1));
+      profile = profile.copyWith(
+        rankPoints: win1v1.newRankPoints,
+        rankStars: win1v1.newTotalStars,
+      );
+
+      // Win 2 in 2v2 -> Đồng 2/3 sao
+      final win2v2 = PvpEloCalculator.calculateResult(
+        playerCurrentRp: profile.rankPoints,
+        playerCurrentStars: profile.rankStars,
+        playerRoundsWon: 2,
+        opponentRoundsWon: 0,
+        matchDuration: const Duration(seconds: 75),
+        gameMode: PvpGameMode.duo2v2,
+      );
+      expect(win2v2.starDelta, equals(1));
+      expect(win2v2.newTotalStars, equals(2));
+      expect(win2v2.newRankTier, equals('Đồng'));
+      expect(win2v2.newStarsInTier, equals(2));
+      profile = profile.copyWith(
+        rankPoints: win2v2.newRankPoints,
+        rankStars: win2v2.newTotalStars,
+      );
+
+      // Win 3 in 4v4 -> Reaches 3rd star in Đồng -> Promotes to Bạc 0/3 sao!
+      final win4v4 = PvpEloCalculator.calculateResult(
+        playerCurrentRp: profile.rankPoints,
+        playerCurrentStars: profile.rankStars,
+        playerRoundsWon: 2,
+        opponentRoundsWon: 1,
+        matchDuration: const Duration(seconds: 95),
+        gameMode: PvpGameMode.squad4v4,
+      );
+      expect(win4v4.starDelta, equals(1));
+      expect(win4v4.newTotalStars, equals(3));
+      expect(win4v4.oldRankTier, equals('Đồng'));
+      expect(win4v4.newRankTier, equals('Bạc'));
+      expect(win4v4.newStarsInTier, equals(0));
+      expect(win4v4.isPromotion, isTrue);
+    });
+
+    test('Every tier from Đồng to Kim Cương has 3 stars, and Kim Cương 3rd star promotes to Huyền Thoại 0 sao', () {
+      // 0..2: Đồng, 3..5: Bạc, 6..8: Vàng, 9..11: Bạch Kim, 12..14: Kim Cương, 15+: Huyền Thoại
+      expect(PvpRankSystem.getTierFromStars(0), equals('Đồng'));
+      expect(PvpRankSystem.getStarsInTier(2), equals(2));
+
+      expect(PvpRankSystem.getTierFromStars(3), equals('Bạc'));
+      expect(PvpRankSystem.getStarsInTier(3), equals(0));
+
+      expect(PvpRankSystem.getTierFromStars(6), equals('Vàng'));
+      expect(PvpRankSystem.getStarsInTier(8), equals(2));
+
+      expect(PvpRankSystem.getTierFromStars(9), equals('Bạch Kim'));
+      expect(PvpRankSystem.getStarsInTier(11), equals(2));
+
+      expect(PvpRankSystem.getTierFromStars(12), equals('Kim Cương'));
+      expect(PvpRankSystem.getStarsInTier(14), equals(2));
+
+      // Win at Kim Cương 2 sao (totalStars = 14) -> Huyền Thoại 0 sao (totalStars = 15)
+      final promoteToLegendary = PvpEloCalculator.calculateResult(
+        playerCurrentRp: PvpRankSystem.rpFromTotalStars(14),
+        playerCurrentStars: 14,
+        playerRoundsWon: 2,
+        opponentRoundsWon: 0,
+        matchDuration: const Duration(seconds: 80),
+        gameMode: PvpGameMode.duo2v2,
+      );
+      expect(promoteToLegendary.isPromotion, isTrue);
+      expect(promoteToLegendary.oldRankTier, equals('Kim Cương'));
+      expect(promoteToLegendary.newRankTier, equals('Huyền Thoại'));
+      expect(promoteToLegendary.newTotalStars, equals(15));
+      expect(promoteToLegendary.newStarsInTier, equals(0)); // Huyền Thoại 0 sao
+      expect(promoteToLegendary.maxStarsInNewTier, isNull);
+    });
+
+    test('Huyền Thoại accumulates stars from 0s upwards and promotes to Thách Đấu when in Top 10 Server', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      final db = MockDatabaseService();
+      await db.initialize();
+
+      // Player at Huyền Thoại 0 sao (totalStars = 15, 2000 RP) -> outside Top 10 Server (Rank #11)
+      const legendary0Profile = PlayerProfile(
+        playerName: 'ChiếnBinh_HuyềnThoại',
+        rankPoints: 2000,
+        rankStars: 15,
+      );
+      final evalOutsideTop10 = await db.evaluatePlayerServerRank(legendary0Profile);
+      expect(evalOutsideTop10.serverRank, greaterThan(10));
+      expect(evalOutsideTop10.isChallengerTop10, isFalse);
+
+      final resolvedOutside = legendary0Profile.copyWith(
+        isChallengerTop10: evalOutsideTop10.isChallengerTop10,
+        serverRank: evalOutsideTop10.serverRank,
+      );
+      expect(resolvedOutside.rankTier, equals('Huyền Thoại'));
+      expect(resolvedOutside.starsInTier, equals(0));
+
+      // Player accumulates stars in Huyền Thoại (e.g. 20 sao Huyền Thoại => totalStars = 35, RP = 2600)
+      final top10Stars = 35;
+      final top10Profile = legendary0Profile.copyWith(
+        rankStars: top10Stars,
+        rankPoints: PvpRankSystem.rpFromTotalStars(top10Stars),
+      );
+      final evalInsideTop10 = await db.evaluatePlayerServerRank(top10Profile);
+      expect(evalInsideTop10.serverRank, lessThanOrEqualTo(10));
+      expect(evalInsideTop10.isChallengerTop10, isTrue);
+
+      final resolvedChallenger = top10Profile.copyWith(
+        isChallengerTop10: evalInsideTop10.isChallengerTop10,
+        serverRank: evalInsideTop10.serverRank,
+      );
+      expect(resolvedChallenger.rankTier, equals('Thách Đấu'));
+      expect(resolvedChallenger.starsInTier, equals(20)); // 20 sao Thách Đấu
     });
   });
 }

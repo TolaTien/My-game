@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Enumeration of BGM tracks used throughout the game.
 enum BgmTrack {
-  lobby('lobby_bgm.mp3', 'Heroic Lobby Theme'),
+  lobby('nhac-sanh-cho.mp3', 'Heroic Lobby Theme'),
   dungeon('dungeon_bgm.mp3', 'Dungeon Crawler Theme'),
   boss('boss_bgm.mp3', 'Boss Orchestral Theme'),
   pvp('pvp_bgm.mp3', 'PvP Adrenaline Combat Theme');
@@ -19,11 +19,18 @@ enum BgmTrack {
   static BgmTrack? fromName(dynamic input) {
     if (input == null) return null;
     if (input is BgmTrack) return input;
-    final str = input.toString().trim();
+    final str = input.toString().trim().toLowerCase();
+    if (str == 'lobby' ||
+        str == 'lobby_bgm' ||
+        str == 'lobby_bgm.mp3' ||
+        str == 'nhac-sanh-cho' ||
+        str == 'nhac-sanh-cho.mp3') {
+      return BgmTrack.lobby;
+    }
     for (final track in values) {
-      if (track.name.toLowerCase() == str.toLowerCase() ||
-          track.fileName.toLowerCase() == str.toLowerCase() ||
-          track.fileName.replaceAll('.mp3', '').toLowerCase() == str.toLowerCase()) {
+      if (track.name.toLowerCase() == str ||
+          track.fileName.toLowerCase() == str ||
+          track.fileName.replaceAll('.mp3', '').toLowerCase() == str) {
         return track;
       }
     }

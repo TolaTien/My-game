@@ -33,7 +33,7 @@
     {
       "id": "nova_blade",
       "name": "Nova Blade (NOVA-07) — Chiến Binh Neon",
-      "role": "Fighter • Melee (Asset 1 & 2)",
+      "role": "Đấu Sĩ / Cơ Động",
       "classType": "warrior",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -50,19 +50,19 @@
       },
       "skillIds": ["nova_energy_slash", "nova_shadow_dash", "nova_quantum_burst"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/nova_blade_portrait.png",
-        "runSheet": "assets/images/heroes/nova_blade_sheet.png",
-        "attackSheet": "assets/images/heroes/nova_blade_sheet.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/nova/nova.png",
+        "runSheet": "assets/images/heroes/nova/nova-run.png",
+        "attackSheet": "assets/images/heroes/nova/nova-attack.png",
         "skill1Sheet": "assets/images/skills/nova_energy_slash.png",
-        "useProceduralFallback": true
+        "useProceduralFallback": false
       }
     },
     {
       "id": "shadow_01",
-      "name": "SHADOW-01 — Sát Thủ Hư Không",
-      "role": "Assassin • Ranged (Asset 2)",
+      "name": "Shadow (SHADOW-01) — Sát Thủ Hư Không",
+      "role": "Sát Thủ / Hư Không",
       "classType": "assassin",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -79,13 +79,13 @@
       },
       "skillIds": ["shadow_plasma_shot", "shadow_cyber_spin", "shadow_phantom_dash"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/shadow_01_portrait.png",
-        "runSheet": "assets/images/heroes/shadow_01_sheet.png",
-        "attackSheet": "assets/images/heroes/shadow_01_sheet.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/shadow/idle/01.png",
+        "runSheet": "assets/images/heroes/shadow/run/01.png",
+        "attackSheet": "assets/images/heroes/shadow/attack/01.png",
         "skill1Sheet": "assets/images/skills/cyber_skill_effects.png",
-        "useProceduralFallback": true
+        "useProceduralFallback": false
       }
     },
     {
@@ -175,8 +175,8 @@
     },
     {
       "id": "kaelen",
-      "name": "Kaelen — Kiếm Khách Lôi Quang",
-      "role": "Thunderblade • Sát Thủ (Asset 4)",
+      "name": "Kale (Kaelen) — Kiếm Khách Lôi Quang",
+      "role": "Sát Thủ / Lôi Kiếm",
       "classType": "assassin",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -193,13 +193,13 @@
       },
       "skillIds": ["kaelen_thunder_flash", "kaelen_storm_vortex", "kaelen_heaven_judgment"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/kaelen_portrait.png",
-        "runSheet": "assets/images/heroes/kaelen_sheet.png",
-        "attackSheet": "assets/images/heroes/kaelen_sheet.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/kale/idle/01.png",
+        "runSheet": "assets/images/heroes/kale/run/01.png",
+        "attackSheet": "assets/images/heroes/kale/kale-attack.png",
         "skill1Sheet": "assets/images/skills/kaelen_thunder_flash.png",
-        "useProceduralFallback": true
+        "useProceduralFallback": false
       }
     },
     {

@@ -1,6 +1,7 @@
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import '../models/player_profile.dart';
+import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
 import 'components/dungeon_map.dart';
@@ -14,6 +15,8 @@ import 'components/floating_combat_text.dart';
 
 class GoldRushGame extends FlameGame with HasCollisionDetection {
   final PlayerProfile? playerProfile;
+  final MapAssetConfig? selectedMapConfig;
+  late MapAssetConfig currentMapConfig;
 
   late final PlayerComponent player;
   late DungeonMapComponent dungeonMap;
@@ -30,6 +33,9 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   // Callback thông báo cho Flutter HUD khi Player thay đổi stats
   Function()? onPlayerStatsChanged;
 
+  // Callback thông báo cho Flutter HUD khi đổi map / chuyển tầng
+  Function()? onMapChanged;
+
   // Callback chiến thắng màn chơi khi quét sạch quái hoặc vào portal
   Function()? onVictory;
 
@@ -40,8 +46,10 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   bool isVictoryTriggered = false;
   bool isGameOverTriggered = false;
 
-  GoldRushGame({this.playerProfile}) {
+  GoldRushGame({this.playerProfile, this.selectedMapConfig}) {
     pauseWhenBackgrounded = false;
+    currentMapConfig =
+        selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
     final hero = activeProfile.selectedHeroId;
     final userHeroLv = activeProfile.getHeroLevel(hero);
     player = PlayerComponent(
@@ -61,7 +69,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     await super.onLoad();
 
     // 1. Thêm bản đồ hầm ngục
-    dungeonMap = DungeonMapComponent();
+    dungeonMap = DungeonMapComponent(config: currentMapConfig);
     await world.add(dungeonMap);
 
     // 2. Thêm Player ở tọa độ trung tâm
@@ -127,10 +135,24 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  void advanceToNextFloor() {
+  Future<void> _switchDungeonMap(MapAssetConfig newMap) async {
+    currentMapConfig = newMap;
+    if (dungeonMap.isMounted) {
+      dungeonMap.removeFromParent();
+    }
+    dungeonMap = DungeonMapComponent(config: currentMapConfig);
+    await world.add(dungeonMap);
+  }
+
+  void advanceToNextFloor({MapAssetConfig? nextMap}) {
     currentFloor++;
     isVictoryTriggered = false;
     isGameOverTriggered = false;
+
+    // Đổi sang một map ngẫu nhiên mới cho tầng tiếp theo (đảm bảo khác map hiện tại)
+    final newMap = nextMap ??
+        GameAssetRegistry.instance.getRandomMap(excludeId: currentMapConfig.id);
+    _switchDungeonMap(newMap);
 
     // Thưởng vàng vượt ải
     player.coinsCollected += 50 * currentFloor;
@@ -150,11 +172,17 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     _spawnBoss(floor: currentFloor);
 
     onPlayerStatsChanged?.call();
+    onMapChanged?.call();
   }
 
   void retryFloor() {
     isVictoryTriggered = false;
     isGameOverTriggered = false;
+
+    // Khi chơi lại, cũng chọn ngẫu nhiên map mới để trải nghiệm phong phú
+    final newMap =
+        GameAssetRegistry.instance.getRandomMap(excludeId: currentMapConfig.id);
+    _switchDungeonMap(newMap);
 
     player.position = Vector2(400, 300);
     player.currentHp = player.maxHp;
@@ -168,6 +196,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     _spawnBoss(floor: currentFloor);
 
     onPlayerStatsChanged?.call();
+    onMapChanged?.call();
   }
 
   void _cleanupFloorEntities() {
