@@ -90,8 +90,8 @@
     },
     {
       "id": "ember_02",
-      "name": "EMBER-02 — Phù Thủy Hỏa Cầu",
-      "role": "Mage • AoE (Asset 2)",
+      "name": "Ember (EMBER-02) — Phù Thủy Hỏa Cầu",
+      "role": "Pháp Sư / Hỏa Lực",
       "classType": "mage",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -108,12 +108,13 @@
       },
       "skillIds": ["ember_fireball", "ember_flame_pillar", "ember_supernova"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/ember_02_portrait.png",
-        "runSheet": "assets/images/heroes/ember_02_sheet.png",
-        "attackSheet": "assets/images/heroes/ember_02_sheet.png",
-        "useProceduralFallback": true
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/ember/Ember-idle.png",
+        "runSheet": "assets/images/heroes/ember/Ember-run.png",
+        "attackSheet": "assets/images/heroes/ember/Ember-attack.png",
+        "portrait": "assets/images/heroes/ember/ember.png",
+        "useProceduralFallback": false
       }
     },
     {

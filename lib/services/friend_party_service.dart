@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
@@ -89,6 +90,43 @@ class FriendPartyService {
     return 'Chiến Binh #${code.replaceAll('GR', '')}';
   }
 
+  /// Kiểm tra xem mã hoặc tên có thuộc về chính bản thân người chơi hay không
+  bool isSelfPlayer({String? code, String? name}) {
+    final prof = PlayerStorage.currentProfile;
+    final myCodes = <String>{
+      effectivePlayerCode.toUpperCase(),
+      prof.playerCode.toUpperCase(),
+      _sessionPlayerCode.toUpperCase(),
+    }..removeWhere((c) => c.isEmpty);
+
+    final myNames = <String>{
+      effectivePlayerName.toLowerCase(),
+      prof.playerName.toLowerCase(),
+    }..removeWhere((n) => n.isEmpty);
+
+    if (code != null) {
+      final cleanCode = code.trim().toUpperCase();
+      if (cleanCode.isNotEmpty && myCodes.contains(cleanCode)) {
+        return true;
+      }
+    }
+    if (name != null) {
+      final cleanName = name.trim().toLowerCase();
+      if (cleanName.isNotEmpty && myNames.contains(cleanName)) {
+        return true;
+      }
+    }
+    try {
+      final authUid = FirebaseAuth.instance.currentUser?.uid;
+      if (authUid != null && authUid.isNotEmpty) {
+        if (code != null && code.trim() == authUid) return true;
+        if (name != null && name.trim() == authUid) return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
   FirebaseDatabase? _getDb() {
     try {
       if (Firebase.apps.isEmpty) return null;
@@ -148,9 +186,8 @@ class FriendPartyService {
     if (clean.isEmpty) return null;
     final upper = clean.toUpperCase();
 
-    // 1. Không thể tự kết bạn với chính mình
-    if (upper == effectivePlayerCode.toUpperCase() ||
-        clean.toLowerCase() == effectivePlayerName.toLowerCase()) {
+    // 1. Không thể tự kết bạn với chính mình (chặn triệt để cả profile code, session code, name, auth uid)
+    if (isSelfPlayer(code: upper, name: clean)) {
       return null;
     }
 
@@ -167,11 +204,15 @@ class FriendPartyService {
       final db = _getDb();
       if (db != null) {
         final snap = await db.ref('directory/$upper').get();
-        if (snap.exists && snap.value is Map) {
-          final map = Map<String, dynamic>.from(snap.value as Map);
-          final found = FriendInfo.fromJson(map);
-          _appendFriend(found);
-          return found;
+        if (snap.exists && snap.value != null) {
+          final norm = _normalizeMap(snap.value);
+          if (norm != null) {
+            final found = FriendInfo.fromJson(norm);
+            if (!isSelfPlayer(code: found.code, name: found.name)) {
+              _appendFriend(found);
+              return found;
+            }
+          }
         }
       }
     } catch (_) {}
@@ -182,26 +223,35 @@ class FriendPartyService {
       await prefs.reload();
       final raw = prefs.getString('$_localDirectoryPrefix$upper');
       if (raw != null && raw.isNotEmpty) {
-        final map = jsonDecode(raw) as Map<String, dynamic>;
-        final found = FriendInfo.fromJson(map);
-        _appendFriend(found);
-        return found;
+        final map = jsonDecode(raw);
+        if (map is Map) {
+          final norm = _normalizeMap(map);
+          if (norm != null) {
+            final found = FriendInfo.fromJson(norm);
+            if (!isSelfPlayer(code: found.code, name: found.name)) {
+              _appendFriend(found);
+              return found;
+            }
+          }
+        }
       }
     } catch (_) {}
 
-    // 5. Dự phòng khi kiểm thử hoặc ngoại tuyến: chấp nhận mã hợp lệ định dạng GRxxxx
+    // 5. Dự phòng khi kiểm thử hoặc ngoại tuyến: chấp nhận mã hợp lệ định dạng GRxxxx (nhưng không phải của mình)
     if (RegExp(r'^GR\d{4}$', caseSensitive: false).hasMatch(upper)) {
-      final fallbackFriend = FriendInfo(
-        code: upper,
-        name: 'Chiến Binh #${upper.replaceAll('GR', '')}',
-        rankPoints: 120,
-        rankTier: 'Bạc',
-        selectedHeroId: 'nova_blade',
-        heroLevel: 10,
-        isOnline: true,
-      );
-      _appendFriend(fallbackFriend);
-      return fallbackFriend;
+      if (!isSelfPlayer(code: upper)) {
+        final fallbackFriend = FriendInfo(
+          code: upper,
+          name: 'Chiến Binh #${upper.replaceAll('GR', '')}',
+          rankPoints: 120,
+          rankTier: 'Bạc',
+          selectedHeroId: 'nova_blade',
+          heroLevel: 10,
+          isOnline: true,
+        );
+        _appendFriend(fallbackFriend);
+        return fallbackFriend;
+      }
     }
 
     // 6. Nếu không tìm thấy người chơi thật trên hệ thống
@@ -263,6 +313,24 @@ class FriendPartyService {
     return created;
   }
 
+  Map<String, dynamic>? _normalizeMap(dynamic raw) {
+    if (raw is! Map) return null;
+    return raw.map((k, v) => MapEntry(k.toString(), v));
+  }
+
+  bool _areMembersEqual(List<FriendInfo> a, List<FriendInfo> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].code.toUpperCase() != b[i].code.toUpperCase() ||
+          a[i].selectedHeroId != b[i].selectedHeroId ||
+          a[i].heroLevel != b[i].heroLevel ||
+          a[i].name != b[i].name) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Lắng nghe thay đổi Realtime của phòng tổ đội trên cả Firebase VÀ SharedPreferences (giữa các tab Chrome)
   void _listenToPartyRealtime(String partyCode) {
     final cleanCode = partyCode.trim().toUpperCase();
@@ -280,12 +348,21 @@ class FriendPartyService {
     if (db != null) {
       _partySubscription = db.ref('parties/$cleanCode').onValue.listen((event) {
         final raw = event.snapshot.value;
-        if (raw is! Map) return;
-        final data = Map<String, dynamic>.from(raw);
+        if (raw == null) return;
+        final data = _normalizeMap(raw);
+        if (data == null) return;
         final parsed = _parsePartySnapshot(cleanCode, data);
         if (parsed != null) {
-          partyNotifier.value = parsed;
-          unawaited(_savePartyToLocalPrefs(parsed));
+          final current = partyNotifier.value;
+          if (current == null ||
+              current.partyCode != parsed.partyCode ||
+              current.mode != parsed.mode ||
+              current.leaderHeroId != parsed.leaderHeroId ||
+              current.members.length != parsed.members.length ||
+              !_areMembersEqual(current.members, parsed.members)) {
+            partyNotifier.value = parsed;
+            unawaited(_savePartyToLocalPrefs(parsed));
+          }
         }
       }, onError: (Object err) {
         debugPrint('Party stream error: $err');
@@ -293,7 +370,7 @@ class FriendPartyService {
     }
 
     // 2. Kênh SharedPreferences Polling (đồng bộ tức thì giữa 2 tab Chrome trên cùng máy)
-    _localPollTimer = Timer.periodic(const Duration(milliseconds: 800), (_) async {
+    _localPollTimer = Timer.periodic(const Duration(milliseconds: 400), (_) async {
       if (_watchedPartyCode != cleanCode) return;
       final localParty = await _readPartyFromLocalPrefs(cleanCode);
       if (localParty != null) {
@@ -301,7 +378,9 @@ class FriendPartyService {
         if (current == null ||
             current.partyCode != localParty.partyCode ||
             current.mode != localParty.mode ||
-            current.members.length != localParty.members.length) {
+            current.leaderHeroId != localParty.leaderHeroId ||
+            current.members.length != localParty.members.length ||
+            !_areMembersEqual(current.members, localParty.members)) {
           partyNotifier.value = localParty;
         }
       }
@@ -327,15 +406,21 @@ class FriendPartyService {
     if (rawMembers is List) {
       for (final item in rawMembers) {
         if (item is Map) {
-          allMembers.add(FriendInfo.fromJson(Map<String, dynamic>.from(item)));
+          final normItem = _normalizeMap(item);
+          if (normItem != null) {
+            allMembers.add(FriendInfo.fromJson(normItem));
+          }
         }
       }
     } else if (rawMembers is Map) {
       rawMembers.forEach((_, value) {
         if (value is Map) {
-          allMembers.add(
-            FriendInfo.fromJson(Map<String, dynamic>.from(value)),
-          );
+          final normItem = _normalizeMap(value);
+          if (normItem != null) {
+            allMembers.add(
+              FriendInfo.fromJson(normItem),
+            );
+          }
         }
       });
     }
@@ -571,28 +656,70 @@ class FriendPartyService {
     } catch (_) {}
   }
 
+  /// Cập nhật Tướng đang trang bị của người chơi hiện tại vào phòng Tổ Đội và sync realtime
+  Future<void> updateMyPartyHero(String newHeroId) async {
+    final current = partyNotifier.value;
+    if (current == null) return;
+    final myCode = effectivePlayerCode.toUpperCase();
+    PartyRoomState updated;
+    if (current.leaderCode.toUpperCase() == myCode) {
+      if (current.leaderHeroId == newHeroId) return;
+      updated = current.copyWith(leaderHeroId: newHeroId);
+    } else {
+      var changed = false;
+      final updatedMembers = current.members.map((m) {
+        if (m.code.toUpperCase() == myCode) {
+          if (m.selectedHeroId != newHeroId) {
+            changed = true;
+            return m.copyWith(selectedHeroId: newHeroId);
+          }
+        }
+        return m;
+      }).toList();
+      if (!changed) return;
+      updated = current.copyWith(members: updatedMembers);
+    }
+    partyNotifier.value = updated;
+    await _syncPartyEverywhere(updated);
+  }
+
   /// Tham gia phòng tổ đội của bạn bè bằng Mã Đội (Party Code).
   /// Ghi trực tiếp thông tin người vào phòng lên cả Firebase VÀ Local Storage để Chủ Phòng thấy ngay lập tức!
   Future<PartyRoomState> joinPartyByCode(
     String rawPartyCode, {
     PvpGameMode fallbackMode = PvpGameMode.duo2v2,
+    String? asGuestCode,
+    String? asGuestName,
+    String? asGuestHeroId,
   }) async {
     final code = rawPartyCode.trim().toUpperCase();
+    if (code.isEmpty) {
+      throw ArgumentError('Mã phòng không được để trống!');
+    }
     final profile = PlayerStorage.currentProfile;
-    var myCode = effectivePlayerCode;
-    var myName = effectivePlayerName;
+    final myCode = asGuestCode ?? effectivePlayerCode;
+    final myName = asGuestName ?? effectivePlayerName;
+    final myHeroId = asGuestHeroId ?? profile.selectedHeroId;
 
-    // 1. Đọc thông tin phòng hiện có từ Firebase hoặc LocalPrefs
+    // 1. Kiểm tra nếu chính người này đang ở trong phòng này
+    final currentActive = partyNotifier.value;
+    if (currentActive != null && currentActive.partyCode.toUpperCase() == code) {
+      if (asGuestCode == null) {
+        throw StateError('Bạn đang ở trong phòng $code này rồi!');
+      }
+    }
+
+    // 2. Đọc thông tin phòng hiện có từ Firebase hoặc LocalPrefs
     PartyRoomState? existingParty;
     try {
       final db = _getDb();
       if (db != null) {
         final snap = await db.ref('parties/$code').get();
-        if (snap.exists && snap.value is Map) {
-          existingParty = _parsePartySnapshot(
-            code,
-            Map<String, dynamic>.from(snap.value as Map),
-          );
+        if (snap.exists && snap.value != null) {
+          final norm = _normalizeMap(snap.value);
+          if (norm != null) {
+            existingParty = _parsePartySnapshot(code, norm);
+          }
         }
       }
     } catch (_) {}
@@ -600,10 +727,23 @@ class FriendPartyService {
     existingParty ??= await _readPartyFromLocalPrefs(code);
 
     if (existingParty != null) {
-      // Nếu 2 tab Chrome vô tình trùng mã với chủ phòng, cấp ngay mã Khách riêng để vào slot #2!
-      if (existingParty.leaderCode.toUpperCase() == myCode) {
-        myCode = 'GR${1000 + Random().nextInt(8999)}';
-        myName = '${profile.playerName} #${myCode.substring(2)}';
+      // 3. Chặn chủ phòng tự gia nhập phòng của chính mình
+      if (asGuestCode == null && isSelfPlayer(code: existingParty.leaderCode)) {
+        throw StateError('Bạn là chủ phòng của phòng $code, không thể tự tham gia lại!');
+      }
+
+      // 4. Nếu người chơi đã có trong danh sách thành viên
+      if (asGuestCode == null &&
+          existingParty.members.any((m) => isSelfPlayer(code: m.code, name: m.name))) {
+        partyNotifier.value = existingParty;
+        return existingParty;
+      }
+
+      // 5. Nếu phòng đã đủ người
+      if (existingParty.isFull) {
+        throw StateError(
+          'Phòng $code (${existingParty.mode.shortLabel}) đã đủ ${existingParty.maxSlots} người!',
+        );
       }
 
       final myFriendInfo = FriendInfo(
@@ -611,14 +751,14 @@ class FriendPartyService {
         name: myName,
         rankPoints: profile.rankPoints,
         rankTier: profile.rankTier,
-        selectedHeroId: profile.selectedHeroId,
+        selectedHeroId: myHeroId,
         heroLevel: profile.getHeroLevel(),
         isOnline: true,
         statusText: 'Đã vào phòng $code',
       );
 
       final updatedMembers = List<FriendInfo>.from(existingParty.members);
-      if (!updatedMembers.any((m) => m.code.toUpperCase() == myCode)) {
+      if (!updatedMembers.any((m) => m.code.toUpperCase() == myCode.toUpperCase())) {
         updatedMembers.add(myFriendInfo);
       }
 
@@ -629,22 +769,8 @@ class FriendPartyService {
       return joined;
     }
 
-    // Nếu mã phòng chưa có trên hệ thống -> Tạo phòng mới với mã đó
-    final joined = PartyRoomState(
-      partyCode: code.isEmpty ? 'TEAM888' : code,
-      leaderCode: myCode,
-      leaderName: myName,
-      leaderHeroId: profile.selectedHeroId,
-      leaderHeroLevel: profile.getHeroLevel(),
-      mode: fallbackMode == PvpGameMode.solo1v1
-          ? PvpGameMode.duo2v2
-          : fallbackMode,
-      members: const [],
-    );
-    partyNotifier.value = joined;
-    await _syncPartyEverywhere(joined);
-    _listenToPartyRealtime(joined.partyCode);
-    return joined;
+    // 6. Báo lỗi khi không tìm thấy phòng (tuyệt đối không tự tạo phòng ma)
+    throw ArgumentError('Không tìm thấy phòng có mã "$code"! Vui lòng kiểm tra lại mã phòng.');
   }
 
   void removeMemberFromParty(String friendCode) {

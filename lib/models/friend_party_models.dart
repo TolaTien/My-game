@@ -58,6 +58,28 @@ class FriendInfo {
       statusText: json['statusText'] as String? ?? 'Đang Online',
     );
   }
+
+  FriendInfo copyWith({
+    String? code,
+    String? name,
+    int? rankPoints,
+    String? rankTier,
+    String? selectedHeroId,
+    int? heroLevel,
+    bool? isOnline,
+    String? statusText,
+  }) {
+    return FriendInfo(
+      code: code ?? this.code,
+      name: name ?? this.name,
+      rankPoints: rankPoints ?? this.rankPoints,
+      rankTier: rankTier ?? this.rankTier,
+      selectedHeroId: selectedHeroId ?? this.selectedHeroId,
+      heroLevel: heroLevel ?? this.heroLevel,
+      isOnline: isOnline ?? this.isOnline,
+      statusText: statusText ?? this.statusText,
+    );
+  }
 }
 
 class PartyRoomState {

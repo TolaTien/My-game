@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/player_profile.dart';
 import '../services/audio_service.dart';
+import '../services/auth_service.dart';
 import '../services/game_settings_service.dart';
 import '../services/player_storage.dart';
+import 'auth_screen.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -194,7 +196,8 @@ class _SettingsDialogState extends State<SettingsDialog>
               ),
               child: Row(
                 children: [
-                  Row(
+                  Expanded(
+                    child: Row(
                     children: [
                       Container(
                         width: 8,
@@ -205,16 +208,33 @@ class _SettingsDialogState extends State<SettingsDialog>
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        'Asia-East Server • Ping: 18ms • ID: ${profile.playerCode}',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 10.5,
+                      Flexible(
+                        child: Text(
+                          AuthService.instance.isSignedIn
+                              ? '${AuthService.instance.currentUser?.email ?? ''} • ID: ${profile.playerCode}'
+                              : 'Asia-East Server • Ping: 18ms • ID: ${profile.playerCode}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 10.5,
+                          ),
                         ),
                       ),
                     ],
+                    ),
                   ),
-                  const Spacer(),
+                  if (AuthService.instance.isSignedIn) ...[
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _confirmLogout(context),
+                      icon: const Icon(Icons.logout_rounded, size: 16),
+                      label: const Text('Đăng xuất', style: TextStyle(fontSize: 11)),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white60,
@@ -268,6 +288,45 @@ class _SettingsDialogState extends State<SettingsDialog>
           ],
         ),
       ),
+    );
+  }
+
+  // --- ĐĂNG XUẤT TÀI KHOẢN ---
+  Future<void> _confirmLogout(BuildContext context) async {
+    AudioService.instance.playSfx(SfxSound.uiClick);
+    final email = AuthService.instance.currentUser?.email ?? '';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1528),
+        title: const Text('Đăng xuất?', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Tiến trình của tài khoản $email đã được lưu trên máy chủ.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+    await AuthService.instance.logout();
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (_) => false,
     );
   }
 

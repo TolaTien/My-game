@@ -143,6 +143,17 @@ class _HeroCanvasPainter extends CustomPainter {
       }
     }
 
+    // 4.4 EMBER (ember_02 / ember): Chạy animation IDLE trong sảnh (5 frames nhìn thẳng)
+    if (heroId == 'ember_02' || heroId == 'ember') {
+      final emberSheet = SpriteImageCache.instance.getHeroIdleImage(heroId) ??
+          SpriteImageCache.instance.getHeroIdleImage('ember_02') ??
+          SpriteImageCache.instance.getHeroIdleImage('ember');
+      if (emberSheet != null && emberSheet.width >= 1000) {
+        _drawEmberIdleAnimation(canvas, emberSheet, cx, daisCenter.dy, size, animProgress);
+        return;
+      }
+    }
+
     // Ưu tiên hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 (giống 100% trong Shop)
     // kết hợp hiệu ứng chuyển động nhún thở (Squash & Stretch) và nghiêng nhịp nhàng 60 FPS
     final spriteImg = SpriteImageCache.instance.getHeroImage(heroId);
@@ -265,6 +276,61 @@ class _HeroCanvasPainter extends CustomPainter {
     // Trong cell 256x256 của nova.png, chân nằm ở y ≈ 229, tâm x ≈ 117.5
     final feetY = 229.0 * (dstSize / cellW);
     final centerX = 117.5 * (dstSize / cellW);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      sheet,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
+  }
+
+  /// Hiển thị Ember (EMBER-02) chạy 5 frames IDLE mặt trước (Row 0) với hào quang hỏa diễm
+  void _drawEmberIdleAnimation(
+    Canvas canvas,
+    ui.Image sheet,
+    double cx,
+    double daisY,
+    Size size,
+    double animProgress,
+  ) {
+    if (sheet.width < 1000 || sheet.height < 1000) {
+      _drawAnimatedAssetHero(canvas, sheet, cx, daisY - 90);
+      return;
+    }
+
+    const double cellW = 256.0;
+    const double cellH = 256.0;
+
+    // Chạy tuần tự 5 frames IDLE mặt trước (Hàng 0: 5 ô cột 0 -> 4)
+    final int col = (animProgress * 5).floor() % 5;
+    const int row = 0;
+
+    final srcRect = Rect.fromLTWH(
+      col * cellW,
+      row * cellH,
+      cellW,
+      cellH,
+    );
+
+    // Hào quang hỏa diễm rực lửa phía sau lưng Ember
+    final auraPaint = Paint()
+      ..color = const Color(0xFFFF5722)
+          .withValues(alpha: 0.35 + 0.15 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    // Trong cell 256x256 của Ember-idle.png, chân nằm ở y ≈ 236, tâm x ≈ 128
+    final feetY = 236.0 * (dstSize / cellW);
+    final centerX = 128.0 * (dstSize / cellW);
 
     final dstLeft = cx - centerX;
     final dstTop = (daisY - 4.0) - feetY;

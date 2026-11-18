@@ -124,6 +124,16 @@ class PvpArenaMapComponent extends Component {
         mapConfig.id == 'map_bang' ||
         mapConfig.id == 'map_dao_bang_gia';
 
+    // 0. Nền không gian mở rộng phía ngoài tường đấu trường (tránh hẫng đen khi Camera follow)
+    final outerBgPaint = ui.Paint()
+      ..color = isIceTheme
+          ? const ui.Color(0xFF0D1B2A)
+          : const ui.Color(0xFF141722);
+    canvas.drawRect(
+      const ui.Rect.fromLTWH(-600, -400, arenaWidth + 1200, arenaHeight + 800),
+      outerBgPaint,
+    );
+
     // 1. Vẽ nền sàn đấu trường
     if (_mapImage != null) {
       canvas.drawImageRect(

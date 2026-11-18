@@ -633,18 +633,18 @@ class _LobbyScreenState extends State<LobbyScreen>
 
                   // 3.5 GÓC TRÊN PHẢI: NÚT CÀI ĐẶT HỆ THỐNG
                   posBox(
-                    1246,
+                    1324,
                     14,
-                    1310,
+                    1392,
                     84,
                     _buildSettingsHeaderButton(),
                   ),
 
-                  // 4. GÓC TRÊN PHẢI: 3 Ô TIỀN TỆ (XU, VÀNG, KIM CƯƠNG)
+                  // 4. GÓC TRÊN PHẢI: 2 Ô TIỀN TỆ (XU & VÀNG)
                   posBox(
-                    1318,
+                    1400,
                     14,
-                    1446,
+                    1566,
                     84,
                     _buildCurrencyPill(
                       leading: _buildXuCoinIcon(),
@@ -655,32 +655,15 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
                   posBox(
-                    1449,
+                    1574,
                     14,
-                    1600,
+                    1741,
                     84,
                     _buildCurrencyPill(
                       leading: _buildGoldCoinIcon(),
                       value: profile.gold,
                       valueColor: const Color(0xFFFFF59D),
                       plusBgColor: const Color(0xFFE68A00),
-                      onTap: _openShop,
-                    ),
-                  ),
-                  posBox(
-                    1602,
-                    14,
-                    1741,
-                    84,
-                    _buildCurrencyPill(
-                      leading: const Icon(
-                        Icons.diamond_rounded,
-                        color: Color(0xFF40E0FF),
-                        size: 26,
-                      ),
-                      value: profile.diamonds,
-                      valueColor: Colors.white,
-                      plusBgColor: const Color(0xFF1E88E5),
                       onTap: _openShop,
                     ),
                   ),
@@ -808,25 +791,6 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
 
-                  // 5.6 CÀI ĐẶT HỆ THỐNG (SETTINGS)
-                  posBox(
-                    18,
-                    630,
-                    178,
-                    726,
-                    _buildSciFiSidebarButton(
-                      label: 'CÀI ĐẶT',
-                      borderColor: const Color(0xFF00E5FF),
-                      glowColor: const Color(0xFF00B0FF),
-                      bgColors: const [Color(0xFF142D52), Color(0xFF0C1D38)],
-                      iconWidget: const Icon(
-                        Icons.settings_rounded,
-                        color: Color(0xFF00E5FF),
-                        size: 38,
-                      ),
-                      onTap: _openSettings,
-                    ),
-                  ),
 
                   // 5.7 SIDEBAR BÊN PHẢI: DANH SÁCH BẠN BÈ ONLINE/OFFLINE & NÚT MỜI TỔ ĐỘI "+"
                   posBox(
@@ -1949,9 +1913,10 @@ class _LobbyScreenState extends State<LobbyScreen>
           icon: Icons.flare_rounded,
         );
       case 'ember_02':
+      case 'ember':
         return const _HeroDisplayInfo(
-          name: 'EMBER-02',
-          title: 'Phù Thủy Hỏa Cầu (Asset 2)',
+          name: 'Ember (EMBER-02)',
+          title: 'Phù Thủy Hỏa Cầu',
           themeColor: Color(0xFFFF6D00),
           icon: Icons.local_fire_department_rounded,
         );

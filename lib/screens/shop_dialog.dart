@@ -146,14 +146,6 @@ class _ShopDialogState extends State<ShopDialog>
                         color: Colors.amberAccent,
                         value: profile.gold,
                       ),
-                      const SizedBox(width: 10),
-
-                      // Số dư Kim Cương
-                      _CurrencyBadge(
-                        icon: Icons.diamond_rounded,
-                        color: Colors.cyanAccent,
-                        value: profile.diamonds,
-                      ),
                       const SizedBox(width: 12),
 
                       // Nút đóng
@@ -293,6 +285,16 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFF9C27B0),
         icon: Icons.nights_stay_rounded,
         portraitAsset: 'assets/images/heroes/shadow_01_portrait.png',
+      ),
+      _HeroItem(
+        id: 'ember_02',
+        name: 'Ember (EMBER-02)',
+        subtitle: 'Phù Thủy Hỏa Cầu',
+        role: 'PHÁP SƯ / HỎA LỰC',
+        description: 'Hỏa cầu nổ diện rộng, cột lửa ma pháp thiêu đốt, thái dương bộc phá hủy diệt.',
+        color: const Color(0xFFFF5722),
+        icon: Icons.local_fire_department_rounded,
+        portraitAsset: 'assets/images/heroes/ember/ember.png',
       ),
     ];
 
@@ -773,35 +775,35 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'skin_george_gold',
         name: 'George Hoàng Kim',
         forHero: 'George',
-        priceDiamonds: 50,
+        priceGold: 150,
         color: const Color(0xFFFFD700),
       ),
       _SkinItem(
         id: 'skin_ranger_shadow',
         name: 'Ranger Bóng Đêm',
         forHero: 'Xạ Thủ Ranger',
-        priceDiamonds: 40,
+        priceGold: 120,
         color: const Color(0xFF7E57C2),
       ),
       _SkinItem(
         id: 'skin_tanker_magma',
         name: 'Hiệp Sĩ Dung Nham',
         forHero: 'Hiệp Sĩ Tanker',
-        priceDiamonds: 45,
+        priceGold: 130,
         color: const Color(0xFFFF3D00),
       ),
       _SkinItem(
         id: 'skin_ninja_thunder',
         name: 'Ninja Lôi Thần',
         forHero: 'Ninja Sát Thủ',
-        priceDiamonds: 50,
+        priceGold: 150,
         color: const Color(0xFF651FFF),
       ),
       _SkinItem(
         id: 'skin_kaelen_emperor',
         name: 'Kaelen Lôi Đế Hoàng Kim',
         forHero: 'Kaelen Lôi Quang',
-        priceDiamonds: 60,
+        priceGold: 200,
         color: const Color(0xFF00E5FF),
       ),
     ];
@@ -962,30 +964,30 @@ class _ShopDialogState extends State<ShopDialog>
                         height: 30,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyanAccent.shade700,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.zero,
+                            backgroundColor: Colors.amber.shade700,
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
                           onPressed: () async {
-                            if (profile.diamonds < skin.priceDiamonds) {
+                            if (profile.gold < skin.priceGold) {
                               _showNotification(
-                                  'Không đủ Kim Cương! Cần ${skin.priceDiamonds} KC.',
+                                  'Không đủ Vàng! Cần ${skin.priceGold} Vàng.',
                                   isSuccess: false);
                               return;
                             }
                             final success = await PlayerStorage.unlockSkin(
-                                skin.id, skin.priceDiamonds);
+                                skin.id, skin.priceGold);
                             if (success) {
                               _showNotification(
-                                  'Đã sở hữu ${skin.name} (-${skin.priceDiamonds} KC)!');
+                                  'Đã sở hữu ${skin.name} (-${skin.priceGold} Vàng)!');
                             }
                           },
-                          icon: const Icon(Icons.diamond_rounded, size: 14),
+                          icon: const Icon(Icons.monetization_on_rounded, size: 14),
                           label: Text(
-                            '${skin.priceDiamonds} KC',
+                            '${skin.priceGold} VÀNG',
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 11,
@@ -1094,14 +1096,14 @@ class _SkinItem {
   final String id;
   final String name;
   final String forHero;
-  final int priceDiamonds;
+  final int priceGold;
   final Color color;
 
   const _SkinItem({
     required this.id,
     required this.name,
     required this.forHero,
-    required this.priceDiamonds,
+    required this.priceGold,
     required this.color,
   });
 }

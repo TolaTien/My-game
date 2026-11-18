@@ -310,16 +310,18 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
     final bool isKale = heroId == 'kaelen' || heroId == 'kale';
+    final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
     final isMoving =
         !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
+    final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
 
     canvas.save();
     if (currentHp <= 0) {
       // Mờ đi khi bị hạ gục trong 2v2 / 4v4
       canvas.translate(0, 6);
     }
-    if (!isFacingRight && !novaMultiDirRun) {
+    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
@@ -545,6 +547,99 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
             const dstH = 48.0;
             final dstLeft = (size.x - dstW) / 2;
             final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
+    } else if (isEmber) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('ember_02') ??
+              SpriteImageCache.instance.getHeroAttackImage('ember') ??
+              SpriteImageCache.instance.getHeroImage('ember_02'))
+          : (isMoving
+              ? (SpriteImageCache.instance.getHeroRunImage('ember_02') ??
+                  SpriteImageCache.instance.getHeroRunImage('ember') ??
+                  SpriteImageCache.instance.getHeroImage('ember_02'))
+              : (SpriteImageCache.instance.getHeroIdleImage('ember_02') ??
+                  SpriteImageCache.instance.getHeroIdleImage('ember') ??
+                  SpriteImageCache.instance.getHeroImage('ember_02')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final mx = !moveDirection.isZero() ? moveDirection.x : targetVelocity.x;
+          final my = !moveDirection.isZero() ? moveDirection.y : targetVelocity.y;
+          final absX = mx.abs();
+          final absY = my.abs();
+
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = mx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = mx > 0 ? 5 : 4; // 5: Diag Right, 4: Diag Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect =
+              Rect.fromLTWH(col * cellW, runRow * cellH, cellW, cellH);
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final row = facingRow.clamp(0, 4);
+          final int col;
+          if (isAttacking) {
+            final progress =
+                (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            col = (animTime * 12.0).floor() % 5;
+          } else {
+            col = (animTime * 4.5).floor() % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (472.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
             dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
           }
 

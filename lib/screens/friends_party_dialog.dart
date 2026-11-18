@@ -6,6 +6,7 @@ import '../services/audio_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
 import 'widgets/edit_profile_dialog.dart';
+import 'widgets/hero_showcase_painter.dart';
 
 class FriendsPartyDialog extends StatefulWidget {
   final PvpGameMode initialMode;
@@ -67,6 +68,13 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
     AudioService.instance.playSfx(SfxSound.uiClick);
+
+    // Chặn ngay lập tức nếu người dùng nhập ID hoặc tên của chính mình
+    if (FriendPartyService.instance.isSelfPlayer(code: query, name: query)) {
+      _showToast('Không thể kết bạn với chính mình!', isSuccess: false);
+      return;
+    }
+
     final added =
         await FriendPartyService.instance.addFriendByCodeOrName(query);
     if (!mounted) return;
@@ -74,11 +82,10 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
       _searchController.clear();
       _showToast('Đã kết bạn với ${added.name} (${added.code})!');
     } else {
-      if (query.toUpperCase() ==
-          PlayerStorage.currentProfile.playerCode.toUpperCase()) {
+      if (FriendPartyService.instance.isSelfPlayer(code: query, name: query)) {
         _showToast('Không thể kết bạn với chính mình!', isSuccess: false);
       } else {
-        _showToast('Không tìm thấy người chơi có mã $query!', isSuccess: false);
+        _showToast('Không tìm thấy người chơi có mã hoặc tên "$query"!', isSuccess: false);
       }
     }
   }
@@ -100,16 +107,32 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
   }
 
   Future<void> _handleJoinPartyCode() async {
-    final code = _partyCodeController.text.trim();
+    final code = _partyCodeController.text.trim().toUpperCase();
     if (code.isEmpty) return;
     AudioService.instance.playSfx(SfxSound.uiClick);
-    final party = await FriendPartyService.instance.joinPartyByCode(
-      code,
-      fallbackMode: _selectedMode,
-    );
-    if (!mounted) return;
-    _partyCodeController.clear();
-    _showToast('Đã gia nhập tổ đội ${party.partyCode} (${party.mode.shortLabel})!');
+
+    // 1. Chặn nếu nhập mã phòng hiện tại đang ở
+    final active = FriendPartyService.instance.partyNotifier.value;
+    if (active != null && active.partyCode.toUpperCase() == code) {
+      _showToast('Bạn đang ở trong phòng $code này rồi!', isSuccess: false);
+      return;
+    }
+
+    try {
+      final party = await FriendPartyService.instance.joinPartyByCode(
+        code,
+        fallbackMode: _selectedMode,
+      );
+      if (!mounted) return;
+      _partyCodeController.clear();
+      _showToast('Đã gia nhập tổ đội ${party.partyCode} (${party.mode.shortLabel})!');
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ArgumentError
+          ? e.message.toString()
+          : (e is StateError ? e.message.toString() : 'Không thể gia nhập phòng: $e');
+      _showToast(msg, isSuccess: false);
+    }
   }
 
   @override
@@ -593,7 +616,7 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
                           subtitle: isMeLeader
                               ? 'ID: ${activeParty.leaderCode} • Lv.${profile.getHeroLevel()}/100'
                               : 'ID: ${activeParty.leaderCode} • Đội Trưởng',
-                          heroId: isMeLeader ? profile.selectedHeroId : 'kaelen',
+                          heroId: isMeLeader ? profile.selectedHeroId : activeParty.leaderHeroId,
                           isLeader: true,
                           isEmpty: false,
                         ),
@@ -710,6 +733,35 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
   }
 }
 
+Color _getHeroCardColor(String id) {
+  switch (id.toLowerCase()) {
+    case 'kaelen':
+    case 'kale':
+      return const Color(0xFF00E5FF);
+    case 'nova':
+    case 'nova_blade':
+      return const Color(0xFF18FFFF);
+    case 'shadow':
+    case 'shadow_01':
+      return const Color(0xFFE040FB);
+    case 'ember':
+    case 'ember_02':
+      return const Color(0xFFFF6D00);
+    case 'valeria':
+      return const Color(0xFF40C4FF);
+    case 'garrick':
+      return const Color(0xFFFFD700);
+    case 'ranger':
+      return const Color(0xFFFFEB3B);
+    case 'tanker':
+      return const Color(0xFF76FF03);
+    case 'ninja':
+      return const Color(0xFFFF1744);
+    default:
+      return const Color(0xFFFFD700);
+  }
+}
+
 class _PartySlotCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -733,7 +785,7 @@ class _PartySlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isEmpty
             ? Colors.white.withValues(alpha: 0.03)
@@ -759,17 +811,17 @@ class _PartySlotCard extends StatelessWidget {
               ),
             )
           else
-            CircleAvatar(
-              radius: 20,
-              backgroundColor:
-                  isLeader ? Colors.amber.shade800 : Colors.cyan.shade800,
-              child: Icon(
-                isLeader ? Icons.workspace_premium_rounded : Icons.shield_rounded,
-                color: Colors.white,
-                size: 22,
+            SizedBox(
+              width: 76,
+              height: 76,
+              child: HeroShowcaseWidget(
+                heroId: heroId.isNotEmpty ? heroId : 'george',
+                themeColor: _getHeroCardColor(heroId),
+                width: 76,
+                height: 76,
               ),
             ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             title,
             textAlign: TextAlign.center,
@@ -781,16 +833,16 @@ class _PartySlotCard extends StatelessWidget {
               fontSize: 12,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
             subtitle,
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white60, fontSize: 10.5),
+            style: const TextStyle(color: Colors.white60, fontSize: 10),
           ),
           if (!isEmpty && heroId.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               'Tướng: ${heroId.toUpperCase()}',
               style: const TextStyle(
@@ -801,7 +853,7 @@ class _PartySlotCard extends StatelessWidget {
             ),
           ],
           if (onRemove != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             InkWell(
               onTap: onRemove,
               child: const Text(

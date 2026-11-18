@@ -400,14 +400,16 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
     final bool isKale = heroId == 'kaelen' || heroId == 'kale';
-    final bool isCustomAnimated = isNova || isShadow || isKale;
+    final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final bool isCustomAnimated = isNova || isShadow || isKale || isEmber;
 
     // Hiệu ứng nghiêng thân khi chạy, nhún bước chân và lao người khi tấn công
     final isMoving = !moveDirection.isZero();
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
+    final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
 
     canvas.save();
-    if (!isFacingRight && !novaMultiDirRun) {
+    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
@@ -651,6 +653,96 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             const dstH = 48.0;
             final dstLeft = (size.x - dstW) / 2;
             final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
+    } else if (isEmber) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('ember_02') ??
+              SpriteImageCache.instance.getHeroAttackImage('ember') ??
+              SpriteImageCache.instance.getHeroImage('ember_02'))
+          : (isMoving
+              ? (SpriteImageCache.instance.getHeroRunImage('ember_02') ??
+                  SpriteImageCache.instance.getHeroRunImage('ember') ??
+                  SpriteImageCache.instance.getHeroImage('ember_02'))
+              : (SpriteImageCache.instance.getHeroIdleImage('ember_02') ??
+                  SpriteImageCache.instance.getHeroIdleImage('ember') ??
+                  SpriteImageCache.instance.getHeroImage('ember_02')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          final absX = mx.abs();
+          final absY = my.abs();
+
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = mx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = mx > 0 ? 5 : 4; // 5: Diag Right, 4: Diag Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect =
+              Rect.fromLTWH(col * cellW, runRow * cellH, cellW, cellH);
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final row = facingRow.clamp(0, 4);
+          final int col;
+          if (isAttacking) {
+            final progress =
+                (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            col = (animTime * 12.0).floor() % 5;
+          } else {
+            col = (animTime * 4.5).floor() % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (472.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
             dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
           }
 
@@ -965,6 +1057,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       case 'ninja':
         return const Color(0xFFE040FB);
       case 'ember_02':
+      case 'ember':
         return const Color(0xFFFF6D00);
       case 'valeria':
         return const Color(0xFF38BDF8);
@@ -990,6 +1083,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       case 'ninja':
         return const Color(0xFF00E5FF);
       case 'ember_02':
+      case 'ember':
         return const Color(0xFFFFEA00);
       case 'valeria':
         return const Color(0xFFFF5252);
@@ -1045,6 +1139,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         capeColor = const Color(0xFF4A148C);
         break;
       case 'ember_02':
+      case 'ember':
         bootsColor = const Color(0xFF3E2723);
         armorColor = const Color(0xFF4A148C);
         borderGold = const Color(0xFFFF6D00);
@@ -1171,7 +1266,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       ),
       Paint()..color = helmetColor,
     );
-    if (heroId == 'ember_02') {
+    if (heroId == 'ember_02' || heroId == 'ember') {
       final hatPath = Path()
         ..moveTo(4, 6 + breathOffset)
         ..lineTo(32, 6 + breathOffset)
@@ -1264,7 +1359,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         3.8,
         Paint()..color = const Color(0xFFFF5252),
       );
-    } else if (heroId == 'ember_02') {
+    } else if (heroId == 'ember_02' || heroId == 'ember') {
       // Trượng Hỏa Ngọc & Cầu Lửa của Phù Thủy Ember-02
       canvas.drawLine(
         const Offset(0, 8),
@@ -1391,7 +1486,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
               ..strokeCap = StrokeCap.round,
           );
         }
-      } else if (heroId == 'ember_02') {
+      } else if (heroId == 'ember_02' || heroId == 'ember') {
         // Ember-02 Skill 1: Hỏa Cầu Liên Hoàn (3 quả cầu lửa bắn tỏa phía trước)
         for (final spreadY in [-14.0, 0.0, 14.0]) {
           final fx = center.dx + dirSign * (24.0 + progress * 70.0);
@@ -1520,7 +1615,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = const Color(0xFFFFD700),
           );
         }
-      } else if (heroId == 'ember_02') {
+      } else if (heroId == 'ember_02' || heroId == 'ember') {
         // Ember-02 Skill 2: Cột Lửa Địa Ngục (4 cột lửa rực cháy xoay quanh vòng ma pháp)
         canvas.drawCircle(
           center,

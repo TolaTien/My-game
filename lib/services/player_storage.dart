@@ -20,11 +20,35 @@ class PlayerStorage {
 
   static PlayerProfile get currentProfile => profileNotifier.value;
 
+  /// UID tài khoản Firebase đang đăng nhập (null = chơi offline / khách)
+  static String? _activeUid;
+  static String? get activeUid => _activeUid;
+
+  /// Hook đồng bộ hồ sơ lên cloud (do AuthService gắn vào khi đăng nhập)
+  static void Function(PlayerProfile profile)? _cloudSync;
+
+  /// Mỗi tài khoản có một bản cache cục bộ riêng để không lẫn dữ liệu khi đổi tài khoản
+  static String get _activeKey =>
+      _activeUid == null ? _storageKey : '${_storageKey}_$_activeUid';
+
+  /// Gắn tài khoản đang đăng nhập (gọi bởi AuthService)
+  static void attachUser(String uid, void Function(PlayerProfile) cloudSync) {
+    _activeUid = uid;
+    _cloudSync = cloudSync;
+  }
+
+  /// Gỡ tài khoản khi đăng xuất
+  static void detachUser() {
+    _activeUid = null;
+    _cloudSync = null;
+    profileNotifier.value = PlayerProfile.defaultProfile();
+  }
+
   /// Đọc hồ sơ người chơi từ SharedPreferences
   static Future<PlayerProfile> loadProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_storageKey);
+      final jsonString = prefs.getString(_activeKey);
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> map = jsonDecode(jsonString);
         var profile = PlayerProfile.fromJson(map);
@@ -83,12 +107,14 @@ class PlayerStorage {
   }
 
   /// Lưu hồ sơ người chơi vào SharedPreferences và cập nhật notifier
-  static Future<void> saveProfile(PlayerProfile profile) async {
+  /// và đồng bộ lên Firebase (players/{uid}/profile) nếu đã đăng nhập.
+  static Future<void> saveProfile(PlayerProfile profile, {bool syncCloud = true}) async {
     profileNotifier.value = profile;
+    if (syncCloud) _cloudSync?.call(profile);
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = jsonEncode(profile.toJson());
-      await prefs.setString(_storageKey, jsonString);
+      await prefs.setString(_activeKey, jsonString);
     } catch (e) {
       debugPrint('Lỗi lưu player profile: $e');
     }
@@ -276,6 +302,7 @@ class PlayerStorage {
     if (!currentProfile.unlockedHeroIds.contains(heroId)) return;
     final updated = currentProfile.copyWith(selectedHeroId: heroId);
     await saveProfile(updated);
+    unawaited(FriendPartyService.instance.updateMyPartyHero(heroId));
   }
 
   /// Mở khóa Trợ thủ AI
@@ -303,14 +330,14 @@ class PlayerStorage {
     await saveProfile(updated);
   }
 
-  /// Mở khóa Skin bằng Kim cương
-  static Future<bool> unlockSkin(String skinId, int diamondPrice) async {
+  /// Mở khóa Skin bằng Vàng
+  static Future<bool> unlockSkin(String skinId, int goldPrice) async {
     if (currentProfile.unlockedSkinIds.contains(skinId)) return true;
-    if (currentProfile.diamonds < diamondPrice) return false;
+    if (currentProfile.gold < goldPrice) return false;
 
     final newSkins = List<String>.from(currentProfile.unlockedSkinIds)..add(skinId);
     final updated = currentProfile.copyWith(
-      diamonds: currentProfile.diamonds - diamondPrice,
+      gold: currentProfile.gold - goldPrice,
       unlockedSkinIds: newSkins,
       selectedSkinId: skinId,
     );

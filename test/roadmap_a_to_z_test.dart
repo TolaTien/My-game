@@ -230,17 +230,48 @@ void main() {
       expect(roster.allies.first.name, contains('GR7777'));
     });
 
-    test('Joining party by code updates the host party room members list', () async {
+    test('Self-friending is blocked while adding another player succeeds', () async {
+      final myCode = FriendPartyService.instance.effectivePlayerCode;
+      final myName = FriendPartyService.instance.effectivePlayerName;
+      final profCode = PlayerStorage.currentProfile.playerCode;
+
+      // Chặn tự kết bạn bằng code hoặc tên của chính mình
+      final selfByCode = await FriendPartyService.instance.addFriendByCodeOrName(myCode);
+      expect(selfByCode, isNull);
+
+      final selfByProfCode = await FriendPartyService.instance.addFriendByCodeOrName(profCode);
+      expect(selfByProfCode, isNull);
+
+      final selfByName = await FriendPartyService.instance.addFriendByCodeOrName(myName);
+      expect(selfByName, isNull);
+
+      // Kết bạn với người chơi khác thành công
+      final otherFriend = await FriendPartyService.instance.addFriendByCodeOrName('GR3099');
+      expect(otherFriend, isNotNull);
+      expect(otherFriend!.code, equals('GR3099'));
+    });
+
+    test('Self-joining own party code is rejected with StateError, while guest joins cleanly', () async {
       final hostParty = FriendPartyService.instance.createOrUpdateParty(
         mode: PvpGameMode.duo2v2,
       );
       expect(hostParty.members, isEmpty);
 
+      // 1. Nhập mã của chính mình => Bị chặn, ném StateError
+      expect(
+        () => FriendPartyService.instance.joinPartyByCode(hostParty.partyCode),
+        throwsA(isA<StateError>()),
+      );
+
+      // 2. Người chơi khác (Guest) nhập mã => Vào phòng thành công
       final joinedParty = await FriendPartyService.instance.joinPartyByCode(
         hostParty.partyCode,
+        asGuestCode: 'GR7788',
+        asGuestName: 'Chiến Hữu Khách',
       );
       expect(joinedParty.partyCode, equals(hostParty.partyCode));
       expect(joinedParty.members.length, equals(1));
+      expect(joinedParty.members.first.code, equals('GR7788'));
       expect(
         FriendPartyService.instance.partyNotifier.value?.members.length,
         equals(1),

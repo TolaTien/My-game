@@ -372,6 +372,9 @@ class GameAssetRegistry {
     if (heroId == 'shadow') {
       return _heroes['shadow'] ?? _heroes['shadow_01'] ?? _heroes['george']!;
     }
+    if (heroId == 'ember') {
+      return _heroes['ember'] ?? _heroes['ember_02'] ?? _heroes['george']!;
+    }
     return _heroes[heroId] ?? _heroes['george']!;
   }
 
@@ -380,6 +383,7 @@ class GameAssetRegistry {
     if (effectiveId == 'nova') effectiveId = 'nova_blade';
     if (effectiveId == 'kale') effectiveId = 'kaelen';
     if (effectiveId == 'shadow') effectiveId = 'shadow_01';
+    if (effectiveId == 'ember') effectiveId = 'ember_02';
     final list = _skills.values
         .where((s) => s.heroId == effectiveId)
         .toList()

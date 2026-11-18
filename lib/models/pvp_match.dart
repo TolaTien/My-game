@@ -207,6 +207,7 @@ class PvpOpponentInfo {
       'nova_blade',
       'kaelen',
       'shadow_01',
+      'ember_02',
     ];
 
     final allies = <PvpOpponentInfo>[...onlineAllies];

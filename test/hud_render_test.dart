@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -213,8 +214,8 @@ void main() {
     }
   });
 
-  test('New heroes (nova_blade, kaelen, shadow_01) render across all actions in game and lobby', () {
-    const newHeroes = ['nova_blade', 'kaelen', 'shadow_01', 'kale', 'shadow'];
+  test('New heroes (nova_blade, kaelen, shadow_01, ember) render across all actions in game and lobby', () {
+    const newHeroes = ['nova_blade', 'kaelen', 'shadow_01', 'kale', 'shadow', 'ember_02', 'ember'];
 
     for (final heroId in newHeroes) {
       final player = PlayerComponent(
@@ -243,7 +244,16 @@ void main() {
       player.update(0.1);
       player.render(canvas);
 
-      // 5. Attack (tấn công)
+      // 5. Run Diagonals
+      player.moveDirection = Vector2(1, 1);
+      player.update(0.1);
+      player.render(canvas);
+
+      player.moveDirection = Vector2(-1, -1);
+      player.update(0.1);
+      player.render(canvas);
+
+      // 6. Attack (tấn công)
       player.performBasicAttack();
       player.update(0.1);
       player.render(canvas);
@@ -251,5 +261,24 @@ void main() {
       final picture = recorder.endRecording();
       expect(picture, isNotNull);
     }
+  });
+
+  testWidgets('Can load Ember idle and run assets via rootBundle', (tester) async {
+    final idleData = await rootBundle.load('assets/images/heroes/ember/Ember-idle.png');
+    expect(idleData.lengthInBytes, greaterThan(1000000));
+    final runData = await rootBundle.load('assets/images/heroes/ember/ember-run.png');
+    expect(runData.lengthInBytes, greaterThan(1000000));
+
+    await tester.runAsync(() async {
+      final idleCodec = await ui.instantiateImageCodec(idleData.buffer.asUint8List());
+      final idleFrame = await idleCodec.getNextFrame();
+      expect(idleFrame.image.width, 1280);
+      expect(idleFrame.image.height, 1280);
+
+      final runCodec = await ui.instantiateImageCodec(runData.buffer.asUint8List());
+      final runFrame = await runCodec.getNextFrame();
+      expect(runFrame.image.width, 2048);
+      expect(runFrame.image.height, 1536);
+    });
   });
 }

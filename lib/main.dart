@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'registry/asset_registry.dart';
 import 'registry/sprite_image_cache.dart';
+import 'screens/auth_screen.dart';
 import 'screens/lobby_screen.dart';
 import 'services/audio_service.dart';
+import 'services/auth_service.dart';
 import 'services/database_service.dart';
 import 'services/firebase_bootstrap.dart';
 import 'services/game_settings_service.dart';
@@ -29,8 +31,12 @@ void main() async {
   // provide the Web app values through --dart-define.
   await FirebaseBootstrap.initialize();
 
+  // Khôi phục phiên đăng nhập cũ (nếu có) và nạp hồ sơ từ Firebase,
+  // nếu chưa đăng nhập thì sẽ hiển thị màn hình Đăng nhập / Đăng ký.
+  final isSignedIn = await AuthService.instance.restoreSession();
+
   // Khởi tạo và nạp dữ liệu hồ sơ người chơi từ SharedPreferences
-  await PlayerStorage.loadProfile();
+  if (!isSignedIn) await PlayerStorage.loadProfile();
 
   // Khởi tạo dịch vụ cơ sở dữ liệu và bảng xếp hạng offline fallback
   await DatabaseService.instance.initialize();
@@ -40,11 +46,12 @@ void main() async {
   await AudioService.instance.initialize();
   await GameSettingsService.instance.initialize();
 
-  runApp(const GoldRushApp());
+  runApp(GoldRushApp(isSignedIn: isSignedIn));
 }
 
 class GoldRushApp extends StatelessWidget {
-  const GoldRushApp({super.key});
+  final bool isSignedIn;
+  const GoldRushApp({super.key, this.isSignedIn = false});
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +65,7 @@ class GoldRushApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LobbyScreen(),
+      home: isSignedIn ? const LobbyScreen() : const AuthScreen(),
     );
   }
 }

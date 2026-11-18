@@ -31,6 +31,7 @@ flutter:
     - assets/images/
     - assets/images/heroes/
     - assets/images/heroes/nova/
+    - assets/images/heroes/ember/
     - assets/images/heroes/kale/
     - assets/images/heroes/kale/run/
     - assets/images/heroes/kale/idle/

@@ -6,6 +6,7 @@ import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
 import 'components/floating_combat_text.dart';
+import 'components/hero_projectile.dart';
 import 'components/player.dart';
 import 'components/pvp_arena_map.dart';
 import 'components/pvp_bot_player.dart';
@@ -185,9 +186,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       await world.add(enemy);
     }
 
-    // 5. Camera bao quát đấu trường trung tâm
-    camera.viewfinder.position = Vector2(480, 320);
-    camera.viewfinder.zoom = 0.85;
+    // 5. Cấu hình Camera bám sát theo Player (toàn màn hình, to và rõ nét như PvE)
+    camera.follow(player);
+    camera.viewfinder.zoom = 1.4;
 
     matchStartTime = DateTime.now();
 
@@ -394,6 +395,71 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   void onBasicAttack() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     player.performBasicAttack();
+
+    final heroId = player.heroId;
+    final isRanger = heroId == 'ranger';
+    final isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final isValeria = heroId == 'valeria';
+    final isRanged = isRanger || isEmber || isValeria;
+
+    if (isRanged) {
+      if (isRanger) {
+        AudioService.instance.playSfx(SfxSound.attackArrow);
+      } else {
+        AudioService.instance.playSfx(SfxSound.attackHammer);
+      }
+
+      // Xác định mục tiêu đối thủ gần nhất trong tầm 400px
+      Vector2? targetDir;
+      double closestDist = 400.0;
+      for (final enemy in allEnemies) {
+        if (enemy.currentHp <= 0) continue;
+        final d = player.position.distanceTo(enemy.position);
+        if (d < closestDist) {
+          closestDist = d;
+          targetDir = (enemy.position - player.position).normalized();
+        }
+      }
+
+      if (targetDir == null) {
+        if (player.moveDirection.length2 > 0) {
+          targetDir = player.moveDirection.normalized();
+        } else {
+          targetDir = Vector2(player.isFacingRight ? 1.0 : -1.0, 0.0);
+        }
+      } else {
+        if (targetDir.x != 0) {
+          player.isFacingRight = targetDir.x > 0;
+        }
+      }
+
+      final isCombo3 = player.comboStep == 3;
+      final dmg = player.damage * (isCombo3 ? 1.4 : 1.0);
+      final pType = isRanger
+          ? HeroProjectileType.arrow
+          : (isEmber ? HeroProjectileType.fireball : HeroProjectileType.frostOrb);
+
+      final projectile = HeroProjectile(
+        position: player.position.clone() + Vector2(0, 2),
+        direction: targetDir,
+        damage: dmg,
+        type: pType,
+        isFromPlayer: true,
+        onHit: (target, hitPos) {
+          if (isMounted) {
+            world.add(FloatingCombatText(
+              text: '-${dmg.toInt()}',
+              position: hitPos.clone()..y -= 20,
+              type: isCombo3 ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
+            ));
+          }
+        },
+      );
+
+      world.add(projectile);
+      onLocalAction?.call('basicAttack');
+      return;
+    }
 
     _damageEnemiesInRange(player.damage, 55, type: CombatTextType.normalDamage);
     onLocalAction?.call('basicAttack');

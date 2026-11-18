@@ -36,8 +36,10 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
       case 'garrick':
         return Icons.fort_rounded;
       case 'shadow_01':
+      case 'shadow':
         return Icons.flare_rounded;
       case 'ember_02':
+      case 'ember':
         return Icons.local_fire_department_rounded;
       case 'ranger':
         return Icons.gps_fixed_rounded;
@@ -62,8 +64,10 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
       case 'garrick':
         return const Color(0xFFFFD700);
       case 'shadow_01':
+      case 'shadow':
         return const Color(0xFFE040FB);
       case 'ember_02':
+      case 'ember':
         return const Color(0xFFFF6D00);
       case 'ranger':
         return const Color(0xFF00E676);
