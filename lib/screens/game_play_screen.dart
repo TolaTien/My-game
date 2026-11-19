@@ -1,13 +1,17 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+
 import '../core/game_keyboard_controller.dart';
 import '../core/stat_growth_formula.dart';
 import '../game/gold_rush_game.dart';
 import '../game/hud/game_hud.dart';
+import '../registry/asset_registry.dart';
 import '../services/player_storage.dart';
 
 class GamePlayScreen extends StatefulWidget {
-  const GamePlayScreen({super.key});
+  final MapAssetConfig? initialMapConfig;
+
+  const GamePlayScreen({super.key, this.initialMapConfig});
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
@@ -24,7 +28,10 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _game = GoldRushGame(playerProfile: PlayerStorage.currentProfile);
+    _game = GoldRushGame(
+      playerProfile: PlayerStorage.currentProfile,
+      selectedMapConfig: widget.initialMapConfig,
+    );
     _keyboardController = GameKeyboardController(
       onMoveDirectionChanged: (dir) => _game.setPlayerMoveDirection(dir),
       onBasicAttack: () => _game.onBasicAttack(),
@@ -118,11 +125,14 @@ class _GamePlayScreenState extends State<GamePlayScreen>
         builder: (dialogContext) => _PauseMenuDialog(
           onResume: () => Navigator.of(dialogContext).pop(false),
           onLeave: () async {
+            if (ModalRoute.of(dialogContext)?.isCurrent != true) return;
             final confirmed = await showDialog<bool>(
               context: dialogContext,
               builder: (confirmContext) => AlertDialog(
                 title: const Text('Rời trận?'),
-                content: const Text('Tiến trình tầng hiện tại sẽ không được tiếp tục.'),
+                content: const Text(
+                  'Tiến trình tầng hiện tại sẽ không được tiếp tục.',
+                ),
                 actions: [
                   TextButton(
                     key: const Key('pause_leave_cancel_button'),
@@ -137,8 +147,8 @@ class _GamePlayScreenState extends State<GamePlayScreen>
                 ],
               ),
             );
-            if (dialogContext.mounted) {
-              // Cancel returns to live gameplay; only positive confirmation exits.
+            if (dialogContext.mounted &&
+                ModalRoute.of(dialogContext)?.isCurrent == true) {
               Navigator.of(dialogContext).pop(confirmed == true);
             }
           },
@@ -186,10 +196,10 @@ class _GamePlayScreenState extends State<GamePlayScreen>
           game: _game,
           overlayBuilderMap: {
             'HUD': (context, game) => GameHudOverlay(
-                  game: game,
-                  keyboardController: _keyboardController,
-                  onPause: showPauseMenu,
-                ),
+              game: game,
+              keyboardController: _keyboardController,
+              onPause: showPauseMenu,
+            ),
           },
           initialActiveOverlays: const ['HUD'],
         ),
@@ -214,33 +224,46 @@ class _PauseMenuDialog extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 380),
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.pause_circle_filled, color: Colors.amberAccent, size: 48),
-                const SizedBox(height: 8),
-                const Text('TẠM DỪNG', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    key: const Key('pause_resume_button'),
-                    onPressed: onResume,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('TIẾP TỤC'),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.pause_circle_filled,
+                    color: Colors.amberAccent,
+                    size: 48,
                   ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    key: const Key('pause_leave_button'),
-                    onPressed: onLeave,
-                    icon: const Icon(Icons.exit_to_app),
-                    label: const Text('RỜI TRẬN'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'TẠM DỪNG',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('pause_resume_button'),
+                      onPressed: onResume,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('TIẾP TỤC'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const Key('pause_leave_button'),
+                      onPressed: onLeave,
+                      icon: const Icon(Icons.exit_to_app),
+                      label: const Text('RỜI TRẬN'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -320,8 +343,10 @@ class _LevelClearDialog extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black45,
                   borderRadius: BorderRadius.circular(12),
@@ -459,8 +484,10 @@ class _GameOverDialog extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black45,
                   borderRadius: BorderRadius.circular(12),
@@ -550,7 +577,9 @@ class _HeroLevelProgressBanner extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: result.didLevelUp ? Colors.amberAccent : Colors.cyanAccent.withValues(alpha: 0.4),
+          color: result.didLevelUp
+              ? Colors.amberAccent
+              : Colors.cyanAccent.withValues(alpha: 0.4),
           width: 1.2,
         ),
       ),
@@ -560,8 +589,12 @@ class _HeroLevelProgressBanner extends StatelessWidget {
           Row(
             children: [
               Icon(
-                result.didLevelUp ? Icons.auto_awesome : Icons.trending_up_rounded,
-                color: result.didLevelUp ? Colors.amberAccent : Colors.cyanAccent,
+                result.didLevelUp
+                    ? Icons.auto_awesome
+                    : Icons.trending_up_rounded,
+                color: result.didLevelUp
+                    ? Colors.amberAccent
+                    : Colors.cyanAccent,
                 size: 18,
               ),
               const SizedBox(width: 6),
@@ -571,7 +604,9 @@ class _HeroLevelProgressBanner extends StatelessWidget {
                       ? 'THĂNG CẤP NHÂN VẬT: Lv.${result.oldLevel} ➔ Lv.${result.newLevel}/100!'
                       : 'CẤP NHÂN VẬT: Lv.${result.newLevel}/100 (+${result.expEarned} EXP)',
                   style: TextStyle(
-                    color: result.didLevelUp ? Colors.amberAccent : Colors.white,
+                    color: result.didLevelUp
+                        ? Colors.amberAccent
+                        : Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 12,
                   ),
