@@ -55,4 +55,6 @@ AGENTS
 
 *.md
 .rules/
-!README.md.firebase/ 
+/rules/
+!README.md
+.firebase/
