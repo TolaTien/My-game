@@ -2234,10 +2234,23 @@ class _LeaderboardDialog extends StatelessWidget {
               child: StreamBuilder<List<LeaderboardEntry>>(
                 stream: DatabaseService.instance.streamTopLeaderboard(limit: 20),
                 builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.amberAccent),
+                    );
+                  }
                   final entries = snapshot.data ?? [];
                   if (entries.isEmpty) {
                     return const Center(
-                      child: CircularProgressIndicator(color: Colors.amberAccent),
+                      child: Text(
+                        'Chưa có dữ liệu bảng xếp hạng',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     );
                   }
 
