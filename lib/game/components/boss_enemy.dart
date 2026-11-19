@@ -8,7 +8,7 @@ import 'enemy_skeleton.dart';
 import 'enemy_zombie.dart';
 import 'pickup_item.dart';
 import '../../services/audio_service.dart';
-import '../ai/astar_pathfinder.dart';
+import '../ai/chase_navigation.dart';
 import '../gold_rush_game.dart';
 
 enum BossState {
@@ -17,6 +17,8 @@ enum BossState {
   groundSlamTelegraph,
   groundSlamImpact,
   radialFlameBurst,
+  radialFlameImpact,
+  radialFlameCooldown,
   defeated,
 }
 
@@ -65,6 +67,9 @@ class BossEnemy extends PositionComponent
   static const double groundSlamTelegraphDuration = 1.2;
   static const double flameBurstDamage = 15.0;
   static const double flameBurstSpeed = 180.0;
+  static const double flameBurstTelegraphDuration = 1.2;
+  static const double flameBurstRecoveryDuration = 0.3;
+  static const int flameBurstProjectileCount = 8;
 
   BossState state = BossState.chase;
 
@@ -73,16 +78,13 @@ class BossEnemy extends PositionComponent
   double groundSlamCooldownTimer = 5.0;
   double flameBurstCooldownTimer = 4.0;
   double stateTimer = 0.0;
+  double stunTimer = 0;
 
   // Wave spawn flags
   bool summonedWave70 = false;
   bool summonedWave30 = false;
 
-  // A* Navigation state
-  List<Vector2> _waypoints = [];
-  int _currentWaypointIndex = 0;
-  double _pathRecalcTimer = 0.0;
-  static const double _pathRecalcInterval = 0.5;
+  final ChaseNavigation navigation;
 
   // Visuals & Animations
   bool isFacingRight = true;
@@ -93,8 +95,9 @@ class BossEnemy extends PositionComponent
   Vector2? groundSlamCenter;
   GroundSlamTelegraph? activeTelegraph;
 
-  BossEnemy({required Vector2 position, required this.player})
-      : super(
+  BossEnemy({required Vector2 position, required this.player, Random? random})
+      : navigation = ChaseNavigation(random: random, halfSize: Vector2(22, 28)),
+        super(
           position: position,
           size: Vector2(64, 64),
           anchor: Anchor.center,
@@ -116,12 +119,18 @@ class BossEnemy extends PositionComponent
   void update(double dt) {
     super.update(dt);
     auraTimer += dt;
+    previousPosition.setFrom(position);
 
     if (isDefeated) {
       deathFadeTimer -= dt;
       if (deathFadeTimer <= 0) {
         removeFromParent();
       }
+      return;
+    }
+    if (stunTimer > 0) {
+      stunTimer = max(0, stunTimer - dt);
+      navigation.pause();
       return;
     }
 
@@ -132,6 +141,7 @@ class BossEnemy extends PositionComponent
 
     final distanceToPlayer = position.distanceTo(player.position);
     isFacingRight = player.position.x >= position.x;
+    if (state != BossState.chase) navigation.pause();
 
     // State machine evaluation
     switch (state) {
@@ -150,6 +160,16 @@ class BossEnemy extends PositionComponent
       case BossState.radialFlameBurst:
         _updateRadialFlameBurst(dt);
         break;
+      case BossState.radialFlameImpact:
+        state = BossState.radialFlameCooldown;
+        stateTimer = 0;
+        break;
+      case BossState.radialFlameCooldown:
+        stateTimer += dt;
+        if (stateTimer >= flameBurstRecoveryDuration) {
+          state = BossState.chase;
+        }
+        break;
       case BossState.defeated:
         break;
     }
@@ -158,6 +178,7 @@ class BossEnemy extends PositionComponent
   void _updateChaseState(double dt, double distanceToPlayer) {
     // 1. Phase 2 Special: Radial Flame Burst (every 5.0s)
     if (phase == 2 && flameBurstCooldownTimer <= 0) {
+      navigation.pause();
       state = BossState.radialFlameBurst;
       stateTimer = 0.0;
       return;
@@ -165,11 +186,12 @@ class BossEnemy extends PositionComponent
 
     // 2. Special Attack: Ground Slam (1.2s telegraphed AoE)
     if (groundSlamCooldownTimer <= 0 && distanceToPlayer <= groundSlamRange) {
+      navigation.pause();
       state = BossState.groundSlamTelegraph;
       stateTimer = 0.0;
       groundSlamCenter = player.position.clone();
       activeTelegraph = GroundSlamTelegraph(
-        position: groundSlamCenter!,
+        position: groundSlamCenter!.clone(),
         duration: groundSlamTelegraphDuration,
       );
       if (isMounted) {
@@ -180,6 +202,7 @@ class BossEnemy extends PositionComponent
 
     // 3. Melee Cleave
     if (distanceToPlayer <= meleeRange && meleeCooldownTimer <= 0) {
+      navigation.pause();
       state = BossState.meleeCleave;
       stateTimer = 0.0;
       axeSwingAngle = isFacingRight ? -1.2 : 1.2;
@@ -188,46 +211,15 @@ class BossEnemy extends PositionComponent
 
     // 4. Default: Navigation towards Player
     if (distanceToPlayer > 30.0) {
-      previousPosition = position.clone();
-
-      // Check if A* pathfinding is accessible
-      if (isMounted && game.walkableGrid.isNotEmpty) {
-        _pathRecalcTimer -= dt;
-        if (_pathRecalcTimer <= 0) {
-          _pathRecalcTimer = _pathRecalcInterval;
-          _waypoints = AStarPathfinder.findPath(
-            position,
-            player.position,
-            game.walkableGrid,
-          );
-          _currentWaypointIndex = 0;
-        }
-
-        if (_waypoints.isNotEmpty && _currentWaypointIndex < _waypoints.length) {
-          var targetPt = _waypoints[_currentWaypointIndex];
-          if (_currentWaypointIndex == _waypoints.length - 1) {
-            targetPt = player.position;
-          }
-
-          if (position.distanceTo(targetPt) <= 16.0) {
-            _currentWaypointIndex++;
-            if (_currentWaypointIndex < _waypoints.length) {
-              targetPt = _waypoints[_currentWaypointIndex];
-            }
-          }
-
-          final toTarget = targetPt - position;
-          if (toTarget.length2 > 0.001) {
-            final dir = toTarget.normalized();
-            position.add(dir * currentSpeed * dt);
-            return;
-          }
-        }
-      }
-
-      // Direct fallback
-      final dir = (player.position - position).normalized();
-      position.add(dir * currentSpeed * dt);
+      position.add(navigation.step(
+        position: position,
+        target: player.position,
+        grid: isMounted ? game.walkableGrid : const [],
+        speed: currentSpeed,
+        dt: dt,
+      ));
+    } else {
+      navigation.pause();
     }
   }
 
@@ -257,21 +249,13 @@ class BossEnemy extends PositionComponent
     if (stateTimer >= groundSlamTelegraphDuration) {
       state = BossState.groundSlamImpact;
       stateTimer = 0.0;
+      _applyGroundSlamImpact();
     }
   }
 
   void _updateGroundSlamImpact(double dt) {
     stateTimer += dt;
     axeSwingAngle = isFacingRight ? 1.6 : -1.6; // Axe slammed downward
-
-    if (groundSlamCenter != null) {
-      final dist = player.position.distanceTo(groundSlamCenter!);
-      if (dist <= groundSlamAoERadius) {
-        player.takeDamage(groundSlamDamage);
-      }
-      groundSlamCenter = null;
-      AudioService.instance.playSfx(SfxSound.skillSmash);
-    }
 
     if (stateTimer >= 0.3) {
       axeSwingAngle = 0.0;
@@ -280,17 +264,27 @@ class BossEnemy extends PositionComponent
     }
   }
 
+  void _applyGroundSlamImpact() {
+    if (groundSlamCenter != null) {
+      final dist = player.position.distanceTo(groundSlamCenter!);
+      if (dist <= groundSlamAoERadius) {
+        player.takeDamage(groundSlamDamage);
+      }
+      groundSlamCenter = null;
+      AudioService.instance.playSfx(SfxSound.skillSmash);
+    }
+  }
+
   void _updateRadialFlameBurst(double dt) {
     stateTimer += dt;
-    if (stateTimer >= 0.25) {
+    if (stateTimer >= flameBurstTelegraphDuration) {
+      state = BossState.radialFlameImpact;
+      stateTimer = 0;
       // Fire 8 fireballs in 360 degrees (45 deg increments)
-      const int numFireballs = 8;
-      for (int i = 0; i < numFireballs; i++) {
-        final angle = i * (2 * pi / numFireballs);
-        final dir = Vector2(cos(angle), sin(angle));
+      for (int i = 0; i < flameBurstProjectileCount; i++) {
         final fireball = BossFlameProjectile(
           position: position.clone(),
-          direction: dir,
+          direction: flameDirection(i),
           speed: flameBurstSpeed,
           damage: flameBurstDamage,
         );
@@ -300,7 +294,33 @@ class BossEnemy extends PositionComponent
       }
       AudioService.instance.playSfx(SfxSound.skillBerserk);
       flameBurstCooldownTimer = 5.0;
+    }
+  }
+
+  static Vector2 flameDirection(int index) {
+    final angle = index * (2 * pi / flameBurstProjectileCount);
+    return Vector2(cos(angle), sin(angle));
+  }
+
+  void applyControl({double stunDuration = 0, double knockback = 0,
+      Vector2? direction}) {
+    if (isDefeated) return;
+    stunTimer = max(stunTimer, stunDuration);
+    navigation.pause();
+    if (stunTimer > 0) {
+      activeTelegraph?.removeFromParent();
+      activeTelegraph = null;
+      groundSlamCenter = null;
       state = BossState.chase;
+      stateTimer = 0;
+      axeSwingAngle = 0;
+    }
+    if (isMounted && direction != null) {
+      position.add(ChaseNavigation.knockbackMovement(
+        position: position, direction: direction, distance: knockback,
+        halfSize: Vector2(22, 28), grid: game.walkableGrid,
+      ));
+      previousPosition.setFrom(position);
     }
   }
 
@@ -350,11 +370,13 @@ class BossEnemy extends PositionComponent
       spawnPos.y = spawnPos.y.clamp(48.0, 720.0);
 
       if (i < 2) {
-        final skeleton = SkeletonEnemy(position: spawnPos, player: player);
+        final skeleton = SkeletonEnemy(position: spawnPos, player: player,
+            random: navigation.random);
         game.skeletons.add(skeleton);
         game.world.add(skeleton);
       } else {
-        final zombie = ZombieEnemy(position: spawnPos, player: player);
+        final zombie = ZombieEnemy(position: spawnPos, player: player,
+            random: navigation.random);
         game.enemies.add(zombie);
         game.world.add(zombie);
       }
@@ -364,6 +386,9 @@ class BossEnemy extends PositionComponent
   void _triggerDefeat() {
     isDefeated = true;
     state = BossState.defeated;
+    activeTelegraph?.removeFromParent();
+    activeTelegraph = null;
+    groundSlamCenter = null;
     children.whereType<ShapeHitbox>().toList().forEach((h) => h.removeFromParent());
     _notifyHpChanged();
 
@@ -416,6 +441,29 @@ class BossEnemy extends PositionComponent
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+
+    if (state == BossState.radialFlameBurst) {
+      final center = Offset(size.x / 2, size.y / 2);
+      final progress =
+          (stateTimer / flameBurstTelegraphDuration).clamp(0.0, 1.0);
+      final lanePaint = Paint()
+        ..color = const Color(0x33FFB300)
+        ..strokeWidth = BossFlameProjectile.hitRadius * 2;
+      final arrowPaint = Paint()
+        ..color = const Color(0xFFFFD54F)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+      for (int i = 0; i < flameBurstProjectileCount; i++) {
+        final dir = flameDirection(i);
+        final ray = Offset(dir.x, dir.y);
+        canvas.drawLine(center,
+            center + ray * (flameBurstSpeed * BossFlameProjectile.lifetime), lanePaint);
+        final tip = center + ray * (48 + 28 * progress);
+        final side = Offset(-dir.y, dir.x);
+        canvas.drawLine(tip - ray * 10 + side * 5, tip, arrowPaint);
+        canvas.drawLine(tip - ray * 10 - side * 5, tip, arrowPaint);
+      }
+    }
 
     // 1. Ground Shadow
     final shadowPaint = Paint()..color = const Color(0x55000000);
@@ -575,6 +623,8 @@ class BossFlameProjectile extends PositionComponent
   final double damage;
   double lifeTimer = 0.0;
   bool hasHit = false;
+  static const double hitRadius = 6;
+  static const double lifetime = 4;
 
   BossFlameProjectile({
     required Vector2 position,
@@ -583,7 +633,7 @@ class BossFlameProjectile extends PositionComponent
     this.damage = 15.0,
   })  : direction = direction.length2 > 0 ? direction.normalized() : Vector2(1, 0),
         super(position: position, size: Vector2(16, 16), anchor: Anchor.center) {
-    add(CircleHitbox(radius: 6, position: Vector2(2, 2)));
+    add(CircleHitbox(radius: hitRadius, position: Vector2(2, 2)));
   }
 
   @override
@@ -591,7 +641,8 @@ class BossFlameProjectile extends PositionComponent
     super.update(dt);
     if (hasHit) return;
     lifeTimer += dt;
-    if (lifeTimer >= 4.0) {
+    if (lifeTimer >= lifetime) {
+      hasHit = true;
       removeFromParent();
       return;
     }
@@ -639,7 +690,11 @@ class GroundSlamTelegraph extends PositionComponent {
   GroundSlamTelegraph({
     required Vector2 position,
     this.duration = 1.2,
-  }) : super(position: position, size: Vector2(140, 140), anchor: Anchor.center);
+  }) : super(
+          position: position,
+          size: Vector2.all(BossEnemy.groundSlamAoERadius * 2),
+          anchor: Anchor.center,
+        );
 
   @override
   void update(double dt) {
@@ -654,7 +709,7 @@ class GroundSlamTelegraph extends PositionComponent {
   void render(Canvas canvas) {
     super.render(canvas);
     final center = Offset(size.x / 2, size.y / 2);
-    const radius = 70.0;
+    const radius = BossEnemy.groundSlamAoERadius;
     final progress = (timer / duration).clamp(0.0, 1.0);
 
     // Outer warning ring
@@ -674,7 +729,7 @@ class GroundSlamTelegraph extends PositionComponent {
         ..color = const Color(0xAAFFEB3B)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4.0;
-      canvas.drawCircle(center, radius * 1.05, flashPaint);
+      canvas.drawCircle(center, radius, flashPaint);
     }
   }
 }

@@ -4,7 +4,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'player.dart';
 import 'dungeon_map.dart';
-import '../ai/astar_pathfinder.dart';
+import '../ai/chase_navigation.dart';
 import '../gold_rush_game.dart';
 
 class ZombieEnemy extends PositionComponent
@@ -17,16 +17,14 @@ class ZombieEnemy extends PositionComponent
   final PlayerComponent player;
   Vector2 previousPosition = Vector2.zero();
   double attackCooldown = 0.0;
+  double stunTimer = 0;
 
-  // A* Navigation state
-  List<Vector2> _waypoints = [];
-  int _currentWaypointIndex = 0;
-  double _pathRecalcTimer = 0.0;
-  static const double _pathRecalcInterval = 0.45; // 0.45s re-path
-  static const double _waypointReachThreshold = 12.0; // 12px reach radius
+  final ChaseNavigation navigation;
 
-  ZombieEnemy({required Vector2 position, required this.player})
-      : super(
+  ZombieEnemy({required Vector2 position, required this.player, Random? random})
+      : navigation = ChaseNavigation(repathInterval: 0.45, random: random,
+            halfSize: Vector2(10, 14)),
+        super(
           position: position,
           size: Vector2(32, 36),
           anchor: Anchor.center,
@@ -35,35 +33,33 @@ class ZombieEnemy extends PositionComponent
       size: Vector2(20, 24),
       position: Vector2(6, 8),
     ));
-    // Stagger recalculation across entities to prevent CPU spike on the same frame
-    _pathRecalcTimer = Random().nextDouble() * _pathRecalcInterval;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
+    previousPosition.setFrom(position);
+    if (stunTimer > 0) {
+      stunTimer = max(0, stunTimer - dt);
+      navigation.pause();
+      return;
+    }
     if (attackCooldown > 0) attackCooldown -= dt;
 
     final distanceToPlayer = position.distanceTo(player.position);
 
     // Tầm phát hiện: 280 pixel
     if (distanceToPlayer < 280 && distanceToPlayer > 18) {
-      if (isMounted && game.walkableGrid.isNotEmpty) {
-        _pathRecalcTimer -= dt;
-        if (_pathRecalcTimer <= 0) {
-          _pathRecalcTimer = _pathRecalcInterval;
-          _recalculatePath();
-        }
-        _followWaypoints(dt);
-      } else {
-        // Fallback di chuyển thẳng nếu chưa mount game
-        previousPosition = position.clone();
-        final dir = (player.position - position).normalized();
-        position.add(dir * speed * dt);
-      }
+      previousPosition = position.clone();
+      position.add(navigation.step(
+        position: position,
+        target: player.position,
+        grid: isMounted ? game.walkableGrid : const [],
+        speed: speed,
+        dt: dt,
+      ));
     } else {
-      _waypoints.clear();
-      _currentWaypointIndex = 0;
+      navigation.pause();
     }
 
     // Tấn công người chơi khi áp sát
@@ -73,50 +69,24 @@ class ZombieEnemy extends PositionComponent
     }
   }
 
-  void _recalculatePath() {
-    _waypoints = AStarPathfinder.findPath(
-      position,
-      player.position,
-      game.walkableGrid,
-    );
-    _currentWaypointIndex = 0;
-  }
-
-  void _followWaypoints(double dt) {
-    if (_waypoints.isEmpty || _currentWaypointIndex >= _waypoints.length) {
-      // Direct approach fallback
-      previousPosition = position.clone();
-      final dir = (player.position - position).normalized();
-      position.add(dir * speed * dt);
-      return;
-    }
-
-    var targetPt = _waypoints[_currentWaypointIndex];
-    if (_currentWaypointIndex == _waypoints.length - 1) {
-      targetPt = player.position;
-    }
-
-    final dist = position.distanceTo(targetPt);
-    if (dist <= _waypointReachThreshold) {
-      _currentWaypointIndex++;
-      if (_currentWaypointIndex < _waypoints.length) {
-        targetPt = _waypoints[_currentWaypointIndex];
-      }
-    }
-
-    final toTarget = targetPt - position;
-    if (toTarget.length2 > 0.0001) {
-      previousPosition = position.clone();
-      final dir = toTarget.normalized();
-      position.add(dir * speed * dt);
-    }
-  }
-
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
     if (other is WallBlock) {
       position = previousPosition.clone();
+    }
+  }
+
+  void applyControl({double stunDuration = 0, double knockback = 0,
+      Vector2? direction}) {
+    stunTimer = max(stunTimer, stunDuration);
+    navigation.pause();
+    if (isMounted && direction != null) {
+      position.add(ChaseNavigation.knockbackMovement(
+        position: position, direction: direction, distance: knockback,
+        halfSize: Vector2(10, 14), grid: game.walkableGrid,
+      ));
+      previousPosition.setFrom(position);
     }
   }
 

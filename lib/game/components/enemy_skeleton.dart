@@ -8,6 +8,7 @@ import 'dungeon_map.dart';
 import 'arrow_projectile.dart';
 import 'pickup_item.dart';
 import '../ai/astar_pathfinder.dart';
+import '../ai/chase_navigation.dart';
 import '../gold_rush_game.dart';
 
 class SkeletonEnemy extends PositionComponent
@@ -19,17 +20,15 @@ class SkeletonEnemy extends PositionComponent
   final PlayerComponent player;
   Vector2 previousPosition = Vector2.zero();
   double shootCooldown = 0.0;
+  double stunTimer = 0;
   bool isFacingRight = true;
 
-  // A* Navigation & Tactical Flanking state
-  List<Vector2> _waypoints = [];
-  int _currentWaypointIndex = 0;
-  double _pathRecalcTimer = 0.0;
-  static const double _pathRecalcInterval = 0.5;
-  static const double _waypointReachThreshold = 12.0;
+  final Random random;
+  late final ChaseNavigation navigation;
 
-  SkeletonEnemy({required Vector2 position, required this.player})
-      : super(
+  SkeletonEnemy({required Vector2 position, required this.player, Random? random})
+      : random = random ?? Random(),
+        super(
           position: position,
           size: Vector2(32, 38),
           anchor: Anchor.center,
@@ -38,12 +37,18 @@ class SkeletonEnemy extends PositionComponent
       size: Vector2(20, 26),
       position: Vector2(6, 8),
     ));
-    _pathRecalcTimer = Random().nextDouble() * _pathRecalcInterval;
+    navigation = ChaseNavigation(random: this.random, halfSize: Vector2(10, 15));
   }
 
   @override
   void update(double dt) {
     super.update(dt);
+    previousPosition.setFrom(position);
+    if (stunTimer > 0) {
+      stunTimer = max(0, stunTimer - dt);
+      navigation.pause();
+      return;
+    }
     if (shootCooldown > 0) shootCooldown -= dt;
 
     final distanceToPlayer = position.distanceTo(player.position);
@@ -54,31 +59,17 @@ class SkeletonEnemy extends PositionComponent
     // AI Kiting & Tactical Archery Behavior:
     if (distanceToPlayer < 110) {
       // 1. Khoảng cách < 110px: Lùi lại (kiting away)
-      _waypoints.clear();
-      _currentWaypointIndex = 0;
-      previousPosition = position.clone();
-      final awayDir = (position - player.position).normalized();
-      position.add(awayDir * speed * dt);
+      final away = position - player.position;
+      final retreatTarget = away.length2 > 0
+          ? position + away.normalized() * 64
+          : position + Vector2(64, 0);
+      _navigate(dt, retreatTarget);
     } else if (distanceToPlayer > 240) {
       // 2. Khoảng cách > 240px: Tiến lại gần
       if (distanceToPlayer < 500) {
-        if (isMounted && game.walkableGrid.isNotEmpty) {
-          _pathRecalcTimer -= dt;
-          if (_pathRecalcTimer <= 0) {
-            _pathRecalcTimer = _pathRecalcInterval;
-            _waypoints = AStarPathfinder.findPath(
-              position,
-              player.position,
-              game.walkableGrid,
-            );
-            _currentWaypointIndex = 0;
-          }
-          _followWaypoints(dt);
-        } else {
-          previousPosition = position.clone();
-          final towardDir = (player.position - position).normalized();
-          position.add(towardDir * speed * dt);
-        }
+        _navigate(dt, player.position);
+      } else {
+        navigation.pause();
       }
     } else {
       // 3. Trong tầm 110-240px: Kiểm tra Line-of-Sight trước khi bắn
@@ -93,61 +84,31 @@ class SkeletonEnemy extends PositionComponent
 
       if (hasLoS) {
         // Đường đạn thông thoáng -> Giữ vị trí và bắn tên mỗi 1.8s
-        _waypoints.clear();
-        _currentWaypointIndex = 0;
+        navigation.pause();
         if (shootCooldown <= 0) {
           _shootArrow();
           shootCooldown = 1.8;
         }
       } else {
         // Bị cản bởi cột đá -> Dùng A* tìm đường vòng sang để flank
-        if (isMounted && game.walkableGrid.isNotEmpty) {
-          _pathRecalcTimer -= dt;
-          if (_pathRecalcTimer <= 0) {
-            _pathRecalcTimer = _pathRecalcInterval;
-            _waypoints = AStarPathfinder.findPath(
-              position,
-              player.position,
-              game.walkableGrid,
-            );
-            _currentWaypointIndex = 0;
-          }
-          _followWaypoints(dt);
-        }
+        _navigate(dt, player.position);
       }
     }
   }
 
-  void _followWaypoints(double dt) {
-    if (_waypoints.isEmpty || _currentWaypointIndex >= _waypoints.length) {
-      previousPosition = position.clone();
-      final towardDir = (player.position - position).normalized();
-      position.add(towardDir * speed * dt);
-      return;
-    }
-
-    var targetPt = _waypoints[_currentWaypointIndex];
-    if (_currentWaypointIndex == _waypoints.length - 1) {
-      targetPt = player.position;
-    }
-
-    final dist = position.distanceTo(targetPt);
-    if (dist <= _waypointReachThreshold) {
-      _currentWaypointIndex++;
-      if (_currentWaypointIndex < _waypoints.length) {
-        targetPt = _waypoints[_currentWaypointIndex];
-      }
-    }
-
-    final toTarget = targetPt - position;
-    if (toTarget.length2 > 0.0001) {
-      previousPosition = position.clone();
-      final dir = toTarget.normalized();
-      position.add(dir * speed * dt);
-    }
+  void _navigate(double dt, Vector2 target) {
+    previousPosition = position.clone();
+    position.add(navigation.step(
+      position: position,
+      target: target,
+      grid: isMounted ? game.walkableGrid : const [],
+      speed: speed,
+      dt: dt,
+    ));
   }
 
   void _shootArrow() {
+    if (!isMounted) return;
     final toPlayer = player.position - position;
     if (toPlayer.length2 == 0) return;
     final dir = toPlayer.normalized();
@@ -169,6 +130,19 @@ class SkeletonEnemy extends PositionComponent
     }
   }
 
+  void applyControl({double stunDuration = 0, double knockback = 0,
+      Vector2? direction}) {
+    stunTimer = max(stunTimer, stunDuration);
+    navigation.pause();
+    if (isMounted && direction != null) {
+      position.add(ChaseNavigation.knockbackMovement(
+        position: position, direction: direction, distance: knockback,
+        halfSize: Vector2(10, 15), grid: game.walkableGrid,
+      ));
+      previousPosition.setFrom(position);
+    }
+  }
+
   void takeDamage(double dmg) {
     currentHp -= dmg;
     if (currentHp <= 0) {
@@ -181,7 +155,7 @@ class SkeletonEnemy extends PositionComponent
   }
 
   void _dropLoot() {
-    final rand = Random().nextDouble();
+    final rand = random.nextDouble();
     // 75% tỉ lệ rớt vật phẩm giá trị
     if (rand < 0.75) {
       PickupType dropType;

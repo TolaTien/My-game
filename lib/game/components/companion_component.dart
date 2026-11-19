@@ -1,7 +1,10 @@
 import 'dart:math';
+import 'dart:ui' as ui;
+
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../gold_rush_game.dart';
@@ -12,12 +15,7 @@ import 'boss_enemy.dart';
 import 'dungeon_map.dart';
 
 /// 4 phân loại Trợ thủ AI Companion Drone (bao gồm Aegis-X9 Tinh Linh Lôi Từ)
-enum CompanionType {
-  attack,
-  shield,
-  frost,
-  aegisX9,
-}
+enum CompanionType { attack, shield, frost, aegisX9 }
 
 extension CompanionTypeExtension on CompanionType {
   static CompanionType? fromId(String? id) {
@@ -84,6 +82,10 @@ class CompanionComponent extends PositionComponent
   final String companionId;
   final CompanionType type;
   final PlayerComponent player;
+  ui.Picture? _chassisPicture;
+  ui.Picture? _frostFieldPicture;
+  ui.Picture? _frostRunesPicture;
+  ui.Picture? _aegisCrystalPicture;
 
   // Quỹ đạo bay quanh Player
   final double orbitRadius;
@@ -108,11 +110,9 @@ class CompanionComponent extends PositionComponent
     required this.companionId,
     required this.player,
     this.orbitRadius = 45.0,
-  })  : type = CompanionTypeExtension.fromId(companionId) ?? CompanionType.attack,
-        super(
-          size: Vector2(24, 24),
-          anchor: Anchor.center,
-        );
+  }) : type =
+           CompanionTypeExtension.fromId(companionId) ?? CompanionType.attack,
+       super(size: Vector2(24, 24), anchor: Anchor.center);
 
   @override
   Future<void> onLoad() async {
@@ -139,6 +139,18 @@ class CompanionComponent extends PositionComponent
 
   @override
   void onRemove() {
+    for (final picture in [
+      _chassisPicture,
+      _frostFieldPicture,
+      _frostRunesPicture,
+      _aegisCrystalPicture,
+    ]) {
+      picture?.dispose();
+    }
+    _chassisPicture = null;
+    _frostFieldPicture = null;
+    _frostRunesPicture = null;
+    _aegisCrystalPicture = null;
     cleanup();
     super.onRemove();
   }
@@ -219,14 +231,18 @@ class CompanionComponent extends PositionComponent
 
     if (type == CompanionType.aegisX9) {
       // Aegis-X9: Bay lơ lửng lệch sau vai phải với nội suy lò xo (Spring Damping) chuẩn assets_guid.md
-      final shoulderOffset = Vector2(player.isFacingRight ? -28.0 : 28.0, -22.0 + cos(bobbingTimer * 4.0) * 3.0);
+      final shoulderOffset = Vector2(
+        player.isFacingRight ? -28.0 : 28.0,
+        -22.0 + cos(bobbingTimer * 4.0) * 3.0,
+      );
       final targetPos = player.position + shoulderOffset;
       position.add((targetPos - position) * min(1.0, 8.0 * dt));
     } else {
       // Quỹ đạo tròn chuẩn cho Attack / Shield / Frost Drone
       final bobbingY = sin(bobbingTimer * 4.0) * 3.5;
       final targetX = player.position.x + cos(orbitAngle) * orbitRadius;
-      final targetY = player.position.y + sin(orbitAngle) * orbitRadius + bobbingY;
+      final targetY =
+          player.position.y + sin(orbitAngle) * orbitRadius + bobbingY;
       position.setValues(targetX, targetY);
     }
 
@@ -418,6 +434,12 @@ class CompanionComponent extends PositionComponent
   }
 
   // --- PROCEDURAL CANVAS RENDERING ---
+  ui.Picture _recordStatic(void Function(Canvas) draw) {
+    final recorder = ui.PictureRecorder();
+    draw(Canvas(recorder));
+    return recorder.endRecording();
+  }
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
@@ -435,7 +457,8 @@ class CompanionComponent extends PositionComponent
       canvas.drawCircle(
         playerCenter,
         115,
-        Paint()..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
+        Paint()
+          ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
       );
       canvas.drawCircle(
         playerCenter,
@@ -491,8 +514,10 @@ class CompanionComponent extends PositionComponent
     }
 
     // 2. Bóng đổ lơ lửng trên mặt đất
-    final bobbingScale =
-        (1.0 - (sin(bobbingTimer * 4.0) * 0.15)).clamp(0.7, 1.3);
+    final bobbingScale = (1.0 - (sin(bobbingTimer * 4.0) * 0.15)).clamp(
+      0.7,
+      1.3,
+    );
     final shadowPaint = Paint()..color = const Color(0x33000000);
     canvas.drawOval(
       Rect.fromCenter(
@@ -506,11 +531,16 @@ class CompanionComponent extends PositionComponent
     // 3. Động cơ đẩy phản lực Ion (Thrusters & Particles)
     _renderThrusters(canvas, droneCenter);
 
-    // 4. Thân vỏ Drone kim loại (Metallic Chassis)
-    _renderChassis(canvas, droneCenter);
-
-    // 5. Thấu kính / Lõi năng lượng phát sáng (Glowing Core / Sensor Lens)
-    _renderGlowingCore(canvas, droneCenter);
+    // Static chassis/lens geometry shares the original drawing order. Orbit,
+    // thrusters, targeting, auras and gameplay remain live.
+    _chassisPicture ??= _recordStatic((canvas) {
+      _renderChassis(canvas, Offset.zero);
+      _renderGlowingCore(canvas, Offset.zero);
+    });
+    canvas.save();
+    canvas.translate(droneCenter.dx, droneCenter.dy);
+    canvas.drawPicture(_chassisPicture!);
+    canvas.restore();
   }
 
   /// Vẽ Aegis-X9 - Tinh Linh Lôi Từ (Pha lê bát diện #FFD700 + 2 vòng Gyroscope bạc/cyan xoay chéo)
@@ -561,20 +591,26 @@ class CompanionComponent extends PositionComponent
     canvas.restore();
 
     // 4. Lõi pha lê bát diện (Octahedron) màu vàng kim #FFD700
-    final crystalPath = Path()
-      ..moveTo(center.dx, center.dy - 7)
-      ..lineTo(center.dx + 6, center.dy)
-      ..lineTo(center.dx, center.dy + 7)
-      ..lineTo(center.dx - 6, center.dy)
-      ..close();
-    canvas.drawPath(crystalPath, Paint()..color = const Color(0xFFFFD700));
-    canvas.drawPath(
-      crystalPath,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0,
-    );
+    _aegisCrystalPicture ??= _recordStatic((canvas) {
+      final crystalPath = Path()
+        ..moveTo(0, -7)
+        ..lineTo(6, 0)
+        ..lineTo(0, 7)
+        ..lineTo(-6, 0)
+        ..close();
+      canvas.drawPath(crystalPath, Paint()..color = const Color(0xFFFFD700));
+      canvas.drawPath(
+        crystalPath,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+    });
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.drawPicture(_aegisCrystalPicture!);
+    canvas.restore();
   }
 
   void _renderThrusters(Canvas canvas, Offset center) {
@@ -582,8 +618,8 @@ class CompanionComponent extends PositionComponent
     final thrusterColor = type == CompanionType.attack
         ? const Color(0xFFFF9100)
         : type == CompanionType.shield
-            ? const Color(0xFF00E5FF)
-            : const Color(0xFF80D8FF);
+        ? const Color(0xFF00E5FF)
+        : const Color(0xFF80D8FF);
 
     final flamePaint = Paint()..color = thrusterColor;
 
@@ -618,7 +654,10 @@ class CompanionComponent extends PositionComponent
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
-            center: Offset(center.dx, center.dy - 1), width: 14, height: 11),
+          center: Offset(center.dx, center.dy - 1),
+          width: 14,
+          height: 11,
+        ),
         const Radius.circular(2),
       ),
       armorPaint,
@@ -633,9 +672,13 @@ class CompanionComponent extends PositionComponent
     if (type == CompanionType.attack) {
       final cannonPaint = Paint()..color = const Color(0xFF212121);
       canvas.drawRect(
-          Rect.fromLTWH(center.dx - 6, center.dy - 9, 2, 4), cannonPaint);
+        Rect.fromLTWH(center.dx - 6, center.dy - 9, 2, 4),
+        cannonPaint,
+      );
       canvas.drawRect(
-          Rect.fromLTWH(center.dx + 4, center.dy - 9, 2, 4), cannonPaint);
+        Rect.fromLTWH(center.dx + 4, center.dy - 9, 2, 4),
+        cannonPaint,
+      );
     } else if (type == CompanionType.shield) {
       final nodePaint = Paint()..color = const Color(0xFF2979FF);
       canvas.drawCircle(Offset(center.dx - 8, center.dy), 1.8, nodePaint);
@@ -662,14 +705,23 @@ class CompanionComponent extends PositionComponent
     canvas.drawCircle(center, 3.2, lensPaint);
 
     final pupilPaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(center.dx - 0.8, center.dy - 0.8), 1.2, pupilPaint);
+    canvas.drawCircle(
+      Offset(center.dx - 0.8, center.dy - 0.8),
+      1.2,
+      pupilPaint,
+    );
   }
 
   void _renderShieldDomeAndTether(
-      Canvas canvas, Offset droneCenter, Offset toGeorge) {
+    Canvas canvas,
+    Offset droneCenter,
+    Offset toGeorge,
+  ) {
     final georgeCenter = droneCenter + toGeorge;
-    final pulseAlpha =
-        (0.20 + sin(bobbingTimer * 3.5) * 0.08).clamp(0.12, 0.35);
+    final pulseAlpha = (0.20 + sin(bobbingTimer * 3.5) * 0.08).clamp(
+      0.12,
+      0.35,
+    );
 
     final tetherPaint = Paint()
       ..color = const Color(0xFF00E5FF).withValues(alpha: 0.45)
@@ -699,29 +751,40 @@ class CompanionComponent extends PositionComponent
 
   void _renderFrostDecal(Canvas canvas, Offset droneCenter, Offset toGeorge) {
     final georgeCenter = droneCenter + toGeorge;
-
-    final decalPaint = Paint()
-      ..color = const Color(0xFF18FFFF).withValues(alpha: 0.10)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(georgeCenter, 130.0, decalPaint);
-
-    final borderPaint = Paint()
-      ..color = const Color(0xFF18FFFF).withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(georgeCenter, 130.0, borderPaint);
-
-    final runeAngle = bobbingTimer * 0.5;
-    final runePaint = Paint()
-      ..color = const Color(0xFF80D8FF).withValues(alpha: 0.25)
-      ..strokeWidth = 1.0;
-
-    for (int i = 0; i < 6; i++) {
-      final rad = runeAngle + (i * pi / 3);
-      final p1 = georgeCenter + Offset(cos(rad) * 20, sin(rad) * 20);
-      final p2 = georgeCenter + Offset(cos(rad) * 120, sin(rad) * 120);
-      canvas.drawLine(p1, p2, runePaint);
-    }
+    _frostFieldPicture ??= _recordStatic((canvas) {
+      canvas.drawCircle(
+        Offset.zero,
+        130,
+        Paint()..color = const Color(0xFF18FFFF).withValues(alpha: 0.10),
+      );
+      canvas.drawCircle(
+        Offset.zero,
+        130,
+        Paint()
+          ..color = const Color(0xFF18FFFF).withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+    });
+    _frostRunesPicture ??= _recordStatic((canvas) {
+      final paint = Paint()
+        ..color = const Color(0xFF80D8FF).withValues(alpha: 0.25)
+        ..strokeWidth = 1.0;
+      for (var i = 0; i < 6; i++) {
+        final rad = i * pi / 3;
+        canvas.drawLine(
+          Offset(cos(rad) * 20, sin(rad) * 20),
+          Offset(cos(rad) * 120, sin(rad) * 120),
+          paint,
+        );
+      }
+    });
+    canvas.save();
+    canvas.translate(georgeCenter.dx, georgeCenter.dy);
+    canvas.drawPicture(_frostFieldPicture!);
+    canvas.rotate(bobbingTimer * 0.5);
+    canvas.drawPicture(_frostRunesPicture!);
+    canvas.restore();
   }
 
   void _renderTargetingLaser(Canvas canvas, Offset droneCenter) {
@@ -749,18 +812,12 @@ class CompanionPlasmaProjectile extends PositionComponent
   CompanionPlasmaProjectile({
     required Vector2 position,
     required Vector2 direction,
-  })  : direction =
-            direction.length2 > 0 ? direction.normalized() : Vector2(1, 0),
-        super(
-          position: position,
-          size: Vector2(12, 12),
-          anchor: Anchor.center,
-        ) {
+  }) : direction = direction.length2 > 0
+           ? direction.normalized()
+           : Vector2(1, 0),
+       super(position: position, size: Vector2(12, 12), anchor: Anchor.center) {
     angle = atan2(this.direction.y, this.direction.x);
-    add(CircleHitbox(
-      radius: 5,
-      position: Vector2(1, 1),
-    ));
+    add(CircleHitbox(radius: 5, position: Vector2(1, 1)));
   }
 
   @override

@@ -13,6 +13,16 @@ enum CombatTextType {
 
 /// Hiển thị số sát thương / hồi máu nảy lên theo chuẩn Game UI Design (Damage Number Pattern)
 class FloatingCombatText extends PositionComponent {
+  // Eviction only releases cached layouts; it never drops a combat message.
+  // Alpha is part of native paragraph paint. Reuse exact text/style layouts
+  // rather than adding an offscreen saveLayer on every animated frame.
+  static final _layouts = <(String, CombatTextType, double), _CombatTextLayout>{};
+  static const _maxCachedLayouts = 192;
+  @visibleForTesting
+  static int debugLayoutBuildCount = 0;
+  @visibleForTesting
+  static int get debugCachedLayoutCount => _layouts.length;
+
   final String text;
   final CombatTextType type;
   final double duration;
@@ -64,6 +74,22 @@ class FloatingCombatText extends PositionComponent {
       scale = 1.25 - ((progress - 0.18) / 0.17) * 0.25;
     }
 
+    final layout = _layoutFor(opacity);
+    canvas.save();
+    canvas.scale(scale, scale);
+    final offset = Offset(-layout.fill.width / 2, -layout.fill.height / 2);
+    layout.stroke.paint(canvas, offset);
+    layout.fill.paint(canvas, offset);
+    canvas.restore();
+  }
+
+  _CombatTextLayout _layoutFor(double opacity) {
+    final key = (text, type, opacity);
+    final cached = _layouts.remove(key);
+    if (cached != null) {
+      _layouts[key] = cached;
+      return cached;
+    }
     Color textColor;
     double fontSize;
     switch (type) {
@@ -93,9 +119,6 @@ class FloatingCombatText extends PositionComponent {
         break;
     }
 
-    canvas.save();
-    canvas.scale(scale, scale);
-
     final strokePainter = TextPainter(
       text: TextSpan(
         text: text,
@@ -123,10 +146,27 @@ class FloatingCombatText extends PositionComponent {
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final offset = Offset(-fillPainter.width / 2, -fillPainter.height / 2);
-    strokePainter.paint(canvas, offset);
-    fillPainter.paint(canvas, offset);
+    if (_layouts.length >= _maxCachedLayouts) {
+      _layouts.remove(_layouts.keys.first)!.dispose();
+    }
+    final layout = _CombatTextLayout(strokePainter, fillPainter);
+    _layouts[key] = layout;
+    assert(() {
+      debugLayoutBuildCount += 2;
+      return true;
+    }());
+    return layout;
+  }
+}
 
-    canvas.restore();
+class _CombatTextLayout {
+  final TextPainter stroke;
+  final TextPainter fill;
+
+  _CombatTextLayout(this.stroke, this.fill);
+
+  void dispose() {
+    stroke.dispose();
+    fill.dispose();
   }
 }
