@@ -20,12 +20,17 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   final bool isPlayerOne;
   final PvpGameMode gameMode;
   final MapAssetConfig? selectedMapConfig;
+  final int localBlueSlotIndex;
+  final Map<int, String> humanAllyCodes;
+  final bool isPartyGuest;
   late MapAssetConfig currentMapConfig;
   late final PvpTeamRoster teamRoster;
 
   late PlayerComponent player;
   late PvpBotPlayerComponent bot;
   final List<PvpBotPlayerComponent> allies = [];
+  final List<int> _allySlotIndices = [];
+  final Map<String, PvpBotPlayerComponent> _humanAlliesByCode = {};
   final List<PvpBotPlayerComponent> extraEnemies = [];
   late PvpArenaMapComponent arenaMap;
 
@@ -38,6 +43,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   int get redTeamAliveCount =>
       allEnemies.where((e) => e.currentHp > 0).length;
 
+  static const double roundIntroDuration = 1.5;
+
   // Trạng thái trận đấu Bo3
   PvpMatchState matchState = PvpMatchState.roundIntro;
   int currentRound = 1;
@@ -45,7 +52,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   int opponentWins = 0;
   bool lastRoundPlayerWon = true;
   double roundTimeRemaining = 90.0;
-  double stateTimer = 3.0; // 3s cho roundIntro / 2.5s cho roundEnd
+  double stateTimer = roundIntroDuration; // 1.5s chuẩn bị / 2.5s cho roundEnd
+  double fightStartBannerTimer = 0.0;
+  Vector2 _pendingMoveDirection = Vector2.zero();
   DateTime matchStartTime = DateTime.now();
 
   // Tọa độ spawn chuẩn đối xứng
@@ -75,8 +84,11 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   Function(PvpMatchResult result)? onMatchFinished;
   Function(String action, {String? text})? onLocalAction;
 
-  Vector2 get _localSpawn =>
-      (isPlayerOne ? playerSpawnPos : botSpawnPos).clone();
+  Vector2 get _localSpawn => isPlayerOne
+      ? _blueSlotPositions[
+              localBlueSlotIndex.clamp(0, _blueSlotPositions.length - 1)]
+          .clone()
+      : botSpawnPos.clone();
   Vector2 get _opponentSpawn =>
       (isPlayerOne ? botSpawnPos : playerSpawnPos).clone();
 
@@ -90,6 +102,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     this.gameMode = PvpGameMode.solo1v1,
     PvpTeamRoster? roster,
     this.selectedMapConfig,
+    this.localBlueSlotIndex = 0,
+    this.humanAllyCodes = const {},
+    this.isPartyGuest = false,
   }) {
     // Không bao giờ pause khi chạy đa tab/cửa sổ không focus (Multi-window PvP)
     pauseWhenBackgrounded = false;
@@ -97,7 +112,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     currentMapConfig =
         selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
 
-    // Trận online chỉ bắt đầu khi CẢ HAI bên đã vào phòng (xem startOnlineMatch)
+    // Trận online 1v1 chỉ bắt đầu khi CẢ HAI bên đã vào phòng (xem startOnlineMatch)
     if (isOnline) matchState = PvpMatchState.waiting;
 
     final localHero = PlayerStorage.currentProfile.selectedHeroId;
@@ -108,6 +123,11 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
           playerHeroId: localHero,
         );
 
+    arenaMap = PvpArenaMapComponent(
+      gameMode: gameMode,
+      mapConfig: currentMapConfig,
+    );
+
     player = PlayerComponent(
       position: _localSpawn,
       heroId: localHero,
@@ -116,25 +136,47 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       position: _opponentSpawn,
       opponentInfo: opponentInfo,
       targetPlayer: player,
-      enableAi: !isOnline,
+      enableAi: !isOnline && !isPartyGuest,
       getHostileTargets: gameMode == PvpGameMode.solo1v1
           ? null
           : () => <PositionComponent>[player, ...allies],
+      canAct: () => matchState == PvpMatchState.fighting,
+      getObstacleRects: () => arenaMap.obstacleRects,
+      getInteriorObstacleRects: () => arenaMap.pillarRects,
+      getWalkableGrid: () => arenaMap.walkableGrid,
     );
 
     // Khởi tạo thêm Đồng đội & Kẻ địch cho chế độ 2v2 và 4v4
     if (gameMode != PvpGameMode.solo1v1) {
+      final availableBlueSlots = <int>[
+        for (int s = 0; s < _blueSlotPositions.length; s++)
+          if (s != localBlueSlotIndex) s,
+      ];
+
       for (int i = 0; i < teamRoster.allies.length; i++) {
         final allyInfo = teamRoster.allies[i];
-        final spawnIdx = min(i + 1, _blueSlotPositions.length - 1);
+        final slotIdx = i < availableBlueSlots.length
+            ? availableBlueSlots[i]
+            : min(i + 1, _blueSlotPositions.length - 1);
+        final humanCode = humanAllyCodes[i]?.trim().toUpperCase();
+        final isHumanTeammate = humanCode != null && humanCode.isNotEmpty;
+
         final allyBot = PvpBotPlayerComponent(
-          position: _blueSlotPositions[spawnIdx].clone(),
+          position: _blueSlotPositions[slotIdx].clone(),
           opponentInfo: allyInfo,
           targetPlayer: player,
-          enableAi: true,
+          enableAi: !isHumanTeammate && !isPartyGuest,
           getHostileTargets: () => <PositionComponent>[...allEnemies],
+          canAct: () => matchState == PvpMatchState.fighting,
+          getObstacleRects: () => arenaMap.obstacleRects,
+          getInteriorObstacleRects: () => arenaMap.pillarRects,
+          getWalkableGrid: () => arenaMap.walkableGrid,
         );
         allies.add(allyBot);
+        _allySlotIndices.add(slotIdx);
+        if (isHumanTeammate) {
+          _humanAlliesByCode[humanCode] = allyBot;
+        }
       }
 
       // Kẻ địch thứ 2..N (bỏ qua phần tử 0 vì đã là `bot`)
@@ -148,8 +190,12 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
           position: _redSlotPositions[spawnIdx].clone(),
           opponentInfo: enemyInfo,
           targetPlayer: player,
-          enableAi: true,
+          enableAi: !isPartyGuest,
           getHostileTargets: () => <PositionComponent>[player, ...allies],
+          canAct: () => matchState == PvpMatchState.fighting,
+          getObstacleRects: () => arenaMap.obstacleRects,
+          getInteriorObstacleRects: () => arenaMap.pillarRects,
+          getWalkableGrid: () => arenaMap.walkableGrid,
         );
         extraEnemies.add(enemyBot);
       }
@@ -161,10 +207,6 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     await super.onLoad();
 
     // 1. Bản đồ đấu trường đối xứng 960x640 (Ngẫu nhiên theo currentMapConfig)
-    arenaMap = PvpArenaMapComponent(
-      gameMode: gameMode,
-      mapConfig: currentMapConfig,
-    );
     await world.add(arenaMap);
 
     // 2. Player (Bên trái: X=200, Y=320)
@@ -224,15 +266,29 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
         break;
 
       case PvpMatchState.roundIntro:
+        final prevCountdown = stateTimer.ceil();
         stateTimer -= dt;
+        final nextCountdown = stateTimer.ceil();
         if (stateTimer <= 0) {
           matchState = PvpMatchState.fighting;
           roundTimeRemaining = 90.0;
+          fightStartBannerTimer = 0.7;
+          // Áp dụng ngay hướng di chuyển người chơi đang giữ khi đếm ngược kết thúc
+          player.moveDirection = _pendingMoveDirection.clone();
+          onStateChanged?.call();
+        } else if (nextCountdown != prevCountdown) {
           onStateChanged?.call();
         }
         break;
 
       case PvpMatchState.fighting:
+        if (fightStartBannerTimer > 0) {
+          fightStartBannerTimer -= dt;
+          if (fightStartBannerTimer <= 0) {
+            fightStartBannerTimer = 0.0;
+            onStateChanged?.call();
+          }
+        }
         final oldSec = roundTimeRemaining.toInt();
         roundTimeRemaining -= dt;
         final newSec = roundTimeRemaining.toInt();
@@ -299,7 +355,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   void _startNextRound() {
     currentRound++;
     matchState = PvpMatchState.roundIntro;
-    stateTimer = 3.0;
+    stateTimer = roundIntroDuration;
+    fightStartBannerTimer = 0.0;
 
     // Reset vị trí và máu của tất cả đấu sĩ về vị trí xuất phát đối xứng chuẩn
     player.position = _localSpawn;
@@ -310,7 +367,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player.moveDirection = Vector2.zero();
 
     for (int i = 0; i < allies.length; i++) {
-      final spawnIdx = min(i + 1, _blueSlotPositions.length - 1);
+      final spawnIdx = i < _allySlotIndices.length
+          ? _allySlotIndices[i]
+          : min(i + 1, _blueSlotPositions.length - 1);
       allies[i].resetRound(_blueSlotPositions[spawnIdx].clone());
     }
 
@@ -353,7 +412,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   void startOnlineMatch() {
     if (matchState != PvpMatchState.waiting) return;
     matchState = PvpMatchState.roundIntro;
-    stateTimer = 3.0;
+    stateTimer = roundIntroDuration;
+    fightStartBannerTimer = 0.0;
     matchStartTime = DateTime.now();
     onStateChanged?.call();
   }
@@ -368,6 +428,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   // --- ACTIONS ---
 
   void setPlayerMoveDirection(Vector2 dir) {
+    _pendingMoveDirection = dir.clone();
     if (matchState != PvpMatchState.fighting) {
       player.moveDirection = Vector2.zero();
       return;
@@ -681,5 +742,188 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       map['speech'] = player.speechBubbleText!;
     }
     return map;
+  }
+
+  // --- PARTY CO-OP SYNC (ĐỒNG BỘ ĐỒNG ĐỘI & CHỦ PHÒNG TRONG CÙNG 1 TRẬN) ---
+
+  void applyPartyAllySnapshot(String memberCode, Map<String, dynamic> snapshot) {
+    final ally = _humanAlliesByCode[memberCode.trim().toUpperCase()];
+    if (ally == null) return;
+
+    double? number(String key) => (snapshot[key] as num?)?.toDouble();
+    final x = number('x');
+    final y = number('y');
+    final vx = number('vx');
+    final vy = number('vy');
+    final hp = number('hp');
+    final ki = number('ki');
+
+    if (x != null && y != null) {
+      ally.targetPosition = Vector2(x, y);
+    }
+    if (vx != null && vy != null) {
+      ally.targetVelocity = Vector2(vx, vy);
+    }
+    if (hp != null) {
+      ally.currentHp = hp.clamp(0, ally.maxHp);
+    }
+    if (ki != null) {
+      ally.currentKi = ki.clamp(0, ally.maxKi);
+    }
+    ally.isFacingRight = snapshot['facingRight'] as bool? ?? ally.isFacingRight;
+    ally.isBerserk = snapshot['berserk'] as bool? ?? ally.isBerserk;
+    ally.isAttacking = snapshot['attacking'] as bool? ?? ally.isAttacking;
+    if (snapshot['speech'] is String) {
+      ally.say(snapshot['speech'] as String);
+    }
+    onStateChanged?.call();
+  }
+
+  void applyPartyAllyAction(
+    String memberCode,
+    String action, {
+    String? text,
+  }) {
+    final ally = _humanAlliesByCode[memberCode.trim().toUpperCase()];
+    if (ally == null) return;
+
+    switch (action) {
+      case 'basicAttack':
+        ally.performBasicAttack(force: true);
+        break;
+      case 'skill1':
+        ally.executeSkill1(force: true);
+        break;
+      case 'skill2':
+        ally.executeSkill2(force: true);
+        break;
+      case 'skill3':
+        ally.executeSkill3(force: true);
+        break;
+      case 'quickChat':
+        if (text != null) ally.say(text);
+        break;
+    }
+    onStateChanged?.call();
+  }
+
+  Map<String, Object?> get partyHostSnapshot {
+    final enemiesData = allEnemies
+        .map((e) => <String, Object?>{
+              'x': double.parse(e.position.x.toStringAsFixed(1)),
+              'y': double.parse(e.position.y.toStringAsFixed(1)),
+              'vx': double.parse((e.moveDirection.x * e.speed).toStringAsFixed(1)),
+              'vy': double.parse((e.moveDirection.y * e.speed).toStringAsFixed(1)),
+              'hp': e.currentHp,
+              'ki': e.currentKi,
+              'facingRight': e.isFacingRight,
+              'berserk': e.isBerserk,
+              'attacking': e.isAttacking,
+            })
+        .toList();
+
+    final aiAlliesData = <int, Map<String, Object?>>{};
+    for (int i = 0; i < allies.length; i++) {
+      if (humanAllyCodes.containsKey(i)) continue;
+      final a = allies[i];
+      aiAlliesData[i] = {
+        'x': double.parse(a.position.x.toStringAsFixed(1)),
+        'y': double.parse(a.position.y.toStringAsFixed(1)),
+        'vx': double.parse((a.moveDirection.x * a.speed).toStringAsFixed(1)),
+        'vy': double.parse((a.moveDirection.y * a.speed).toStringAsFixed(1)),
+        'hp': a.currentHp,
+        'ki': a.currentKi,
+        'facingRight': a.isFacingRight,
+        'berserk': a.isBerserk,
+        'attacking': a.isAttacking,
+      };
+    }
+
+    return {
+      'round': currentRound,
+      'playerWins': playerWins,
+      'opponentWins': opponentWins,
+      'matchState': matchState.name,
+      'roundTimeRemaining': roundTimeRemaining,
+      'lastRoundPlayerWon': lastRoundPlayerWon,
+      'localHp': player.currentHp,
+      'enemies': enemiesData,
+      'aiAllies': aiAlliesData.map((k, v) => MapEntry('$k', v)),
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  void applyPartyHostState(Map<String, dynamic> hostState) {
+    if (!isPartyGuest) return;
+    final enemiesRaw = hostState['enemies'];
+    if (enemiesRaw is List) {
+      for (int i = 0; i < enemiesRaw.length && i < allEnemies.length; i++) {
+        final raw = enemiesRaw[i];
+        if (raw is! Map) continue;
+        final m = raw.map((k, v) => MapEntry(k.toString(), v));
+        final enemy = allEnemies[i];
+        final x = (m['x'] as num?)?.toDouble();
+        final y = (m['y'] as num?)?.toDouble();
+        final vx = (m['vx'] as num?)?.toDouble();
+        final vy = (m['vy'] as num?)?.toDouble();
+        final hp = (m['hp'] as num?)?.toDouble();
+        final ki = (m['ki'] as num?)?.toDouble();
+        if (x != null && y != null) enemy.targetPosition = Vector2(x, y);
+        if (vx != null && vy != null) enemy.targetVelocity = Vector2(vx, vy);
+        if (hp != null) enemy.currentHp = hp.clamp(0, enemy.maxHp);
+        if (ki != null) enemy.currentKi = ki.clamp(0, enemy.maxKi);
+        enemy.isFacingRight = m['facingRight'] as bool? ?? enemy.isFacingRight;
+        enemy.isBerserk = m['berserk'] as bool? ?? enemy.isBerserk;
+        enemy.isAttacking = m['attacking'] as bool? ?? enemy.isAttacking;
+      }
+    }
+
+    final aiAlliesRaw = hostState['aiAllies'];
+    if (aiAlliesRaw is Map) {
+      aiAlliesRaw.forEach((key, raw) {
+        final idx = int.tryParse(key.toString());
+        if (idx == null || idx < 0 || idx >= allies.length || raw is! Map) return;
+        final m = raw.map((k, v) => MapEntry(k.toString(), v));
+        final ally = allies[idx];
+        final x = (m['x'] as num?)?.toDouble();
+        final y = (m['y'] as num?)?.toDouble();
+        final vx = (m['vx'] as num?)?.toDouble();
+        final vy = (m['vy'] as num?)?.toDouble();
+        final hp = (m['hp'] as num?)?.toDouble();
+        if (x != null && y != null) ally.targetPosition = Vector2(x, y);
+        if (vx != null && vy != null) ally.targetVelocity = Vector2(vx, vy);
+        if (hp != null) ally.currentHp = hp.clamp(0, ally.maxHp);
+        ally.isFacingRight = m['facingRight'] as bool? ?? ally.isFacingRight;
+        ally.isAttacking = m['attacking'] as bool? ?? ally.isAttacking;
+      });
+    }
+
+    final hostRound = (hostState['round'] as num?)?.toInt();
+    final hostPlayerWins = (hostState['playerWins'] as num?)?.toInt();
+    final hostOpponentWins = (hostState['opponentWins'] as num?)?.toInt();
+    final hostMatchState = hostState['matchState'] as String?;
+
+    if (hostRound != null && hostRound > currentRound) {
+      currentRound = hostRound - 1;
+      _startNextRound();
+    }
+
+    if (hostPlayerWins != null && hostOpponentWins != null) {
+      playerWins = hostPlayerWins;
+      opponentWins = hostOpponentWins;
+    }
+
+    if (hostMatchState == PvpMatchState.roundEnd.name &&
+        matchState == PvpMatchState.fighting) {
+      lastRoundPlayerWon = hostState['lastRoundPlayerWon'] as bool? ?? true;
+      matchState = PvpMatchState.roundEnd;
+      stateTimer = 2.5;
+    } else if (hostMatchState == PvpMatchState.matchFinished.name &&
+        matchState != PvpMatchState.matchFinished) {
+      _concludeMatch();
+      return;
+    }
+
+    onStateChanged?.call();
   }
 }

@@ -23,10 +23,11 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/george_idle.png",
-        "runSheet": "assets/images/heroes/Tien-run-trimmed.png",
-        "attackSheet": "assets/images/heroes/george_attack.png",
-        "skill1Sheet": "assets/images/heroes/Tien-asm_hammer_hammer_hurricane.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
+        "portrait": "assets/images/heroes/george_portrait.png",
+        "skill1Sheet": null,
         "useProceduralFallback": true
       }
     },
@@ -56,6 +57,7 @@
         "runSheet": "assets/images/heroes/nova/nova-run.png",
         "attackSheet": "assets/images/heroes/nova/nova-attack.png",
         "skill1Sheet": "assets/images/skills/nova_energy_slash.png",
+        "portrait": "assets/images/heroes/nova/nova_portrait.png",
         "useProceduralFallback": false
       }
     },
@@ -84,7 +86,8 @@
         "idleSheet": "assets/images/heroes/shadow/idle/01.png",
         "runSheet": "assets/images/heroes/shadow/run/01.png",
         "attackSheet": "assets/images/heroes/shadow/attack/01.png",
-        "skill1Sheet": "assets/images/skills/cyber_skill_effects.png",
+        "portrait": "assets/images/heroes/shadow_01_portrait.png",
+        "skill1Sheet": null,
         "useProceduralFallback": false
       }
     },
@@ -111,7 +114,7 @@
         "frameWidth": 256,
         "frameHeight": 256,
         "idleSheet": "assets/images/heroes/ember/Ember-idle.png",
-        "runSheet": "assets/images/heroes/ember/Ember-run.png",
+        "runSheet": "assets/images/heroes/ember/ember-run.png",
         "attackSheet": "assets/images/heroes/ember/Ember-attack.png",
         "portrait": "assets/images/heroes/ember/ember.png",
         "useProceduralFallback": false
@@ -120,7 +123,7 @@
     {
       "id": "valeria",
       "name": "Valeria — Pháp Sư Băng Hỏa",
-      "role": "Elementalist • Băng Hỏa (Asset 3)",
+      "role": "Elementalist • Băng Hỏa",
       "classType": "mage",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -139,17 +142,18 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/valeria_portrait.png",
-        "runSheet": "assets/images/heroes/valeria_sheet.png",
-        "attackSheet": "assets/images/heroes/valeria_sheet.png",
-        "skill1Sheet": "assets/images/skills/valeria_skills.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
+        "portrait": "assets/images/heroes/george_portrait.png",
+        "skill1Sheet": null,
         "useProceduralFallback": true
       }
     },
     {
       "id": "garrick",
       "name": "Garrick — Chiến Binh Cổ Đại",
-      "role": "Stone Guardian • Đỡ Đòn (Asset 3)",
+      "role": "Stone Guardian • Đỡ Đòn",
       "classType": "tank",
       "priceGold": 100,
       "unlockedByDefault": false,
@@ -168,39 +172,10 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/garrick_portrait.png",
-        "runSheet": "assets/images/heroes/garrick_sheet.png",
-        "attackSheet": "assets/images/heroes/garrick_sheet.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
         "useProceduralFallback": true
-      }
-    },
-    {
-      "id": "kaelen",
-      "name": "Kale (Kaelen) — Kiếm Khách Lôi Quang",
-      "role": "Sát Thủ / Lôi Kiếm",
-      "classType": "assassin",
-      "priceGold": 100,
-      "unlockedByDefault": false,
-      "baseStats": {
-        "hp": 110,
-        "ki": 120,
-        "attack": 32,
-        "speed": 175
-      },
-      "growthPerLevel": {
-        "hpPerLevel": 11.5,
-        "kiPerLevel": 4.5,
-        "attackPerLevel": 3.0
-      },
-      "skillIds": ["kaelen_thunder_flash", "kaelen_storm_vortex", "kaelen_heaven_judgment"],
-      "sprites": {
-        "frameWidth": 256,
-        "frameHeight": 256,
-        "idleSheet": "assets/images/heroes/kale/idle/01.png",
-        "runSheet": "assets/images/heroes/kale/run/01.png",
-        "attackSheet": "assets/images/heroes/kale/kale-attack.png",
-        "skill1Sheet": "assets/images/skills/kaelen_thunder_flash.png",
-        "useProceduralFallback": false
       }
     },
     {
@@ -225,9 +200,10 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/ranger_idle.png",
-        "runSheet": "assets/images/heroes/ranger_run.png",
-        "attackSheet": "assets/images/heroes/ranger_attack.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
+        "portrait": "assets/images/heroes/ranger_portrait.png",
         "useProceduralFallback": true
       }
     },
@@ -253,9 +229,10 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/tanker_idle.png",
-        "runSheet": "assets/images/heroes/tanker_run.png",
-        "attackSheet": "assets/images/heroes/tanker_attack.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
+        "portrait": "assets/images/heroes/tanker_portrait.png",
         "useProceduralFallback": true
       }
     },
@@ -281,9 +258,10 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/ninja_idle.png",
-        "runSheet": "assets/images/heroes/ninja_run.png",
-        "attackSheet": "assets/images/heroes/ninja_attack.png",
+        "idleSheet": "",
+        "runSheet": "",
+        "attackSheet": "",
+        "portrait": "assets/images/heroes/ninja_portrait.png",
         "useProceduralFallback": true
       }
     }

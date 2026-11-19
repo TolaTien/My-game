@@ -329,28 +329,4 @@ class PlayerStorage {
     );
     await saveProfile(updated);
   }
-
-  /// Mở khóa Skin bằng Vàng
-  static Future<bool> unlockSkin(String skinId, int goldPrice) async {
-    if (currentProfile.unlockedSkinIds.contains(skinId)) return true;
-    if (currentProfile.gold < goldPrice) return false;
-
-    final newSkins = List<String>.from(currentProfile.unlockedSkinIds)..add(skinId);
-    final updated = currentProfile.copyWith(
-      gold: currentProfile.gold - goldPrice,
-      unlockedSkinIds: newSkins,
-      selectedSkinId: skinId,
-    );
-    await saveProfile(updated);
-    return true;
-  }
-
-  /// Chọn Skin trang phục
-  static Future<void> selectSkin(String? skinId) async {
-    final updated = currentProfile.copyWith(
-      selectedSkinId: skinId,
-      clearSkin: skinId == null,
-    );
-    await saveProfile(updated);
-  }
 }

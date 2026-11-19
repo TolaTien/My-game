@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
-import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../gold_rush_game.dart';
 import 'player.dart';
@@ -26,25 +25,20 @@ extension CompanionTypeExtension on CompanionType {
       case 'companion_attack':
       case 'comp_attack':
       case 'attack':
-      case 'orbit_03':
         return CompanionType.attack;
       case 'companion_defense':
       case 'comp_defense':
       case 'defense':
       case 'shield':
-      case 'cyber_drone':
         return CompanionType.shield;
       case 'companion_frost':
       case 'comp_control':
       case 'control':
       case 'frost':
-      case 'pyro_frost_dragon':
-      case 'luna_fox':
         return CompanionType.frost;
       case 'aegis_x9':
       case 'comp_aegis':
       case 'aegis':
-      case 'gem_tumbler':
         return CompanionType.aegisX9;
       default:
         return null;
@@ -445,33 +439,6 @@ class CompanionComponent extends PositionComponent
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0,
       );
-    }
-
-    final compSprite = SpriteImageCache.instance.getCompanionImage(companionId);
-    if (compSprite != null) {
-      if (type == CompanionType.shield) {
-        _renderShieldDomeAndTether(canvas, droneCenter, offsetToPlayer);
-      } else if (type == CompanionType.frost) {
-        _renderFrostDecal(canvas, droneCenter, offsetToPlayer);
-      }
-      final srcRect = Rect.fromLTWH(
-        0,
-        0,
-        compSprite.width.toDouble(),
-        compSprite.height.toDouble(),
-      );
-      final dstRect = Rect.fromCenter(
-        center: droneCenter,
-        width: 30,
-        height: 30,
-      );
-      canvas.drawImageRect(
-        compSprite,
-        srcRect,
-        dstRect,
-        Paint()..filterQuality = FilterQuality.none,
-      );
-      return;
     }
 
     if (type == CompanionType.aegisX9) {

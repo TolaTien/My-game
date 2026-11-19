@@ -2,8 +2,6 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import '../../core/constants.dart';
 import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
@@ -31,7 +29,78 @@ class WallBlock extends PositionComponent with CollisionCallbacks {
         theme == 'ice_island' ||
         theme == 'map_bang' ||
         theme == 'map_dao_bang_gia';
+    final isForestTheme = theme == 'forest' ||
+        theme == 'nature' ||
+        theme == 'forest_island' ||
+        theme == 'map_rung_cay';
     final rect = ui.Rect.fromLTWH(0, 0, size.x, size.y);
+
+    if (isForestTheme) {
+      if (isBoundary) {
+        // Tường ranh giới rừng cây trong suốt tinh tế
+        final forestBarrierPaint = ui.Paint()..color = const ui.Color(0x201B5E20);
+        final forestEdgePaint = ui.Paint()
+          ..color = const ui.Color(0x6669F0AE)
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 1.0;
+        canvas.drawRect(rect, forestBarrierPaint);
+        canvas.drawRect(rect, forestEdgePaint);
+        return;
+      }
+
+      // Trụ cây cổ thụ rừng nguyên sinh (Ancient Forest Trunk / Mossy Pillar)
+      final paintBody = ui.Paint()..color = const ui.Color(0xFF261C14);
+      final paintTop = ui.Paint()..color = const ui.Color(0xFF2E4F28);
+      final paintBorder = ui.Paint()
+        ..color = const ui.Color(0xFF140E0A)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 2;
+
+      canvas.drawRect(rect, paintBody);
+      canvas.drawRect(ui.Rect.fromLTWH(0, 0, size.x, size.y * 0.35), paintTop);
+
+      // Đường viền lá mạ vàng xanh rừng
+      canvas.drawLine(
+        ui.Offset(2, size.y * 0.35),
+        ui.Offset(size.x - 2, size.y * 0.35),
+        ui.Paint()
+          ..color = const ui.Color(0xFF69F0AE).withValues(alpha: 0.85)
+          ..strokeWidth = 1.5,
+      );
+
+      if (isPillar) {
+        // Tinh thể ngọc bích tự nhiên phát quang (Emerald Rune Core)
+        final center = ui.Offset(size.x / 2, size.y / 2);
+        final runePath = ui.Path()
+          ..moveTo(center.dx, center.dy - 14)
+          ..lineTo(center.dx + 11, center.dy)
+          ..lineTo(center.dx, center.dy + 14)
+          ..lineTo(center.dx - 11, center.dy)
+          ..close();
+
+        // Hào quang xanh ngọc
+        canvas.drawCircle(
+          center,
+          18,
+          ui.Paint()
+            ..color = const ui.Color(0x3300E676)
+            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6),
+        );
+        canvas.drawPath(
+          runePath,
+          ui.Paint()..color = const ui.Color(0xFFB9F6CA),
+        );
+        canvas.drawPath(
+          runePath,
+          ui.Paint()
+            ..color = const ui.Color(0xFF00E676)
+            ..style = ui.PaintingStyle.stroke
+            ..strokeWidth = 1.6,
+        );
+      }
+      canvas.drawRect(rect, paintBorder);
+      return;
+    }
 
     if (isIceTheme) {
       if (isBoundary) {
@@ -166,6 +235,7 @@ class DungeonMapComponent extends Component {
     walkableGrid = AStarPathfinder.buildDungeonWalkableGrid(
       width: mapWidthTiles,
       height: mapHeightTiles,
+      mapId: mapConfig.id,
     );
   }
 
@@ -218,13 +288,54 @@ class DungeonMapComponent extends Component {
       ));
     }
 
-    // 6 Trụ đá / Trụ băng tinh thể trong hầm ngục (khớp hoàn toàn với A* grid)
-    _addPillar(8, 6, wallTheme);
-    _addPillar(8, 16, wallTheme);
-    _addPillar(26, 6, wallTheme);
-    _addPillar(26, 16, wallTheme);
-    _addPillar(17, 10, wallTheme);
-    _addPillar(18, 10, wallTheme);
+    // Sinh các chướng ngại vật theo từng bản đồ (khớp chuẩn xác với ảnh nền và A* Grid)
+    if (mapConfig.id == 'map_dao_bang_gia') {
+      // 4 tháp khối đá băng tinh thể tự nhiên tại 4 mỏm đảo (khớp chuẩn tranh nền)
+      _addPillar(6, 6, wallTheme);
+      _addPillar(29, 6, wallTheme);
+      _addPillar(7, 15, wallTheme);
+      _addPillar(28, 15, wallTheme);
+
+      // Chắn bờ vực biển sâu để nhân vật không đi xuyên ra biển ngoài đảo
+      _addWaterBarrierArea(1, 5, 9, 12, wallTheme);
+      _addWaterBarrierArea(30, 34, 9, 12, wallTheme);
+      _addWaterBarrierArea(1, 3, 1, 2, wallTheme);
+      _addWaterBarrierArea(32, 34, 1, 2, wallTheme);
+      _addWaterBarrierArea(1, 4, 20, 22, wallTheme);
+      _addWaterBarrierArea(31, 34, 20, 22, wallTheme);
+    } else if (mapConfig.id == 'map_rung_cay') {
+      // Chướng ngại vật cổ thụ và khối đá rêu trong Rừng Cây
+      _addPillar(12, 5, wallTheme);
+      _addPillar(24, 5, wallTheme);
+      _addPillar(10, 17, wallTheme);
+      _addPillar(28, 11, wallTheme);
+    } else if (mapConfig.id == 'map_bang') {
+      // 4 Trụ đá khối băng đấu trường đối xứng 4 góc
+      _addPillar(8, 6, wallTheme);
+      _addPillar(8, 16, wallTheme);
+      _addPillar(26, 6, wallTheme);
+      _addPillar(26, 16, wallTheme);
+    } else {
+      // Thần Điện Hoàng Kim mặc định
+      _addPillar(8, 6, wallTheme);
+      _addPillar(8, 16, wallTheme);
+      _addPillar(26, 6, wallTheme);
+      _addPillar(26, 16, wallTheme);
+      _addPillar(17, 10, wallTheme);
+    }
+  }
+
+  void _addWaterBarrierArea(int c1, int c2, int r1, int r2, String theme) {
+    final x = c1 * tileSize;
+    final y = r1 * tileSize;
+    final w = (c2 - c1 + 1) * tileSize;
+    final h = (r2 - r1 + 1) * tileSize;
+    add(WallBlock(
+      position: Vector2(x, y),
+      size: Vector2(w, h),
+      theme: theme,
+      isBoundary: true,
+    ));
   }
 
   void _addPillar(int col, int row, String theme) {
@@ -255,6 +366,9 @@ class DungeonMapComponent extends Component {
         mapConfig.theme == 'ice_island' ||
         mapConfig.id == 'map_bang' ||
         mapConfig.id == 'map_dao_bang_gia';
+    final isForestTheme = mapConfig.theme == 'forest' ||
+        mapConfig.theme == 'nature' ||
+        mapConfig.id == 'map_rung_cay';
 
     // 1. NỀN BẢN ĐỒ
     if (_mapImage != null) {
@@ -270,22 +384,31 @@ class DungeonMapComponent extends Component {
         ui.Paint()..filterQuality = ui.FilterQuality.medium,
       );
     } else {
-      // Nền dự phòng (xanh băng cho theme băng, đá hoàng kim cho thần điện)
+      // Nền dự phòng (xanh băng cho theme băng, xanh thảo mộc cho rừng, đá hoàng kim cho thần điện)
       final lightPaint = isIceTheme
           ? (ui.Paint()..color = const ui.Color(0xFF1B324B))
-          : (ui.Paint()..color = const ui.Color(0xFF2D3440));
+          : isForestTheme
+              ? (ui.Paint()..color = const ui.Color(0xFF2E4F28))
+              : (ui.Paint()..color = const ui.Color(0xFF2D3440));
       final darkPaint = isIceTheme
           ? (ui.Paint()..color = const ui.Color(0xFF102033))
-          : (ui.Paint()..color = const ui.Color(0xFF222831));
+          : isForestTheme
+              ? (ui.Paint()..color = const ui.Color(0xFF223A1E))
+              : (ui.Paint()..color = const ui.Color(0xFF222831));
       final veinPaint = isIceTheme
           ? (ui.Paint()
             ..color = const ui.Color(0xFF00E5FF).withValues(alpha: 0.35)
             ..strokeWidth = 1.2
             ..style = ui.PaintingStyle.stroke)
-          : (ui.Paint()
-            ..color = const ui.Color(0xFFD4AF37).withValues(alpha: 0.28)
-            ..strokeWidth = 1.2
-            ..style = ui.PaintingStyle.stroke);
+          : isForestTheme
+              ? (ui.Paint()
+                ..color = const ui.Color(0xFF81C784).withValues(alpha: 0.35)
+                ..strokeWidth = 1.2
+                ..style = ui.PaintingStyle.stroke)
+              : (ui.Paint()
+                ..color = const ui.Color(0xFFD4AF37).withValues(alpha: 0.28)
+                ..strokeWidth = 1.2
+                ..style = ui.PaintingStyle.stroke);
 
       for (int r = 0; r < mapHeightTiles; r++) {
         for (int c = 0; c < mapWidthTiles; c++) {
@@ -307,7 +430,52 @@ class DungeonMapComponent extends Component {
 
     // 2. VÒNG MA TRẬN TRUNG TÂM (Phù hợp theo chủ đề bản đồ)
     final centerOffset = ui.Offset(totalW / 2, totalH / 2);
-    if (isIceTheme) {
+    if (isForestTheme) {
+      // Vòng Trận Pháp Thảo Mộc / Sinh Mệnh Rừng Xanh
+      canvas.drawCircle(
+        centerOffset,
+        125,
+        ui.Paint()..color = const ui.Color(0x1800E676),
+      );
+      canvas.drawCircle(
+        centerOffset,
+        125,
+        ui.Paint()
+          ..color = const ui.Color(0xFF00E676).withValues(alpha: 0.65)
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      );
+      canvas.drawCircle(
+        centerOffset,
+        96,
+        ui.Paint()
+          ..color = const ui.Color(0xFF69F0AE).withValues(alpha: 0.45)
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+
+      final octPath = ui.Path();
+      for (int i = 0; i < 8; i++) {
+        final angle = i * (pi / 4);
+        final pt = ui.Offset(
+          centerOffset.dx + cos(angle) * 110,
+          centerOffset.dy + sin(angle) * 110,
+        );
+        if (i == 0) {
+          octPath.moveTo(pt.dx, pt.dy);
+        } else {
+          octPath.lineTo(pt.dx, pt.dy);
+        }
+      }
+      octPath.close();
+      canvas.drawPath(
+        octPath,
+        ui.Paint()
+          ..color = const ui.Color(0x6669F0AE)
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    } else if (isIceTheme) {
       // Vòng Trận Pháp Băng Tinh (Frost Nexus Circle)
       canvas.drawCircle(
         centerOffset,
@@ -399,16 +567,40 @@ class DungeonMapComponent extends Component {
       );
     }
 
-    // 3. 4 CỔNG SPAWN QUÁI VẬT (Monster Portals)
-    final portalTiles = [
-      const ui.Offset(4.5, 4.5),
-      const ui.Offset(31.5, 4.5),
-      const ui.Offset(4.5, 19.5),
-      const ui.Offset(31.5, 19.5),
-    ];
+    // 3. 4 CỔNG SPAWN QUÁI VẬT (Monster Portals - Động theo MapConfig)
+    final portalTiles = mapConfig.monsterPortals.isNotEmpty
+        ? mapConfig.monsterPortals
+            .map((p) => ui.Offset(p[0] + 0.5, p[1] + 0.5))
+            .toList()
+        : const [
+            ui.Offset(4.5, 4.5),
+            ui.Offset(31.5, 4.5),
+            ui.Offset(4.5, 19.5),
+            ui.Offset(31.5, 19.5),
+          ];
     for (final tile in portalTiles) {
       final pCenter = ui.Offset(tile.dx * tileSize, tile.dy * tileSize);
-      if (isIceTheme) {
+      if (isForestTheme) {
+        // Cổng rừng sâu ma mị thảo mộc
+        canvas.drawCircle(
+          pCenter,
+          24,
+          ui.Paint()..color = const ui.Color(0x441B5E20),
+        );
+        canvas.drawCircle(
+          pCenter,
+          18,
+          ui.Paint()
+            ..color = const ui.Color(0xFF69F0AE).withValues(alpha: 0.75)
+            ..style = ui.PaintingStyle.stroke
+            ..strokeWidth = 2.0,
+        );
+        canvas.drawCircle(
+          pCenter,
+          10,
+          ui.Paint()..color = const ui.Color(0xFF0A220F),
+        );
+      } else if (isIceTheme) {
         // Cổng băng xoáy lạnh sâu thẳm
         canvas.drawCircle(
           pCenter,

@@ -4,8 +4,11 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../models/pvp_match.dart';
 import '../../registry/sprite_image_cache.dart';
+import '../../services/audio_service.dart';
 import '../ai/pvp_bot_ai.dart';
 import 'dungeon_map.dart';
+import 'floating_combat_text.dart';
+import 'hero_projectile.dart';
 import 'player.dart';
 
 class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
@@ -40,9 +43,24 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   String? speechBubbleText;
   double speechBubbleTimer = 0.0;
 
-  // Callback
+  // Callback & arena awareness
   Function()? onStatsChanged;
   List<PositionComponent> Function()? getHostileTargets;
+  bool Function()? canAct;
+  List<Rect> Function()? getObstacleRects;
+  List<Rect> Function()? getInteriorObstacleRects;
+  List<List<bool>> Function()? getWalkableGrid;
+
+  // Hitbox extents relative to component center (size: 36x40, hitbox: 24x28 at (6, 10))
+  static const double _hitboxLeft = -12.0;
+  static const double _hitboxRight = 12.0;
+  static const double _hitboxTop = -10.0;
+  static const double _hitboxBottom = 18.0;
+
+  bool get isRangedHero {
+    final id = opponentInfo.heroId;
+    return id == 'ranger' || id == 'ember_02' || id == 'ember' || id == 'valeria';
+  }
 
   PvpBotPlayerComponent({
     required Vector2 position,
@@ -50,11 +68,16 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     required this.targetPlayer,
     this.enableAi = true,
     this.getHostileTargets,
+    this.canAct,
+    this.getObstacleRects,
+    this.getInteriorObstacleRects,
+    this.getWalkableGrid,
   }) : super(
           position: position,
           size: Vector2(36, 40),
           anchor: Anchor.center,
         ) {
+    previousPosition = position.clone();
     isFacingRight = opponentInfo.isAlly;
     add(RectangleHitbox(
       size: Vector2(24, 28),
@@ -82,7 +105,58 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
           position.distanceToSquared(a.position).compareTo(position.distanceToSquared(b.position)));
       return candidates.first;
     }
-    return targetPlayer;
+    return targetPlayer.currentHp > 0 ? targetPlayer : null;
+  }
+
+  Rect _hitboxAt(double x, double y) => Rect.fromLTRB(
+        x + _hitboxLeft,
+        y + _hitboxTop,
+        x + _hitboxRight,
+        y + _hitboxBottom,
+      );
+
+  /// Di chuyển tách trục X/Y để bot trượt mượt dọc tường và cột trụ mà không bị kẹt góc.
+  void _moveWithObstacleSliding(double dx, double dy) {
+    final obstacles = getObstacleRects?.call();
+    if (obstacles == null || obstacles.isEmpty) {
+      position.x += dx;
+      position.y += dy;
+      return;
+    }
+
+    const eps = 0.05;
+
+    // 1. Trục X
+    if (dx.abs() > 1e-6) {
+      final oldX = position.x;
+      position.x += dx;
+      final boxX = _hitboxAt(position.x, position.y);
+      for (final obs in obstacles) {
+        if (boxX.overlaps(obs)) {
+          if (oldX + _hitboxRight <= obs.left + 1.0 || dx > 0 && oldX < obs.center.dx) {
+            position.x = min(position.x, obs.left - _hitboxRight - eps);
+          } else {
+            position.x = max(position.x, obs.right - _hitboxLeft + eps);
+          }
+        }
+      }
+    }
+
+    // 2. Trục Y
+    if (dy.abs() > 1e-6) {
+      final oldY = position.y;
+      position.y += dy;
+      final boxY = _hitboxAt(position.x, position.y);
+      for (final obs in obstacles) {
+        if (boxY.overlaps(obs)) {
+          if (oldY + _hitboxBottom <= obs.top + 1.0 || dy > 0 && oldY < obs.center.dy) {
+            position.y = min(position.y, obs.top - _hitboxBottom - eps);
+          } else {
+            position.y = max(position.y, obs.bottom - _hitboxTop + eps);
+          }
+        }
+      }
+    }
   }
 
   @override
@@ -131,10 +205,16 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     if (!moveDirection.isZero()) {
       previousPosition = position.clone();
       final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
-      position.add(moveDirection * effectiveSpeed * dt);
+      final stepDir = moveDirection.length2 > 1.0001
+          ? moveDirection.normalized()
+          : moveDirection;
+      _moveWithObstacleSliding(
+        stepDir.x * effectiveSpeed * dt,
+        stepDir.y * effectiveSpeed * dt,
+      );
 
-      final mx = moveDirection.x;
-      final my = moveDirection.y;
+      final mx = stepDir.x;
+      final my = stepDir.y;
       final absX = mx.abs();
       final absY = my.abs();
 
@@ -192,30 +272,82 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     }
   }
 
-  void _damageTargetsInRange(double dmg, double range) {
+  void _spawnCombatText(Vector2 targetPos, double dmg, {bool isCrit = false}) {
+    if (!isMounted || parent == null) return;
+    parent!.add(FloatingCombatText(
+      text: '-${dmg.toInt()}',
+      position: targetPos.clone()..y -= 20,
+      type: isCrit ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
+    ));
+  }
+
+  void _damageTargetsInRange(double dmg, double range, {bool isCrit = false}) {
     if (getHostileTargets != null) {
       for (final target in getHostileTargets!()) {
         if (position.distanceTo(target.position) <= range) {
           if (target is PlayerComponent && target.currentHp > 0) {
             target.takeDamage(dmg);
+            _spawnCombatText(target.position, dmg, isCrit: isCrit);
           } else if (target is PvpBotPlayerComponent && target.currentHp > 0) {
             target.takeDamage(dmg);
+            _spawnCombatText(target.position, dmg, isCrit: isCrit);
           }
         }
       }
       return;
     }
+    if (targetPlayer.currentHp <= 0) return;
     final dist = position.distanceTo(targetPlayer.position);
     if (dist <= range) {
       targetPlayer.takeDamage(dmg);
+      _spawnCombatText(targetPlayer.position, dmg, isCrit: isCrit);
     }
   }
 
-  void performBasicAttack({bool force = false}) {
+  void performBasicAttack({bool force = false, Vector2? aimDirection}) {
     if ((!force && isAttacking) || currentHp <= 0) return;
     isAttacking = true;
     attackTimer = 0.0;
     attackAngle = isFacingRight ? -0.8 : 0.8;
+
+    if (isRangedHero && parent != null && isMounted) {
+      Vector2 dir;
+      if (aimDirection != null && aimDirection.length2 > 0) {
+        dir = aimDirection.normalized();
+      } else if (primaryTarget != null && primaryTarget!.position != position) {
+        dir = (primaryTarget!.position - position).normalized();
+      } else {
+        dir = Vector2(isFacingRight ? 1.0 : -1.0, 0.0);
+      }
+
+      if (dir.x.abs() > 0.01) isFacingRight = dir.x >= 0;
+
+      final heroId = opponentInfo.heroId;
+      final isRanger = heroId == 'ranger';
+      final isEmber = heroId == 'ember_02' || heroId == 'ember';
+      if (isRanger) {
+        AudioService.instance.playSfx(SfxSound.attackArrow);
+      } else {
+        AudioService.instance.playSfx(SfxSound.attackHammer);
+      }
+
+      final pType = isRanger
+          ? HeroProjectileType.arrow
+          : (isEmber ? HeroProjectileType.fireball : HeroProjectileType.frostOrb);
+
+      final projectile = HeroProjectile(
+        position: position.clone() + Vector2(0, 2),
+        direction: dir,
+        damage: damage,
+        type: pType,
+        isFromPlayer: opponentInfo.isAlly,
+        onHit: (target, hitPos) {
+          _spawnCombatText(hitPos, damage);
+        },
+      );
+      parent!.add(projectile);
+      return;
+    }
 
     _damageTargetsInRange(damage, 55);
   }
@@ -226,7 +358,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     currentKi = max(0, currentKi - 25);
     isAttacking = true;
     attackTimer = -0.3;
-    _damageTargetsInRange(damage * 1.8, 85);
+    _damageTargetsInRange(damage * 1.8, 85, isCrit: true);
     onStatsChanged?.call();
   }
 
@@ -234,7 +366,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     if (currentHp <= 0) return;
     if (!force && currentKi < 35) return;
     currentKi = max(0, currentKi - 35);
-    _damageTargetsInRange(damage * 2.5, 110);
+    _damageTargetsInRange(damage * 2.5, 110, isCrit: true);
     onStatsChanged?.call();
   }
 
@@ -248,7 +380,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         opponentInfo.heroId != 'ranger' &&
         opponentInfo.heroId != 'tanker' &&
         opponentInfo.heroId != 'ninja') {
-      _damageTargetsInRange(damage * 2.2, 140);
+      _damageTargetsInRange(damage * 2.2, 140, isCrit: true);
     }
     onStatsChanged?.call();
   }
@@ -271,9 +403,13 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
 
   void resetRound(Vector2 spawnPos) {
     position = spawnPos.clone();
+    previousPosition = spawnPos.clone();
     currentHp = maxHp;
     currentKi = maxKi;
+    speed = 160.0;
+    damage = 20.0;
     isBerserk = false;
+    berserkTimer = 0.0;
     isAttacking = false;
     moveDirection = Vector2.zero();
     targetVelocity = Vector2.zero();
@@ -286,7 +422,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void onCollision(Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollision(intersectionPoints, other);
-    if (enableAi && other is WallBlock) {
+    if (enableAi && getObstacleRects == null && other is WallBlock) {
       position = previousPosition.clone();
     }
   }
@@ -309,7 +445,6 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     final heroId = opponentInfo.heroId;
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
-    final bool isKale = heroId == 'kaelen' || heroId == 'kale';
     final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
     final isMoving =
         !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
@@ -381,93 +516,6 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
           _renderSpeechBubble(canvas, speechBubbleText!);
         }
         return;
-      }
-    } else if (isKale) {
-      if (isAttacking) {
-        final atkSheet =
-            SpriteImageCache.instance.getHeroAttackImage('kaelen');
-        if (atkSheet != null && atkSheet.width >= 2000) {
-          final row = facingRow.clamp(0, 4);
-          final progress =
-              (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
-          final col = (progress * 5).floor().clamp(0, 4);
-          const cellW = 512.0;
-          const cellH = 512.0;
-          const dstW = 96.0;
-          const dstH = 96.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - (478.0 / 512.0 * dstH);
-          final srcRect =
-              Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          canvas.drawImageRect(
-            atkSheet,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-          canvas.restore();
-          if (speechBubbleText != null) {
-            _renderSpeechBubble(canvas, speechBubbleText!);
-          }
-          return;
-        }
-      } else if (isMoving) {
-        final frameIndex = (animTime * 14.0).floor() % 16;
-        final runImg = SpriteImageCache.instance
-            .getHeroSequenceFrame('kaelen', 'run', frameIndex);
-        if (runImg != null) {
-          const dstW = 52.0;
-          const dstH = 52.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - dstH;
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          final srcRect = Rect.fromLTWH(
-            0,
-            0,
-            runImg.width.toDouble(),
-            runImg.height.toDouble(),
-          );
-          canvas.drawImageRect(
-            runImg,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-          canvas.restore();
-          if (speechBubbleText != null) {
-            _renderSpeechBubble(canvas, speechBubbleText!);
-          }
-          return;
-        }
-      } else {
-        final frameIndex = (animTime * 11.0).floor() % 16;
-        final idleImg = SpriteImageCache.instance
-            .getHeroSequenceFrame('kaelen', 'idle', frameIndex);
-        if (idleImg != null) {
-          const dstW = 52.0;
-          const dstH = 52.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - dstH;
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          final srcRect = Rect.fromLTWH(
-            0,
-            0,
-            idleImg.width.toDouble(),
-            idleImg.height.toDouble(),
-          );
-          canvas.drawImageRect(
-            idleImg,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-          canvas.restore();
-          if (speechBubbleText != null) {
-            _renderSpeechBubble(canvas, speechBubbleText!);
-          }
-          return;
-        }
       }
     } else if (isNova) {
       final heroSprite = isAttacking
@@ -657,10 +705,12 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         return;
       }
     } else {
-      final botSprite = isAttacking
-          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
-              SpriteImageCache.instance.getHeroImage(heroId))
-          : SpriteImageCache.instance.getHeroImage(heroId);
+      final botSprite = SpriteImageCache.isProceduralHero(heroId)
+          ? null
+          : (isAttacking
+              ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+                  SpriteImageCache.instance.getHeroImage(heroId))
+              : SpriteImageCache.instance.getHeroImage(heroId));
       if (botSprite != null) {
         final srcRect = Rect.fromLTWH(
           0,
@@ -687,22 +737,31 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       }
     }
 
+    final breathOffset = isMoving
+        ? (sin(animTime * 15.0).abs() * -2.2)
+        : (sin(animTime * 3.2) * 1.4);
+    final legSwing = isMoving ? sin(animTime * 15.0) * 4.8 : 0.0;
+    final leftLift = isMoving ? max(0.0, sin(animTime * 15.0)) * 2.5 : 0.0;
+    final rightLift = isMoving ? max(0.0, -sin(animTime * 15.0)) * 2.5 : 0.0;
+    final armSwing =
+        isMoving ? sin(animTime * 15.0) * 0.32 : sin(animTime * 3.0) * 0.06;
+
+    if (isMoving || isAttacking) {
+      final attackLunge = isAttacking ? 3.5 : 0.0;
+      canvas.translate(size.x / 2 + attackLunge, size.y / 2);
+      canvas.rotate(isAttacking ? 0.18 : 0.13);
+      canvas.translate(-size.x / 2, -size.y / 2);
+    }
+
     Color bootsColor;
     Color armorColor;
     Color borderGold;
     Color helmetColor;
     Color crestColor;
     Color eyeColor;
+    Color capeColor;
 
     switch (opponentInfo.heroId) {
-      case 'kaelen':
-        bootsColor = const Color(0xFF1A237E);
-        armorColor = const Color(0xFF1E293B);
-        borderGold = const Color(0xFFFFD700);
-        helmetColor = const Color(0xFFE2E8F0);
-        crestColor = const Color(0xFF00E5FF);
-        eyeColor = const Color(0xFF00E5FF);
-        break;
       case 'valeria':
       case 'ranger':
         bootsColor = const Color(0xFF3E2723);
@@ -711,73 +770,158 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         helmetColor = const Color(0xFF1B5E20);
         crestColor = const Color(0xFFFFD54F);
         eyeColor = const Color(0xFFFFD600);
+        capeColor = const Color(0xFF1B5E20);
         break;
       case 'garrick':
       case 'tanker':
         bootsColor = const Color(0xFF263238);
         armorColor = const Color(0xFF1565C0);
-        borderGold = const Color(0xFFFFD700);
+        borderGold = const Color(0xFFE0E0E0);
         helmetColor = const Color(0xFF37474F);
         crestColor = const Color(0xFF00B0FF);
         eyeColor = const Color(0xFF40C4FF);
+        capeColor = const Color(0xFF0D47A1);
         break;
       case 'ninja':
         bootsColor = const Color(0xFF212121);
         armorColor = const Color(0xFF311B92);
-        borderGold = const Color(0xFFD50000);
+        borderGold = const Color(0xFFE040FB);
         helmetColor = const Color(0xFF1A237E);
         crestColor = const Color(0xFF7B1FA2);
         eyeColor = const Color(0xFFE040FB);
+        capeColor = const Color(0xFF4A148C);
         break;
       case 'george':
       default:
-        bootsColor = const Color(0xFF263238);
-        armorColor = const Color(0xFF4A148C);
-        borderGold = const Color(0xFFCE93D8);
-        helmetColor = const Color(0xFF37474F);
-        crestColor = const Color(0xFFAB47BC);
-        eyeColor = const Color(0xFFE040FB);
+        bootsColor = const Color(0xFF37474F);
+        armorColor = const Color(0xFFC62828);
+        borderGold = const Color(0xFFFFD54F);
+        helmetColor = const Color(0xFF78909C);
+        crestColor = const Color(0xFFE53935);
+        eyeColor = const Color(0xFF00E5FF);
+        capeColor = const Color(0xFFB71C1C);
         break;
     }
 
-    // 2. Chân
+    // 1.5 Áo choàng bay phía sau
+    final capeWave = sin(animTime * 4.5) * 2.5 + (isMoving ? -5.0 : 0.0);
+    final capePath = Path()
+      ..moveTo(9, 15 + breathOffset)
+      ..lineTo(22, 15 + breathOffset)
+      ..quadraticBezierTo(9 + capeWave, 26, 3 + capeWave, 35)
+      ..lineTo(16 + capeWave * 0.5, 34)
+      ..close();
+    canvas.drawPath(capePath, Paint()..color = capeColor.withValues(alpha: 0.85));
+
+    // 2. Đôi chân chuyển động theo nhịp chạy
     final boots = Paint()..color = bootsColor;
-    canvas.drawRect(Rect.fromLTWH(8, size.y - 10, 7, 8), boots);
-    canvas.drawRect(Rect.fromLTWH(21, size.y - 10, 7, 8), boots);
+    final lBoot = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8 + legSwing * 0.7, 26 - leftLift, 7.5, 12),
+      const Radius.circular(2.5),
+    );
+    final rBoot = RRect.fromRectAndRadius(
+      Rect.fromLTWH(20.5 - legSwing * 0.7, 26 - rightLift, 7.5, 12),
+      const Radius.circular(2.5),
+    );
+    canvas.drawRRect(lBoot, boots);
+    canvas.drawRRect(rBoot, boots);
+    canvas.drawRect(
+      Rect.fromLTWH(8 + legSwing * 0.7, 31 - leftLift, 7.5, 2.2),
+      Paint()..color = borderGold,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(20.5 - legSwing * 0.7, 31 - rightLift, 7.5, 2.2),
+      Paint()..color = borderGold,
+    );
 
-    // 3. Giáp
+    // 2.5 Tay sau
+    canvas.save();
+    canvas.translate(9, 17 + breathOffset);
+    canvas.rotate(-armSwing);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-3, 0, 5.5, 10),
+        const Radius.circular(2),
+      ),
+      Paint()..color = armorColor,
+    );
+    canvas.drawCircle(
+      const Offset(0, 10),
+      2.8,
+      Paint()..color = const Color(0xFFFDE68A),
+    );
+    canvas.restore();
+
+    // 3. Giáp thân + Thắt lưng
     final armor = Paint()..color = armorColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(8, 14, 20, 18), const Radius.circular(4)),
-      armor,
+    final torsoRRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8, 14 + breathOffset, 20, 16),
+      const Radius.circular(4),
     );
-    final border = Paint()..color = borderGold;
-    canvas.drawRect(Rect.fromLTWH(10, 16, 16, 4), border);
+    canvas.drawRRect(torsoRRect, armor);
+    canvas.drawRRect(
+      torsoRRect,
+      Paint()
+        ..color = borderGold
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(8, 25 + breathOffset, 20, 3.2),
+      Paint()..color = borderGold,
+    );
 
-    // 4. Mũ sắt / Tóc bạc Kaelen
-    final helmet = Paint()..color = helmetColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(9, 4, 18, 14), const Radius.circular(5)),
-      helmet,
+    // 4. Cổ, Khuôn mặt & Mũ sắt
+    canvas.drawRect(
+      Rect.fromLTWH(14, 11 + breathOffset, 8, 4),
+      Paint()..color = const Color(0xFFFBBF24),
     );
-    final crest = Paint()..color = crestColor;
-    canvas.drawRect(Rect.fromLTWH(15, 0, 6, 6), crest);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(9, 3 + breathOffset, 18, 11),
+        const Radius.circular(4),
+      ),
+      Paint()..color = const Color(0xFFFDE68A),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(8, 1 + breathOffset, 20, 6),
+        const Radius.circular(3),
+      ),
+      Paint()..color = helmetColor,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(15, -2 + breathOffset, 6, 5),
+      Paint()..color = crestColor,
+    );
 
     // Mắt phát sáng
-    final eye = Paint()..color = eyeColor;
-    canvas.drawRect(Rect.fromLTWH(20, 9, 6, 3), eye);
+    canvas.drawRect(
+      Rect.fromLTWH(19, 8 + breathOffset, 5, 2.5),
+      Paint()..color = eyeColor,
+    );
 
-    // 5. Vũ khí
+    // 5. Tay trước & Vũ khí
     canvas.save();
-    canvas.translate(size.x - 2, 20);
+    canvas.translate(size.x - 4, 19 + breathOffset);
     if (isAttacking) {
       canvas.rotate(attackAngle);
+    } else {
+      canvas.rotate(armSwing * 0.8);
     }
-    if (opponentInfo.heroId == 'kaelen') {
-      // Song kiếm Lôi Quang Hoàng Kim
-      canvas.drawLine(const Offset(0, 6), const Offset(8, -22), Paint()..color = const Color(0xFF00E5FF)..strokeWidth = 3.0);
-      canvas.drawLine(const Offset(-2, 4), const Offset(5, -18), Paint()..color = const Color(0xFFFFD700)..strokeWidth = 2.0);
-    } else if (opponentInfo.heroId == 'ranger' || opponentInfo.heroId == 'valeria') {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-4, -2, 6, 10),
+        const Radius.circular(2),
+      ),
+      Paint()..color = borderGold,
+    );
+    canvas.drawCircle(
+      const Offset(-1, 7),
+      3.0,
+      Paint()..color = const Color(0xFFFDE68A),
+    );
+    if (opponentInfo.heroId == 'ranger' || opponentInfo.heroId == 'valeria') {
       final bowPaint = Paint()..color = const Color(0xFF6D4C41)..style = PaintingStyle.stroke..strokeWidth = 3;
       canvas.drawArc(const Rect.fromLTWH(-10, -22, 14, 28), -pi / 2, pi, false, bowPaint);
       canvas.drawLine(const Offset(-3, -22), const Offset(-3, 6), Paint()..color = const Color(0xFF00E676)..strokeWidth = 1.5);
@@ -786,15 +930,17 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.drawLine(const Offset(-1, -20), const Offset(-1, -2), Paint()..color = const Color(0xFFFFD54F)..strokeWidth = 2);
     } else if (opponentInfo.heroId == 'ninja') {
       canvas.drawLine(const Offset(-2, 6), const Offset(-2, 0), Paint()..color = const Color(0xFFD50000)..strokeWidth = 3.5);
-      canvas.drawLine(const Offset(-2, 0), const Offset(6, -24), Paint()..color = const Color(0xFFE0E0E0)..strokeWidth = 2.5);
+      canvas.drawLine(const Offset(-2, 0), const Offset(7, -24), Paint()..color = const Color(0xFFE0E0E0)..strokeWidth = 2.8);
+      canvas.drawLine(const Offset(-7, 5), const Offset(-14, -18), Paint()..color = const Color(0xFFE0E0E0)..strokeWidth = 2.5);
     } else {
-      final handle = Paint()..color = const Color(0xFF3E2723)..strokeWidth = 3;
+      final handle = Paint()..color = const Color(0xFF5D4037)..strokeWidth = 3;
       canvas.drawLine(const Offset(0, 8), const Offset(0, -18), handle);
-      final head = Paint()..color = const Color(0xFF311B92);
+      final head = Paint()..color = const Color(0xFF546E7A);
       canvas.drawRRect(
         RRect.fromRectAndRadius(const Rect.fromLTWH(-8, -26, 16, 12), const Radius.circular(3)),
         head,
       );
+      canvas.drawRect(const Rect.fromLTWH(-5, -23, 10, 6), Paint()..color = const Color(0xFFFFEB3B));
     }
     canvas.restore();
     canvas.restore();

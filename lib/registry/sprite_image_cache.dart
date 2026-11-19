@@ -19,6 +19,7 @@ class SpriteImageCache {
   final Map<String, ui.Image> _companionImages = {};
   final Map<String, ui.Image> _skillImages = {};
   final Map<String, ui.Image> _mapImages = {};
+  final Map<String, ui.Image> _rawPathCache = {};
   final Set<String> _loadingKeys = {};
 
   static const List<String> _shadowIdleFrames = [
@@ -78,44 +79,6 @@ class SpriteImageCache {
     'assets/images/heroes/shadow/attack/16.png',
   ];
 
-  static const List<String> _kaleRunFrames = [
-    'assets/images/heroes/kale/run/01.png',
-    'assets/images/heroes/kale/run/02.png',
-    'assets/images/heroes/kale/run/03.png',
-    'assets/images/heroes/kale/run/04.png',
-    'assets/images/heroes/kale/run/05.png',
-    'assets/images/heroes/kale/run/06.png',
-    'assets/images/heroes/kale/run/07.png',
-    'assets/images/heroes/kale/run/08.png',
-    'assets/images/heroes/kale/run/09.png',
-    'assets/images/heroes/kale/run/10.png',
-    'assets/images/heroes/kale/run/11.png',
-    'assets/images/heroes/kale/run/12.png',
-    'assets/images/heroes/kale/run/13.png',
-    'assets/images/heroes/kale/run/14.png',
-    'assets/images/heroes/kale/run/15.png',
-    'assets/images/heroes/kale/run/16.png',
-  ];
-
-  static const List<String> _kaleIdleFrames = [
-    'assets/images/heroes/kale/idle/01.png',
-    'assets/images/heroes/kale/idle/02.png',
-    'assets/images/heroes/kale/idle/03.png',
-    'assets/images/heroes/kale/idle/04.png',
-    'assets/images/heroes/kale/idle/05.png',
-    'assets/images/heroes/kale/idle/06.png',
-    'assets/images/heroes/kale/idle/07.png',
-    'assets/images/heroes/kale/idle/08.png',
-    'assets/images/heroes/kale/idle/09.png',
-    'assets/images/heroes/kale/idle/10.png',
-    'assets/images/heroes/kale/idle/11.png',
-    'assets/images/heroes/kale/idle/12.png',
-    'assets/images/heroes/kale/idle/13.png',
-    'assets/images/heroes/kale/idle/14.png',
-    'assets/images/heroes/kale/idle/15.png',
-    'assets/images/heroes/kale/idle/16.png',
-  ];
-
   static const Map<String, List<String>> heroSequencePaths = {
     'shadow_01_idle': _shadowIdleFrames,
     'shadow_idle': _shadowIdleFrames,
@@ -123,11 +86,19 @@ class SpriteImageCache {
     'shadow_run': _shadowRunFrames,
     'shadow_01_attack': _shadowAttackFrames,
     'shadow_attack': _shadowAttackFrames,
-    'kaelen_idle': _kaleIdleFrames,
-    'kale_idle': _kaleIdleFrames,
-    'kaelen_run': _kaleRunFrames,
-    'kale_run': _kaleRunFrames,
   };
+
+  static const Set<String> proceduralHeroIds = {
+    'george',
+    'ranger',
+    'tanker',
+    'ninja',
+    'valeria',
+    'garrick',
+  };
+
+  static bool isProceduralHero(String heroId) =>
+      proceduralHeroIds.contains(heroId);
 
   static const Map<String, String> heroPortraitPaths = {
     'nova_blade': 'assets/images/heroes/nova/nova_portrait.png',
@@ -136,8 +107,6 @@ class SpriteImageCache {
     'shadow': 'assets/images/heroes/shadow_01_portrait.png',
     'ember_02': 'assets/images/heroes/ember/ember.png',
     'ember': 'assets/images/heroes/ember/ember.png',
-    'kaelen': 'assets/images/heroes/kale/kaelen_portrait.png',
-    'kale': 'assets/images/heroes/kale/kaelen_portrait.png',
   };
 
   static const Map<String, String> heroIdlePaths = {
@@ -145,8 +114,6 @@ class SpriteImageCache {
     'nova': 'assets/images/heroes/nova/nova.png',
     'ember_02': 'assets/images/heroes/ember/Ember-idle.png',
     'ember': 'assets/images/heroes/ember/Ember-idle.png',
-    'kaelen': 'assets/images/heroes/kale/idle/01.png',
-    'kale': 'assets/images/heroes/kale/idle/01.png',
     'shadow_01': 'assets/images/heroes/shadow/idle/01.png',
     'shadow': 'assets/images/heroes/shadow/idle/01.png',
   };
@@ -155,8 +122,6 @@ class SpriteImageCache {
     'nova': 'assets/images/heroes/nova/nova-run.png',
     'ember_02': 'assets/images/heroes/ember/ember-run.png',
     'ember': 'assets/images/heroes/ember/ember-run.png',
-    'kaelen': 'assets/images/heroes/kale/run/01.png',
-    'kale': 'assets/images/heroes/kale/run/01.png',
     'shadow_01': 'assets/images/heroes/shadow/run/01.png',
     'shadow': 'assets/images/heroes/shadow/run/01.png',
   };
@@ -166,38 +131,24 @@ class SpriteImageCache {
     'nova': 'assets/images/heroes/nova/nova-attack.png',
     'ember_02': 'assets/images/heroes/ember/Ember-attack.png',
     'ember': 'assets/images/heroes/ember/Ember-attack.png',
-    'kaelen': 'assets/images/heroes/kale/kale-attack.png',
-    'kale': 'assets/images/heroes/kale/kale-attack.png',
     'shadow_01': 'assets/images/heroes/shadow/attack/01.png',
     'shadow': 'assets/images/heroes/shadow/attack/01.png',
   };
 
   static const Map<String, String> heroSkillSheetPaths = {};
 
-  static const Map<String, String> companionSpritePaths = {
-    'aegis_x9': 'assets/images/companions/aegis_x9.png',
-    'cyber_drone': 'assets/images/companions/cyber_drone.png',
-    'pyro_frost_dragon': 'assets/images/companions/pyro_frost_dragon.png',
-    'gem_tumbler': 'assets/images/companions/gem_tumbler.png',
-    'luna_fox': 'assets/images/companions/luna_fox.png',
-    'orbit_03': 'assets/images/companions/orbit_03.png',
-  };
+  static const Map<String, String> companionSpritePaths = {};
 
   static const Map<String, String> skillEffectPaths = {
     'nova_blade_1': 'assets/images/skills/nova_energy_slash.png',
     'nova_blade_2': 'assets/images/skills/nova_shadow_dash.png',
     'nova_blade_3': 'assets/images/skills/nova_quantum_burst.png',
-    'valeria_1': 'assets/images/skills/valeria_skill1.png',
-    'valeria_2': 'assets/images/skills/valeria_skill2.png',
-    'valeria_3': 'assets/images/skills/valeria_skill3.png',
-    'kaelen_1': 'assets/images/skills/kaelen_thunder_flash.png',
-    'kaelen_2': 'assets/images/skills/kaelen_storm_vortex.png',
-    'kaelen_3': 'assets/images/skills/kaelen_heaven_judgment.png',
   };
 
   static const Map<String, String> mapImagePaths = {
     'map_bang': 'assets/images/maps/map-bang.png',
     'map_dao_bang_gia': 'assets/images/maps/map-dao-bang-gia.png',
+    'map_rung_cay': 'assets/images/maps/map-rung-cay.png',
   };
 
   String? _getAliasId(String heroId) {
@@ -214,10 +165,6 @@ class SpriteImageCache {
         return 'shadow_01';
       case 'shadow_01':
         return 'shadow';
-      case 'kale':
-        return 'kaelen';
-      case 'kaelen':
-        return 'kale';
       default:
         return null;
     }
@@ -395,90 +342,113 @@ class SpriteImageCache {
   Future<void> _loadSequenceIntoCache(String key, List<String> paths) async {
     final images = <ui.Image>[];
     for (final p in paths) {
+      if (_rawPathCache.containsKey(p)) {
+        images.add(_rawPathCache[p]!);
+        continue;
+      }
       try {
         final data = await rootBundle.load(p);
         final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
         final frame = await codec.getNextFrame();
+        _rawPathCache[p] = frame.image;
         images.add(frame.image);
       } catch (_) {}
     }
     if (images.isNotEmpty) {
       _frameSequences[key] = images;
+      // Tự động gán cho alias để không nạp lại 2 lần
+      if (key == 'shadow_01_idle') _frameSequences['shadow_idle'] = images;
+      if (key == 'shadow_idle') _frameSequences['shadow_01_idle'] = images;
+      if (key == 'shadow_01_run') _frameSequences['shadow_run'] = images;
+      if (key == 'shadow_run') _frameSequences['shadow_01_run'] = images;
+      if (key == 'shadow_01_attack') _frameSequences['shadow_attack'] = images;
+      if (key == 'shadow_attack') _frameSequences['shadow_01_attack'] = images;
     }
   }
 
   Future<void> preloadAll() async {
-    final futures = <Future<void>>[];
-    heroSequencePaths.forEach((key, paths) {
-      if (!_frameSequences.containsKey(key)) {
-        _loadingKeys.add('seq_$key');
-        futures.add(_loadSequenceIntoCache(key, paths));
-      }
-    });
+    // 1. Tải ảnh đại diện tướng và thú cưng trước
+    final priorityFutures = <Future<void>>[];
     heroPortraitPaths.forEach((id, path) {
       if (!_heroImages.containsKey(id)) {
         _loadingKeys.add('hero_$id');
-        futures.add(_loadIntoCache(path, (img) => _heroImages[id] = img));
-      }
-    });
-    heroAttackPaths.forEach((id, path) {
-      if (!_heroAttackImages.containsKey(id)) {
-        _loadingKeys.add('atk_$id');
-        futures.add(_loadIntoCache(path, (img) => _heroAttackImages[id] = img));
-      }
-    });
-    heroIdlePaths.forEach((id, path) {
-      if (!_heroIdleImages.containsKey(id)) {
-        _loadingKeys.add('idle_$id');
-        futures.add(_loadIntoCache(path, (img) => _heroIdleImages[id] = img));
-      }
-    });
-    heroRunPaths.forEach((id, path) {
-      if (!_heroRunImages.containsKey(id)) {
-        _loadingKeys.add('run_$id');
-        futures.add(_loadIntoCache(path, (img) => _heroRunImages[id] = img));
-      }
-    });
-    heroSkillSheetPaths.forEach((key, path) {
-      if (!_heroSkillSheetImages.containsKey(key)) {
-        _loadingKeys.add('skillsheet_$key');
-        futures.add(
-          _loadIntoCache(path, (img) => _heroSkillSheetImages[key] = img),
-        );
+        priorityFutures.add(_loadIntoCache(path, (img) => _heroImages[id] = img));
       }
     });
     companionSpritePaths.forEach((id, path) {
       if (!_companionImages.containsKey(id)) {
         _loadingKeys.add('comp_$id');
-        futures.add(_loadIntoCache(path, (img) => _companionImages[id] = img));
-      }
-    });
-    skillEffectPaths.forEach((key, path) {
-      if (!_skillImages.containsKey(key)) {
-        _loadingKeys.add('skill_$key');
-        futures.add(_loadIntoCache(path, (img) => _skillImages[key] = img));
+        priorityFutures.add(_loadIntoCache(path, (img) => _companionImages[id] = img));
       }
     });
     mapImagePaths.forEach((id, path) {
       if (!_mapImages.containsKey(id) && !_mapImages.containsKey(path)) {
         _loadingKeys.add('map_$id');
-        futures.add(_loadIntoCache(path, (img) {
+        priorityFutures.add(_loadIntoCache(path, (img) {
           _mapImages[id] = img;
           _mapImages[path] = img;
         }));
       }
     });
-    await Future.wait(futures);
+    await Future.wait(priorityFutures);
+
+    // Nhường event loop cho Flutter vẽ mượt frame
+    await Future<void>.delayed(Duration.zero);
+
+    // 2. Tải ảnh kỹ năng, idle, run, attack
+    final secondaryFutures = <Future<void>>[];
+    heroIdlePaths.forEach((id, path) {
+      if (!_heroIdleImages.containsKey(id)) {
+        _loadingKeys.add('idle_$id');
+        secondaryFutures.add(_loadIntoCache(path, (img) => _heroIdleImages[id] = img));
+      }
+    });
+    heroRunPaths.forEach((id, path) {
+      if (!_heroRunImages.containsKey(id)) {
+        _loadingKeys.add('run_$id');
+        secondaryFutures.add(_loadIntoCache(path, (img) => _heroRunImages[id] = img));
+      }
+    });
+    heroAttackPaths.forEach((id, path) {
+      if (!_heroAttackImages.containsKey(id)) {
+        _loadingKeys.add('atk_$id');
+        secondaryFutures.add(_loadIntoCache(path, (img) => _heroAttackImages[id] = img));
+      }
+    });
+    skillEffectPaths.forEach((key, path) {
+      if (!_skillImages.containsKey(key)) {
+        _loadingKeys.add('skill_$key');
+        secondaryFutures.add(_loadIntoCache(path, (img) => _skillImages[key] = img));
+      }
+    });
+    await Future.wait(secondaryFutures);
+
+    // Nhường event loop
+    await Future<void>.delayed(Duration.zero);
+
+    // 3. Tải các frame chuỗi (Sequence) lần lượt để tránh nghẽn luồng UI
+    for (final entry in heroSequencePaths.entries) {
+      if (!_frameSequences.containsKey(entry.key)) {
+        _loadingKeys.add('seq_${entry.key}');
+        await _loadSequenceIntoCache(entry.key, entry.value);
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
   }
 
   Future<void> _loadIntoCache(
     String assetPath,
     void Function(ui.Image) onLoaded,
   ) async {
+    if (_rawPathCache.containsKey(assetPath)) {
+      onLoaded(_rawPathCache[assetPath]!);
+      return;
+    }
     try {
       final data = await rootBundle.load(assetPath);
       final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
       final frame = await codec.getNextFrame();
+      _rawPathCache[assetPath] = frame.image;
       onLoaded(frame.image);
     } catch (_) {
       final altPath = assetPath.contains('/Ember-')
@@ -487,10 +457,15 @@ class SpriteImageCache {
               ? assetPath.replaceAll('/ember-', '/Ember-')
               : null);
       if (altPath != null) {
+        if (_rawPathCache.containsKey(altPath)) {
+          onLoaded(_rawPathCache[altPath]!);
+          return;
+        }
         try {
           final data = await rootBundle.load(altPath);
           final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
           final frame = await codec.getNextFrame();
+          _rawPathCache[altPath] = frame.image;
           onLoaded(frame.image);
         } catch (_) {}
       }

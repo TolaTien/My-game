@@ -1,12 +1,11 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import '../../core/constants.dart';
 import '../../models/pvp_match.dart';
 import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
+import '../ai/astar_pathfinder.dart';
 import 'dungeon_map.dart';
 
 /// Bản đồ đấu trường đối xứng 960x640 dành cho PvP 1v1 / 2v2 / 4v4:
@@ -21,6 +20,18 @@ class PvpArenaMapComponent extends Component {
   final MapAssetConfig mapConfig;
 
   ui.Image? _mapImage;
+
+  /// Danh sách hitbox của 4 cột trụ bên trong đấu trường (48x48)
+  static const List<ui.Rect> defaultPillarRects = [
+    ui.Rect.fromLTWH(280 - 24, 200 - 24, 48, 48),
+    ui.Rect.fromLTWH(280 - 24, 440 - 24, 48, 48),
+    ui.Rect.fromLTWH(680 - 24, 200 - 24, 48, 48),
+    ui.Rect.fromLTWH(680 - 24, 440 - 24, 48, 48),
+  ];
+
+  late final List<ui.Rect> pillarRects;
+  late final List<ui.Rect> obstacleRects;
+  late final List<List<bool>> walkableGrid;
 
   static final List<ui.Offset> blueTeamPads = [
     const ui.Offset(200, 320),
@@ -42,7 +53,27 @@ class PvpArenaMapComponent extends Component {
   })  : mapConfig = mapConfig ??
             (GameAssetRegistry.instance.getMap('sunken_golden_sanctum') ??
                 GameAssetRegistry.defaultSanctumMap),
-        super(priority: -10);
+        super(priority: -10) {
+    pillarRects = List<ui.Rect>.unmodifiable(defaultPillarRects);
+    obstacleRects = List<ui.Rect>.unmodifiable([
+      // Tường bao quanh đấu trường
+      ui.Rect.fromLTWH(0, 0, arenaWidth, tileSize),
+      ui.Rect.fromLTWH(0, (mapHeightTiles - 1) * tileSize, arenaWidth, tileSize),
+      ui.Rect.fromLTWH(0, tileSize, tileSize, arenaHeight - tileSize * 2),
+      ui.Rect.fromLTWH(
+        (mapWidthTiles - 1) * tileSize,
+        tileSize,
+        tileSize,
+        arenaHeight - tileSize * 2,
+      ),
+      ...pillarRects,
+    ]);
+    walkableGrid = AStarPathfinder.buildPvpArenaWalkableGrid(
+      width: mapWidthTiles,
+      height: mapHeightTiles,
+      obstacleRects: pillarRects,
+    );
+  }
 
   @override
   Future<void> onLoad() async {
@@ -91,10 +122,9 @@ class PvpArenaMapComponent extends Component {
     }
 
     // 3. 4 Cột trụ đá/băng đấu trường đối xứng (kích thước 48x48)
-    _addArenaPillar(Vector2(280 - 24, 200 - 24), wallTheme);
-    _addArenaPillar(Vector2(280 - 24, 440 - 24), wallTheme);
-    _addArenaPillar(Vector2(680 - 24, 200 - 24), wallTheme);
-    _addArenaPillar(Vector2(680 - 24, 440 - 24), wallTheme);
+    for (final rect in pillarRects) {
+      _addArenaPillar(Vector2(rect.left, rect.top), wallTheme);
+    }
   }
 
   void _addArenaPillar(Vector2 pos, String theme) {
@@ -123,12 +153,17 @@ class PvpArenaMapComponent extends Component {
         mapConfig.theme == 'ice_island' ||
         mapConfig.id == 'map_bang' ||
         mapConfig.id == 'map_dao_bang_gia';
+    final isForestTheme = mapConfig.theme == 'forest' ||
+        mapConfig.theme == 'nature' ||
+        mapConfig.id == 'map_rung_cay';
 
     // 0. Nền không gian mở rộng phía ngoài tường đấu trường (tránh hẫng đen khi Camera follow)
     final outerBgPaint = ui.Paint()
       ..color = isIceTheme
           ? const ui.Color(0xFF0D1B2A)
-          : const ui.Color(0xFF141722);
+          : isForestTheme
+              ? const ui.Color(0xFF0A180E)
+              : const ui.Color(0xFF141722);
     canvas.drawRect(
       const ui.Rect.fromLTWH(-600, -400, arenaWidth + 1200, arenaHeight + 800),
       outerBgPaint,

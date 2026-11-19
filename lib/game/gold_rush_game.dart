@@ -73,8 +73,14 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     dungeonMap = DungeonMapComponent(config: currentMapConfig);
     await world.add(dungeonMap);
 
-    // 2. Thêm Player ở tọa độ trung tâm
-    player.position = Vector2(400, 300);
+    // 2. Thêm Player ở tọa độ spawn của bản đồ
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
     player.onStatsChanged = () => onPlayerStatsChanged?.call();
     await world.add(player);
 
@@ -160,7 +166,13 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     PlayerStorage.addGold(50 * currentFloor);
 
     // Hồi phục sinh lực và Ki cho tầng mới
-    player.position = Vector2(400, 300);
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
     player.currentHp = player.maxHp;
     player.currentKi = player.maxKi;
 
@@ -185,7 +197,13 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         GameAssetRegistry.instance.getRandomMap(excludeId: currentMapConfig.id);
     _switchDungeonMap(newMap);
 
-    player.position = Vector2(400, 300);
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
     player.currentHp = player.maxHp;
     player.currentKi = player.maxKi;
 
@@ -231,13 +249,21 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnZombies({int floor = 1}) {
-    final spawnPoints = [
-      Vector2(200, 200),
-      Vector2(650, 220),
-      Vector2(250, 500),
-      Vector2(700, 520),
-      Vector2(500, 450),
-    ];
+    final List<Vector2> spawnPoints;
+    if (currentMapConfig.monsterPortals.isNotEmpty) {
+      spawnPoints = currentMapConfig.monsterPortals.map((p) =>
+        Vector2((p[0] + 0.5) * 32.0, (p[1] + 0.5) * 32.0)
+      ).toList();
+      spawnPoints.add(Vector2(540, 360));
+    } else {
+      spawnPoints = [
+        Vector2(200, 200),
+        Vector2(650, 220),
+        Vector2(250, 500),
+        Vector2(700, 520),
+        Vector2(500, 450),
+      ];
+    }
 
     final multiplier = 1.0 + (floor - 1) * 0.2;
     for (final pt in spawnPoints) {
@@ -251,11 +277,22 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnSkeletons({int floor = 1}) {
-    final spawnPoints = [
-      Vector2(320, 180),
-      Vector2(850, 320),
-      Vector2(450, 560),
-    ];
+    final List<Vector2> spawnPoints;
+    if (currentMapConfig.monsterPortals.length >= 2) {
+      spawnPoints = [
+        Vector2((currentMapConfig.monsterPortals.first[0] + 0.5) * 32.0,
+                (currentMapConfig.monsterPortals.first[1] + 1.2) * 32.0),
+        Vector2((currentMapConfig.monsterPortals.last[0] + 0.5) * 32.0,
+                (currentMapConfig.monsterPortals.last[1] - 1.2) * 32.0),
+        Vector2(450, 420),
+      ];
+    } else {
+      spawnPoints = [
+        Vector2(320, 180),
+        Vector2(850, 320),
+        Vector2(450, 560),
+      ];
+    }
 
     final multiplier = 1.0 + (floor - 1) * 0.2;
     for (final pt in spawnPoints) {
@@ -268,7 +305,13 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnBoss({int floor = 1}) {
-    boss = BossEnemy(position: Vector2(920, 380), player: player);
+    final bX = currentMapConfig.bossSpawn.isNotEmpty
+        ? currentMapConfig.bossSpawn[0] * 32.0
+        : 920.0;
+    final bY = currentMapConfig.bossSpawn.length > 1
+        ? currentMapConfig.bossSpawn[1] * 32.0
+        : 380.0;
+    boss = BossEnemy(position: Vector2(bX, bY), player: player);
     if (floor > 1) {
       final multiplier = 1.0 + (floor - 1) * 0.25;
       boss!.maxHp = 500.0 * multiplier;
@@ -515,9 +558,6 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       final hero = player.heroId;
       String ultText = 'CUỒNG NỘ!';
       switch (hero) {
-        case 'kaelen':
-          ultText = 'THIÊN PHẠT LÔI NGỤC!';
-          break;
         case 'nova_blade':
           ultText = 'QUANTUM BURST!';
           break;

@@ -23,9 +23,8 @@ void main() async {
   // Toàn màn hình Immersive (ẩn thanh điều hướng và status bar)
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
-  // Nạp hệ thống Registry từ thư mục assets/data/*.json và bộ đệm Sprite PNG
+  // Nạp hệ thống Registry từ thư mục assets/data/*.json
   await GameAssetRegistry.instance.initialize();
-  await SpriteImageCache.instance.preloadAll();
 
   // Firebase is optional during offline development. For the Chrome PvP demo,
   // provide the Web app values through --dart-define.
@@ -46,7 +45,13 @@ void main() async {
   await AudioService.instance.initialize();
   await GameSettingsService.instance.initialize();
 
+  // Khởi chạy giao diện ngay lập tức để tránh lỗi ANR (Application Not Responding)
   runApp(GoldRushApp(isSignedIn: isSignedIn));
+
+  // Tải trước tài nguyên ảnh Sprite trong nền sau khi frame đầu tiên đã vẽ xong
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    SpriteImageCache.instance.preloadAll();
+  });
 }
 
 class GoldRushApp extends StatelessWidget {

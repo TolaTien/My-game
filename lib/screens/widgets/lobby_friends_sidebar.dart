@@ -9,6 +9,7 @@ class LobbyFriendsSidebar extends StatefulWidget {
   final PvpGameMode selectedPvpMode;
   final ValueChanged<FriendInfo> onInviteFriend;
   final VoidCallback onOpenFriendsDialog;
+  final VoidCallback? onOpenFriendRequests;
 
   const LobbyFriendsSidebar({
     super.key,
@@ -16,6 +17,7 @@ class LobbyFriendsSidebar extends StatefulWidget {
     required this.selectedPvpMode,
     required this.onInviteFriend,
     required this.onOpenFriendsDialog,
+    this.onOpenFriendRequests,
   });
 
   @override
@@ -27,8 +29,6 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
 
   IconData _getHeroIcon(String heroId) {
     switch (heroId) {
-      case 'kaelen':
-        return Icons.bolt_rounded;
       case 'nova_blade':
         return Icons.flash_on_rounded;
       case 'valeria':
@@ -55,8 +55,6 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
 
   Color _getHeroColor(String heroId) {
     switch (heroId) {
-      case 'kaelen':
-        return const Color(0xFF00E5FF);
       case 'nova_blade':
         return const Color(0xFF18FFFF);
       case 'valeria':
@@ -136,10 +134,44 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
                     size: 24,
                   ),
                   const SizedBox(height: 6),
-                  const Icon(
-                    Icons.people_alt_rounded,
-                    color: Color(0xFF00E5FF),
-                    size: 20,
+                  ValueListenableBuilder<List<FriendRequest>>(
+                    valueListenable:
+                        FriendPartyService.instance.incomingFriendRequestsNotifier,
+                    builder: (context, reqs, _) {
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.people_alt_rounded,
+                            color: Color(0xFF00E5FF),
+                            size: 20,
+                          ),
+                          if (reqs.isNotEmpty)
+                            Positioned(
+                              top: -5,
+                              right: -7,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${reqs.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   // Chấm xanh online
@@ -492,7 +524,7 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
             Icon(icon, size: 7, color: color),
             const SizedBox(width: 5),
             Text(
-              ' ()',
+              '$title ($count)',
               style: TextStyle(
                 color: color,
                 fontWeight: FontWeight.w900,
@@ -733,32 +765,71 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
           ),
         ),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 28,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.5),
-            foregroundColor: const Color(0xFF80D8FF),
-            padding: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(7),
-              side: BorderSide(
-                color: const Color(0xFF29D8FF).withValues(alpha: 0.4),
+      child: ValueListenableBuilder<List<FriendRequest>>(
+        valueListenable:
+            FriendPartyService.instance.incomingFriendRequestsNotifier,
+        builder: (context, reqs, _) {
+          return Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 28,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFF1565C0).withValues(alpha: 0.5),
+                      foregroundColor: const Color(0xFF80D8FF),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(7),
+                        side: BorderSide(
+                          color: const Color(0xFF29D8FF).withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+                    onPressed: widget.onOpenFriendsDialog,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 13),
+                    label: const Text(
+                      'TÌM & KẾT BẠN',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          onPressed: widget.onOpenFriendsDialog,
-          icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
-          label: const Text(
-            'TÌM KIẾM & KẾT BẠN THÊM',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
+              if (reqs.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: 28,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                    ),
+                    onPressed: widget.onOpenFriendRequests ??
+                        widget.onOpenFriendsDialog,
+                    child: Text(
+                      'YÊU CẦU (${reqs.length})',
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

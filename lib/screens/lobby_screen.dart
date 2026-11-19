@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/database_models.dart';
 import '../models/friend_party_models.dart';
@@ -18,6 +19,7 @@ import 'shop_dialog.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/hero_showcase_painter.dart';
 import 'widgets/lobby_friends_sidebar.dart';
+import 'widgets/rank_badge.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -27,7 +29,7 @@ class LobbyScreen extends StatefulWidget {
 }
 
 class _LobbyScreenState extends State<LobbyScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _isPvpMode = true;
   PvpGameMode _selectedPvpMode = PvpGameMode.solo1v1;
   late AnimationController _breatheController;
@@ -37,11 +39,20 @@ class _LobbyScreenState extends State<LobbyScreen>
   late Animation<double> _pulseAnimation;
 
   late AnimationController _shimmerController;
-  bool _isShowingInviteDialog = false;
+
+  OverlayEntry? _partyInvitePopupOverlay;
+  Timer? _partyInvitePopupTimer;
+
+  OverlayEntry? _friendReqPopupOverlay;
+  Timer? _friendReqPopupTimer;
+
+  bool _isLaunchingPartyMatch = false;
+  String? _lastLaunchedMatchRoomId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Hiệu ứng thở / nhấp nhô nhẹ nhàng
     _breatheController = AnimationController(
@@ -69,9 +80,9 @@ class _LobbyScreenState extends State<LobbyScreen>
       duration: const Duration(milliseconds: 2800),
     )..repeat();
 
-    // Tải dữ liệu người chơi và đồng bộ thư mục bạn bè
+    // Tải dữ liệu người chơi, khôi phục bạn bè & bật trạng thái Online Realtime
     PlayerStorage.loadProfile().then((prof) {
-      FriendPartyService.instance.syncOwnProfileToDirectory(prof);
+      FriendPartyService.instance.initializeForCurrentUser(prof);
     });
 
     // Lắng nghe lời mời tổ đội & phản hồi từ bạn bè
@@ -80,16 +91,53 @@ class _LobbyScreenState extends State<LobbyScreen>
     FriendPartyService.instance.inviteResponseNotifier
         .addListener(_handleInviteResponse);
 
+    // Lắng nghe yêu cầu kết bạn & phản hồi kết bạn
+    FriendPartyService.instance.incomingFriendRequestPopupNotifier
+        .addListener(_handleIncomingFriendRequestPopup);
+    FriendPartyService.instance.friendRequestResponseNotifier
+        .addListener(_handleFriendRequestResponse);
+
+    // Lắng nghe trạng thái phòng tổ đội để đồng bộ chế độ & tự động ghép trận cho khách khi chủ phòng bấm Tìm Trận
+    FriendPartyService.instance.partyNotifier
+        .addListener(_handlePartyRoomChanged);
+
     // Bật Lobby BGM
     AudioService.instance.playBgm(BgmTrack.lobby);
+
+    // Hiển thị lời mời đang chờ nếu đã nhận ngay trước khi màn sảnh mount xong
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _handleIncomingInvite();
+      _handleIncomingFriendRequestPopup();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      FriendPartyService.instance.setOfflinePresence();
+    } else if (state == AppLifecycleState.resumed) {
+      FriendPartyService.instance.setOnlinePresence(PlayerStorage.currentProfile);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _dismissPartyInvitePopup();
+    _dismissFriendReqPopup();
     FriendPartyService.instance.incomingInviteNotifier
         .removeListener(_handleIncomingInvite);
     FriendPartyService.instance.inviteResponseNotifier
         .removeListener(_handleInviteResponse);
+    FriendPartyService.instance.incomingFriendRequestPopupNotifier
+        .removeListener(_handleIncomingFriendRequestPopup);
+    FriendPartyService.instance.friendRequestResponseNotifier
+        .removeListener(_handleFriendRequestResponse);
+    FriendPartyService.instance.partyNotifier
+        .removeListener(_handlePartyRoomChanged);
     _breatheController.dispose();
     _pulseController.dispose();
     _shimmerController.dispose();
@@ -130,22 +178,14 @@ class _LobbyScreenState extends State<LobbyScreen>
     );
   }
 
-  void _openAssetCodex() {
-    AudioService.instance.playSfx(SfxSound.uiClick);
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => const _AssetCodexDialog(),
-    );
-  }
-
-  void _openFriendsDialog() {
+  void _openFriendsDialog({int initialTabIndex = 0}) {
     AudioService.instance.playSfx(SfxSound.uiClick);
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => FriendsPartyDialog(
         initialMode: _selectedPvpMode,
+        initialTabIndex: initialTabIndex,
         onStartPartyMatch: (mode) {
           setState(() {
             _isPvpMode = true;
@@ -161,248 +201,73 @@ class _LobbyScreenState extends State<LobbyScreen>
     SettingsDialog.show(context);
   }
 
+  void _dismissPartyInvitePopup() {
+    _partyInvitePopupTimer?.cancel();
+    _partyInvitePopupTimer = null;
+    _partyInvitePopupOverlay?.remove();
+    _partyInvitePopupOverlay = null;
+  }
+
   void _handleIncomingInvite() {
     final invite = FriendPartyService.instance.incomingInviteNotifier.value;
-    if (invite == null || !mounted || _isShowingInviteDialog) return;
+    if (invite == null || !mounted) return;
 
-    _isShowingInviteDialog = true;
+    FriendPartyService.instance.incomingInviteNotifier.value = null;
+    _dismissPartyInvitePopup();
     AudioService.instance.playSfx(SfxSound.uiClick);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Container(
-            width: 440,
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF142442), Color(0xFF0C1628)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _PartyInvitePopupBanner(
+        invite: invite,
+        onAccept: () async {
+          _dismissPartyInvitePopup();
+          AudioService.instance.playSfx(SfxSound.uiClick);
+          await FriendPartyService.instance.respondToInvitation(
+            invite,
+            accept: true,
+          );
+          if (mounted) {
+            setState(() {
+              _isPvpMode = true;
+              _selectedPvpMode = invite.mode;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Đã tham gia tổ đội ${invite.mode.shortLabel} cùng ${invite.fromName}!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: Colors.green.shade800,
+                behavior: SnackBarBehavior.floating,
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF29D8FF), width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF29D8FF).withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon & Tiêu đề
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF00E5FF),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.group_add_rounded,
-                        color: Color(0xFF00E5FF),
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'LỜI MỜI VÀO TỔ ĐỘI',
-                      style: TextStyle(
-                        color: Color(0xFF29D8FF),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+            );
+          }
+        },
+        onDecline: () async {
+          _dismissPartyInvitePopup();
+          AudioService.instance.playSfx(SfxSound.uiClick);
+          await FriendPartyService.instance.respondToInvitation(
+            invite,
+            accept: false,
+            reason: 'Người chơi đang bận leo Rank.',
+          );
+        },
+        onClose: () {
+          _dismissPartyInvitePopup();
+          FriendPartyService.instance.dismissExpiredInvitation(invite);
+        },
+      ),
+    );
 
-                // Nội dung lời mời
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    children: [
-                      RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            height: 1.4,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: invite.fromName,
-                              style: const TextStyle(
-                                color: Color(0xFFFFD54F),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' [${invite.fromCode}]',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const TextSpan(
-                              text: '\nmuốn mời bạn tham gia tổ đội chiến đấu!',
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00B0FF).withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF00B0FF)),
-                            ),
-                            child: Text(
-                              'CHẾ ĐỘ: ${invite.mode.title.toUpperCase()}',
-                              style: const TextStyle(
-                                color: Color(0xFF00E5FF),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber),
-                            ),
-                            child: Text(
-                              'PHÒNG: ${invite.partyCode}',
-                              style: const TextStyle(
-                                color: Color(0xFFFFD54F),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // 2 Nút: Từ chối / Tham gia
-                Row(
-                  children: [
-                    // NÚT TỪ CHỐI
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                            color: Color(0xFFFF5252),
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          AudioService.instance.playSfx(SfxSound.uiClick);
-                          Navigator.of(ctx).pop();
-                          FriendPartyService.instance.respondToInvitation(
-                            invite,
-                            accept: false,
-                            reason: 'Người chơi đang bận leo Rank.',
-                          );
-                        },
-                        child: const Text(
-                          'TỪ CHỐI',
-                          style: TextStyle(
-                            color: Color(0xFFFF5252),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // NÚT THAM GIA
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00E676),
-                          foregroundColor: const Color(0xFF072412),
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () async {
-                          AudioService.instance.playSfx(SfxSound.uiClick);
-                          Navigator.of(ctx).pop();
-                          await FriendPartyService.instance.respondToInvitation(
-                            invite,
-                            accept: true,
-                          );
-                          if (mounted) {
-                            setState(() {
-                              _isPvpMode = true;
-                              _selectedPvpMode = invite.mode;
-                            });
-                          }
-                        },
-                        child: const Text(
-                          'THAM GIA',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13.5,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ).then((_) {
-      _isShowingInviteDialog = false;
+    _partyInvitePopupOverlay = entry;
+    overlay.insert(entry);
+    _partyInvitePopupTimer = Timer(const Duration(seconds: 5), () {
+      if (_partyInvitePopupOverlay == entry) {
+        _dismissPartyInvitePopup();
+        FriendPartyService.instance.dismissExpiredInvitation(invite);
+      }
     });
   }
 
@@ -479,6 +344,102 @@ class _LobbyScreenState extends State<LobbyScreen>
     );
   }
 
+  void _dismissFriendReqPopup() {
+    _friendReqPopupTimer?.cancel();
+    _friendReqPopupTimer = null;
+    _friendReqPopupOverlay?.remove();
+    _friendReqPopupOverlay = null;
+  }
+
+  void _handleIncomingFriendRequestPopup() {
+    final req =
+        FriendPartyService.instance.incomingFriendRequestPopupNotifier.value;
+    if (req == null || !mounted) return;
+
+    FriendPartyService.instance.incomingFriendRequestPopupNotifier.value = null;
+    _dismissFriendReqPopup();
+    AudioService.instance.playSfx(SfxSound.uiClick);
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _FriendRequestPopupBanner(
+        request: req,
+        onAccept: () async {
+          _dismissFriendReqPopup();
+          AudioService.instance.playSfx(SfxSound.uiClick);
+          await FriendPartyService.instance
+              .respondToFriendRequest(req, accept: true);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Đã đồng ý kết bạn với ${req.fromName} (${req.fromCode})!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: Colors.green.shade800,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        onDecline: () async {
+          _dismissFriendReqPopup();
+          AudioService.instance.playSfx(SfxSound.uiClick);
+          await FriendPartyService.instance
+              .respondToFriendRequest(req, accept: false);
+        },
+        onClose: _dismissFriendReqPopup,
+      ),
+    );
+
+    _friendReqPopupOverlay = entry;
+    overlay.insert(entry);
+    _friendReqPopupTimer = Timer(const Duration(seconds: 5), () {
+      if (_friendReqPopupOverlay == entry) {
+        _dismissFriendReqPopup();
+      }
+    });
+  }
+
+  void _handleFriendRequestResponse() {
+    final resp =
+        FriendPartyService.instance.friendRequestResponseNotifier.value;
+    if (resp == null || !mounted) return;
+    FriendPartyService.instance.friendRequestResponseNotifier.value = null;
+
+    final isAccepted = resp.status == 'accepted';
+    AudioService.instance.playSfx(SfxSound.uiClick);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isAccepted ? Icons.how_to_reg_rounded : Icons.person_off_rounded,
+              color: isAccepted
+                  ? const Color(0xFF00E676)
+                  : const Color(0xFFFF5252),
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isAccepted
+                    ? '${resp.toName} [${resp.toCode}] đã ĐỒNG Ý kết bạn với bạn!'
+                    : '${resp.toName} [${resp.toCode}] đã từ chối lời mời kết bạn.',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF101C38),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _handleInviteFriendFromSidebar(FriendInfo friend) {
     AudioService.instance.playSfx(SfxSound.uiClick);
 
@@ -544,8 +505,82 @@ class _LobbyScreenState extends State<LobbyScreen>
 
   String? _lastPlayedMapId;
 
+  void _handlePartyRoomChanged() {
+    if (!mounted) return;
+    final party = FriendPartyService.instance.partyNotifier.value;
+    if (party == null) {
+      _lastLaunchedMatchRoomId = null;
+      return;
+    }
+
+    if (!_isPvpMode || _selectedPvpMode != party.mode) {
+      setState(() {
+        _isPvpMode = true;
+        _selectedPvpMode = party.mode;
+      });
+    }
+
+    final myCode = FriendPartyService.instance.effectivePlayerCode;
+    final isLeader = party.isLeader(myCode);
+    final matchRoomId = party.activeMatchRoomId;
+    if (!isLeader &&
+        (party.matchStatus == 'searching' || party.matchStatus == 'in_match') &&
+        matchRoomId != null &&
+        matchRoomId.isNotEmpty &&
+        !_isLaunchingPartyMatch &&
+        _lastLaunchedMatchRoomId != matchRoomId) {
+      _isLaunchingPartyMatch = true;
+      _lastLaunchedMatchRoomId = matchRoomId;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          _isLaunchingPartyMatch = false;
+          return;
+        }
+        unawaited(AudioService.instance.stopBgm());
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PvpArenaScreen(
+              initialMode: party.mode,
+              partyRoom: party,
+            ),
+          ),
+        );
+        _isLaunchingPartyMatch = false;
+        if (mounted) {
+          AudioService.instance.playBgm(BgmTrack.lobby);
+        }
+      });
+    }
+  }
+
   void _startGame() async {
     AudioService.instance.playSfx(SfxSound.uiClick);
+    final party = FriendPartyService.instance.partyNotifier.value;
+    final myCode = FriendPartyService.instance.effectivePlayerCode;
+
+    if (party != null && party.members.isNotEmpty) {
+      if (!party.isLeader(myCode)) {
+        // Khách chỉ bấm Sẵn Sàng, chỉ Chủ Phòng mới có quyền bấm Tìm Trận
+        await FriendPartyService.instance.toggleMyReadyState();
+        return;
+      }
+      if (!party.areAllMembersReady) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Hãy chờ tất cả thành viên trong phòng ở trạng thái SẴN SÀNG!',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
     // Tắt nhạc sảnh chờ ngay khi bắt đầu vào trận
     await AudioService.instance.stopBgm();
     if (!mounted) return;
@@ -555,10 +590,21 @@ class _LobbyScreenState extends State<LobbyScreen>
         GameAssetRegistry.instance.getRandomMap(excludeId: _lastPlayedMapId);
     _lastPlayedMapId = randomMap.id;
 
+    PartyRoomState? startedParty;
+    if (_isPvpMode && party != null && party.members.isNotEmpty && party.isLeader(myCode)) {
+      startedParty = await FriendPartyService.instance
+          .startPartyMatchmaking(mapId: randomMap.id);
+      _lastLaunchedMatchRoomId = startedParty?.activeMatchRoomId;
+    }
+
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => _isPvpMode
-            ? PvpArenaScreen(initialMode: _selectedPvpMode)
+            ? PvpArenaScreen(
+                initialMode: startedParty?.mode ?? _selectedPvpMode,
+                partyRoom: startedParty,
+              )
             : GamePlayScreen(initialMapConfig: randomMap),
       ),
     );
@@ -729,25 +775,66 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
 
-                  // 5.3 TỔ ĐỘI / BẠN BÈ (FRIENDS)
+                  // 5.3 BẠN BÈ (FRIENDS)
                   posBox(
                     18,
                     322,
                     178,
                     420,
                     _buildSciFiSidebarButton(
-                      label: 'TỔ ĐỘI',
+                      label: 'BẠN BÈ',
                       borderColor: const Color(0xFF29D8FF),
                       glowColor: const Color(0xFF00B0FF),
                       bgColors: const [Color(0xFF142D52), Color(0xFF0C1D38)],
-                      badgeText: 'BẠN',
-                      badgeAlignTopCenter: false,
-                      iconWidget: const Icon(
-                        Icons.people_alt_rounded,
-                        color: Color(0xFF4DD0E1),
-                        size: 40,
+                      iconWidget: ValueListenableBuilder<List<FriendRequest>>(
+                        valueListenable: FriendPartyService
+                            .instance.incomingFriendRequestsNotifier,
+                        builder: (context, reqs, _) {
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              const Icon(
+                                Icons.people_alt_rounded,
+                                color: Color(0xFF4DD0E1),
+                                size: 40,
+                              ),
+                              if (reqs.isNotEmpty)
+                                Positioned(
+                                  top: -4,
+                                  right: -8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${reqs.length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
-                      onTap: _openFriendsDialog,
+                      onTap: () {
+                        final hasReqs = FriendPartyService
+                            .instance.incomingFriendRequestsNotifier.value
+                            .isNotEmpty;
+                        _openFriendsDialog(initialTabIndex: hasReqs ? 1 : 0);
+                      },
                     ),
                   ),
 
@@ -802,7 +889,8 @@ class _LobbyScreenState extends State<LobbyScreen>
                       isPvpMode: _isPvpMode,
                       selectedPvpMode: _selectedPvpMode,
                       onInviteFriend: _handleInviteFriendFromSidebar,
-                      onOpenFriendsDialog: _openFriendsDialog,
+                      onOpenFriendsDialog: () => _openFriendsDialog(initialTabIndex: 0),
+                      onOpenFriendRequests: () => _openFriendsDialog(initialTabIndex: 1),
                     ),
                   ),
 
@@ -921,29 +1009,14 @@ class _LobbyScreenState extends State<LobbyScreen>
                                 color: Color(0xFF29D8FF),
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.edit_rounded,
-                              size: 13,
-                              color: Color(0xFFFFD54F),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 3),
                         Row(
                           children: [
-                            Container(
-                              width: 14,
-                              height: 14,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFF26E6A6),
-                              ),
-                              child: Icon(
-                                profile.rankIcon,
-                                size: 10,
-                                color: const Color(0xFF082218),
-                              ),
+                            RankBadge(
+                              rankTier: profile.rankTier,
+                              size: 20,
                             ),
                             const SizedBox(width: 6),
                             Flexible(
@@ -1159,26 +1232,11 @@ class _LobbyScreenState extends State<LobbyScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (profile.selectedCompanionId != null ||
-                  profile.selectedSkinId != null) ...[
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (profile.selectedCompanionId != null)
-                      _buildMiniBadge(
-                        icon: Icons.smart_toy_rounded,
-                        label: 'TRỢ THỦ AI',
-                        color: Colors.cyanAccent,
-                      ),
-                    if (profile.selectedSkinId != null) ...[
-                      const SizedBox(width: 8),
-                      _buildMiniBadge(
-                        icon: Icons.auto_awesome_rounded,
-                        label: 'SKIN HUYỀN THOẠI',
-                        color: const Color(0xFFFFD700),
-                      ),
-                    ],
-                  ],
+              if (profile.selectedCompanionId != null) ...[
+                _buildMiniBadge(
+                  icon: Icons.smart_toy_rounded,
+                  label: 'TRỢ THỦ AI',
+                  color: Colors.cyanAccent,
                 ),
                 const SizedBox(height: 6),
               ],
@@ -1286,6 +1344,7 @@ class _LobbyScreenState extends State<LobbyScreen>
         rankTier: isMemberMe ? profile.rankTier : member.rankTier,
         isLeader: false,
         isMe: isMemberMe,
+        isReady: party.isMemberReady(member.code),
       ));
     }
 
@@ -1441,11 +1500,13 @@ class _LobbyScreenState extends State<LobbyScreen>
                               Text(
                                 member.isLeader
                                     ? 'CHỦ PHÒNG${member.isMe ? ' (BẠN)' : ''}'
-                                    : 'ĐỒNG ĐỘI${member.isMe ? ' (BẠN)' : ''}',
+                                    : '${member.isReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG'}${member.isMe ? ' (BẠN)' : ''}',
                                 style: TextStyle(
                                   color: member.isLeader
                                       ? const Color(0xFFFFD700)
-                                      : const Color(0xFF00E5FF),
+                                      : (member.isReady
+                                          ? const Color(0xFF00E676)
+                                          : const Color(0xFFFFB74D)),
                                   fontSize: 9,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -1701,10 +1762,27 @@ class _LobbyScreenState extends State<LobbyScreen>
               key: Key('lobby_pvp_mode_${mode.shortLabel.toLowerCase()}'),
               onTap: () {
                 AudioService.instance.playSfx(SfxSound.uiClick);
+                final party = FriendPartyService.instance.partyNotifier.value;
+                final myCode = FriendPartyService.instance.effectivePlayerCode;
+                if (party != null && !party.isLeader(myCode)) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Chỉ Chủ Phòng mới có thể đổi chế độ đấu!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
                 setState(() {
                   _isPvpMode = true;
                   _selectedPvpMode = mode;
                 });
+                if (party != null &&
+                    party.isLeader(myCode) &&
+                    mode != PvpGameMode.solo1v1) {
+                  FriendPartyService.instance.createOrUpdateParty(mode: mode);
+                }
               },
               child: Container(
                 height: double.infinity,
@@ -1744,6 +1822,18 @@ class _LobbyScreenState extends State<LobbyScreen>
     return GestureDetector(
       onTap: () {
         AudioService.instance.playSfx(SfxSound.uiClick);
+        final party = FriendPartyService.instance.partyNotifier.value;
+        final myCode = FriendPartyService.instance.effectivePlayerCode;
+        if (party != null && !party.isLeader(myCode)) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bạn đang ở trong Tổ Đội, chỉ Chủ Phòng mới đổi được chế độ!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
         setState(() {
           _isPvpMode = !_isPvpMode;
         });
@@ -1832,55 +1922,102 @@ class _LobbyScreenState extends State<LobbyScreen>
   }
 
   Widget _buildMainActionButton() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_pulseAnimation, _shimmerController]),
-      builder: (context, child) {
-        return GestureDetector(
-          onTap: _startGame,
-          child: CustomPaint(
-            painter: _SciFiHexButtonPainter(
-              pulse: _pulseAnimation.value,
-              shimmerProgress: _shimmerController.value,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CustomPaint(
-                      size: const Size(34, 34),
-                      painter: _CrossedSwordsIconPainter(),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _isPvpMode ? 'TÌM TRẬN RANK' : 'BẮT ĐẦU',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 1.5,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 8,
-                            color: Color(0xFF5D2900),
-                            offset: Offset(0, 2),
+    return ValueListenableBuilder<PartyRoomState?>(
+      valueListenable: FriendPartyService.instance.partyNotifier,
+      builder: (context, party, _) {
+        final myCode = FriendPartyService.instance.effectivePlayerCode;
+        final isPartyGuest = party != null && !party.isLeader(myCode);
+        final isGuestReady = isPartyGuest && party.isMemberReady(myCode);
+
+        final buttonLabel = isPartyGuest
+            ? (isGuestReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG')
+            : (_isPvpMode ? 'TÌM TRẬN RANK' : 'BẮT ĐẦU');
+
+        return AnimatedBuilder(
+          animation: Listenable.merge([_pulseAnimation, _shimmerController]),
+          builder: (context, child) {
+            return GestureDetector(
+              key: const Key('lobby_main_action_button'),
+              onTap: _startGame,
+              child: CustomPaint(
+                painter: _SciFiHexButtonPainter(
+                  pulse: _pulseAnimation.value,
+                  shimmerProgress: _shimmerController.value,
+                  isReadyGreen: isPartyGuest && isGuestReady,
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isPartyGuest)
+                          Icon(
+                            isGuestReady
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            size: 32,
+                            color: Colors.white,
+                          )
+                        else
+                          CustomPaint(
+                            size: const Size(34, 34),
+                            painter: _CrossedSwordsIconPainter(),
                           ),
-                        ],
-                      ),
+                        const SizedBox(width: 12),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              buttonLabel,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 1.5,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 8,
+                                    color: Color(0xFF5D2900),
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isPartyGuest)
+                              Text(
+                                isGuestReady
+                                    ? 'CHỜ CHỦ PHÒNG TÌM TRẬN'
+                                    : 'BẤM ĐỂ SẴN SÀNG',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white70,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          isPartyGuest
+                              ? (isGuestReady
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.touch_app_rounded)
+                              : Icons.keyboard_double_arrow_right_rounded,
+                          size: 30,
+                          color: Colors.white,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    const Icon(
-                      Icons.keyboard_double_arrow_right_rounded,
-                      size: 32,
-                      color: Colors.white,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -1888,14 +2025,6 @@ class _LobbyScreenState extends State<LobbyScreen>
 
   _HeroDisplayInfo _getHeroDisplayInfo(String id) {
     switch (id) {
-      case 'kale':
-      case 'kaelen':
-        return const _HeroDisplayInfo(
-          name: 'Kale (Kaelen)',
-          title: 'Kiếm Khách Thunderblade',
-          themeColor: Color(0xFF00E5FF),
-          icon: Icons.bolt_rounded,
-        );
       case 'nova':
       case 'nova_blade':
         return const _HeroDisplayInfo(
@@ -1974,6 +2103,7 @@ class _LobbyHeroMemberData {
   final String rankTier;
   final bool isLeader;
   final bool isMe;
+  final bool isReady;
 
   const _LobbyHeroMemberData({
     required this.heroId,
@@ -1982,6 +2112,7 @@ class _LobbyHeroMemberData {
     required this.rankTier,
     required this.isLeader,
     required this.isMe,
+    this.isReady = true,
   });
 }
 
@@ -2221,6 +2352,8 @@ class _LeaderboardDialog extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            RankBadge(rankTier: tier, size: 22),
+                            const SizedBox(width: 6),
                             Text(
                               tier,
                               style: TextStyle(
@@ -2298,6 +2431,8 @@ class _LeaderboardDialog extends StatelessWidget {
                       ),
                     ),
                   ),
+                  RankBadge(rankTier: playerProfile.rankTier, size: 22),
+                  const SizedBox(width: 6),
                   Text(
                     playerProfile.rankDisplayLabel,
                     style: TextStyle(
@@ -2379,10 +2514,12 @@ class _SciFiProfilePillPainter extends CustomPainter {
 class _SciFiHexButtonPainter extends CustomPainter {
   final double pulse;
   final double shimmerProgress;
+  final bool isReadyGreen;
 
   const _SciFiHexButtonPainter({
     required this.pulse,
     required this.shimmerProgress,
+    this.isReadyGreen = false,
   });
 
   @override
@@ -2399,20 +2536,29 @@ class _SciFiHexButtonPainter extends CustomPainter {
 
     // Hào quang phát sáng xung quanh nút
     final outerGlow = Paint()
-      ..color = const Color(0xFFFFA000).withValues(alpha: 0.45 * pulse)
+      ..color = (isReadyGreen
+              ? const Color(0xFF00E676)
+              : const Color(0xFFFFA000))
+          .withValues(alpha: 0.45 * pulse)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 10 * pulse
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
     canvas.drawPath(path, outerGlow);
 
-    // Nền gradient vàng cam rực rỡ
+    // Nền gradient vàng cam hoặc xanh ngọc (khi Khách Sẵn Sàng)
     final fillPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [
-          Color(0xFFFFC107),
-          Color(0xFFF57C00),
-          Color(0xFFE65100),
-        ],
+      ..shader = LinearGradient(
+        colors: isReadyGreen
+            ? const [
+                Color(0xFF00E676),
+                Color(0xFF00B248),
+                Color(0xFF00695C),
+              ]
+            : const [
+                Color(0xFFFFC107),
+                Color(0xFFF57C00),
+                Color(0xFFE65100),
+              ],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Offset.zero & size);
@@ -2434,9 +2580,9 @@ class _SciFiHexButtonPainter extends CustomPainter {
     canvas.drawRect(shimmerRect, shimmerPaint);
     canvas.restore();
 
-    // Viền vàng sáng bóng
+    // Viền sáng bóng
     final borderPaint = Paint()
-      ..color = const Color(0xFFFFE082)
+      ..color = isReadyGreen ? const Color(0xFFA7FFEB) : const Color(0xFFFFE082)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.8;
     canvas.drawPath(path, borderPaint);
@@ -2445,7 +2591,8 @@ class _SciFiHexButtonPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SciFiHexButtonPainter oldDelegate) =>
       oldDelegate.pulse != pulse ||
-      oldDelegate.shimmerProgress != shimmerProgress;
+      oldDelegate.shimmerProgress != shimmerProgress ||
+      oldDelegate.isReadyGreen != isReadyGreen;
 }
 
 /// Vẽ biểu tượng Song Kiếm Giao Nhau (⚔️) màu trắng trên nút TÌM TRẬN RANK
@@ -2482,231 +2629,445 @@ class _CrossedSwordsIconPainter extends CustomPainter {
   bool shouldRepaint(covariant _CrossedSwordsIconPainter oldDelegate) => false;
 }
 
-/// Hộp thoại Thư Viện Concept Art & Thiết Kế Nhân Vật (Assets Codex)
-class _AssetCodexDialog extends StatefulWidget {
-  const _AssetCodexDialog();
+/// Pop-up thông báo yêu cầu kết bạn hiển thị trong 5 giây ở phía trên màn hình
+class _FriendRequestPopupBanner extends StatefulWidget {
+  final FriendRequest request;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  final VoidCallback onClose;
+
+  const _FriendRequestPopupBanner({
+    required this.request,
+    required this.onAccept,
+    required this.onDecline,
+    required this.onClose,
+  });
 
   @override
-  State<_AssetCodexDialog> createState() => _AssetCodexDialogState();
+  State<_FriendRequestPopupBanner> createState() =>
+      _FriendRequestPopupBannerState();
 }
 
-class _AssetCodexDialogState extends State<_AssetCodexDialog> {
-  int _selectedSheet = 0;
+class _FriendRequestPopupBannerState extends State<_FriendRequestPopupBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _progressController;
 
-  static const _sheets = [
-    (
-      title: 'Kaelen & Aegis-X9',
-      subtitle: 'Kiếm Khách Lôi Quang & Tinh Linh Lôi Từ',
-      assetPath: 'assets/images/asset_1.png',
-      desc:
-          'Concept Art chuẩn Golden-Cyber Fantasy: Kaelen dùng Song Kiếm Hoàng Kim & Lôi Quang (#00E5FF), đi kèm Trợ Thủ AI Aegis-X9 có kỹ năng Trường Trọng Lực Hoàng Kim.',
-    ),
-    (
-      title: 'Sprite Sheet 4 Trạng Thái',
-      subtitle: 'Idle • Run • Attack • Hit & HUD Mobile',
-      assetPath: 'assets/images/asset_2.png',
-      desc:
-          'Bảng phân tách Layer bộ phận (Cape, Body, Dual Swords, Greaves), hoạt ảnh lướt Lôi Ảnh Trảm và cụm nút kỹ năng hình cánh cung 90°.',
-    ),
-    (
-      title: 'Biệt Đội Liên Minh (2v2 / 4v4)',
-      subtitle: 'Kaelen • Valeria • Garrick',
-      assetPath: 'assets/images/asset_3.png',
-      desc:
-          'Bộ 3 chiến binh chủ lực cho chế độ Song Đấu 2v2 và Quân Đoàn 4v4: Kiếm Khách Kaelen, Xạ Thủ Nỏ Thần Valeria và Pháo Đài Khiên Tháp Garrick.',
-    ),
-    (
-      title: 'Phế Tích Thần Điện Hoàng Kim',
-      subtitle: 'Bản Đồ Sunken Golden Sanctum & Vòng Ma Trận',
-      assetPath: 'assets/images/asset_4.png',
-      desc:
-          'Gạch đá cổ đại rạn nứt nạm mạch quặng Vàng ròng (#D4AF37), Vòng Ma Trận Bát Giác trung tâm và 4 Cổng Không Gian Hắc Ám.',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sheet = _sheets[_selectedSheet];
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 740, maxHeight: 420),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1A2134), Color(0xFF0E1320)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFFFD700), width: 2),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.auto_fix_high_rounded, color: Color(0xFFFFD700), size: 22),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'THƯ VIỆN CONCEPT ART & HƯỚNG DẪN NHÂN VẬT MỚI',
-                    style: TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5FF),
-                    foregroundColor: Colors.black,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onPressed: () async {
-                    final current = PlayerStorage.currentProfile;
-                    final unlockedHeroes = {...current.unlockedHeroIds, 'kaelen', 'valeria', 'garrick'}.toList();
-                    final unlockedComps = {...current.unlockedCompanionIds, 'aegis_x9'}.toList();
-                    await PlayerStorage.saveProfile(
-                      current.copyWith(
-                        unlockedHeroIds: unlockedHeroes,
-                        selectedHeroId: 'kaelen',
-                        unlockedCompanionIds: unlockedComps,
-                        selectedCompanionId: 'aegis_x9',
-                      ),
-                    );
-                    if (context.mounted) {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  icon: const Icon(Icons.bolt_rounded, size: 16),
-                  label: const Text(
-                    'TRẢI NGHIỆM KAELEN + AEGIS-X9',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, color: Colors.white70),
-                  visualDensity: VisualDensity.compact,
+    return Positioned(
+      top: 14,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 470,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF152544), Color(0xFF0A1426)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF29D8FF), width: 1.8),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E5FF).withValues(alpha: 0.35),
+                  blurRadius: 18,
+                  spreadRadius: 2,
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            // Tabs chọn 4 tấm Concept Art
-            Row(
-              children: List.generate(_sheets.length, (idx) {
-                final active = idx == _selectedSheet;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedSheet = idx),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? const Color(0xFFFFD700).withValues(alpha: 0.2)
-                              : Colors.white.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: active ? const Color(0xFFFFD700) : Colors.white12,
-                          ),
-                        ),
-                        child: Text(
-                          _sheets[idx].title,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: active ? const Color(0xFFFFD700) : Colors.white70,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Row(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        color: Colors.black54,
-                        child: Image.asset(
-                          sheet.assetPath,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => const Center(
-                            child: Icon(Icons.image_not_supported, color: Colors.white38, size: 42),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF00E5FF)),
+                          ),
+                          child: const Icon(
+                            Icons.person_add_alt_1_rounded,
+                            color: Color(0xFF00E5FF),
+                            size: 20,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            sheet.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'LỜI MỜI KẾT BẠN MỚI',
+                                style: TextStyle(
+                                  color: Color(0xFF29D8FF),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              RichText(
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: widget.request.fromName,
+                                      style: const TextStyle(
+                                        color: Color(0xFFFFD54F),
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text:
+                                          ' [${widget.request.fromCode}] (${widget.request.fromRankTier}) muốn kết bạn với bạn!',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFF5252),
+                            side: const BorderSide(color: Color(0xFFFF5252)),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            sheet.subtitle,
-                            style: const TextStyle(
-                              color: Color(0xFF00E5FF),
-                              fontSize: 11,
+                          onPressed: widget.onDecline,
+                          child: const Text(
+                            'TỪ CHỐI',
+                            style: TextStyle(
+                              fontSize: 10.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: Text(
-                                sheet.desc,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  height: 1.4,
-                                ),
-                              ),
+                        ),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00E676),
+                            foregroundColor: const Color(0xFF062412),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                           ),
-                        ],
-                      ),
+                          onPressed: widget.onAccept,
+                          child: const Text(
+                            'ĐỒNG Ý',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: widget.onClose,
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
                     ),
+                  ),
+                  AnimatedBuilder(
+                    animation: _progressController,
+                    builder: (_, _) {
+                      return LinearProgressIndicator(
+                        value: 1.0 - _progressController.value,
+                        minHeight: 3,
+                        backgroundColor: Colors.white12,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF00E5FF),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
+/// Pop-up thông báo lời mời vào tổ đội hiển thị trong 5 giây ở phía trên màn hình
+class _PartyInvitePopupBanner extends StatefulWidget {
+  final PartyInvitation invite;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  final VoidCallback onClose;
+
+  const _PartyInvitePopupBanner({
+    required this.invite,
+    required this.onAccept,
+    required this.onDecline,
+    required this.onClose,
+  });
+
+  @override
+  State<_PartyInvitePopupBanner> createState() =>
+      _PartyInvitePopupBannerState();
+}
+
+class _PartyInvitePopupBannerState extends State<_PartyInvitePopupBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _progressController;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 14,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 540),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF152544), Color(0xFF0A1426)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00E676), width: 1.8),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E676).withValues(alpha: 0.35),
+                  blurRadius: 18,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00E676).withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF00E676)),
+                          ),
+                          child: const Icon(
+                            Icons.group_add_rounded,
+                            color: Color(0xFF00E676),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  const Flexible(
+                                    child: Text(
+                                      'LỜI MỜI VÀO TỔ ĐỘI',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Color(0xFF00E676),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00E5FF)
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: const Color(0xFF00E5FF),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      widget.invite.mode.shortLabel.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Color(0xFF00E5FF),
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              RichText(
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: widget.invite.fromName,
+                                      style: const TextStyle(
+                                        color: Color(0xFFFFD54F),
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text:
+                                          ' [${widget.invite.fromCode}] mời bạn vào phòng ${widget.invite.partyCode}!',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFF5252),
+                            side: const BorderSide(color: Color(0xFFFF5252)),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
+                          onPressed: widget.onDecline,
+                          child: const Text(
+                            'TỪ CHỐI',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00E676),
+                            foregroundColor: const Color(0xFF062412),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                          ),
+                          onPressed: widget.onAccept,
+                          child: const Text(
+                            'THAM GIA',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: widget.onClose,
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ),
+                  AnimatedBuilder(
+                    animation: _progressController,
+                    builder: (_, _) {
+                      return LinearProgressIndicator(
+                        value: 1.0 - _progressController.value,
+                        minHeight: 3,
+                        backgroundColor: Colors.white12,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF00E676),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+

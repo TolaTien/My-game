@@ -15,8 +15,6 @@ class PlayerProfile {
   final int? serverRank;
   final List<String> unlockedHeroIds;
   final String selectedHeroId;
-  final List<String> unlockedSkinIds;
-  final String? selectedSkinId;
   final List<String> unlockedCompanionIds;
   final String? selectedCompanionId;
   final int lastSpinTimestamp;
@@ -39,15 +37,15 @@ class PlayerProfile {
     this.serverRank,
     this.unlockedHeroIds = const ['george'],
     this.selectedHeroId = 'george',
-    this.unlockedSkinIds = const [],
-    this.selectedSkinId,
     this.unlockedCompanionIds = const [],
     this.selectedCompanionId,
     this.lastSpinTimestamp = 0,
     this.heroLevels = const {'george': 1},
     this.heroExp = const {'george': 0},
     this.friendIds = const [],
+    // ignore: prefer_initializing_formals
   })  : _rankStars = rankStars,
+        // ignore: prefer_initializing_formals
         _isChallengerTop10 = isChallengerTop10;
 
   factory PlayerProfile.defaultProfile({String? playerCode, String? playerName}) {
@@ -142,6 +140,9 @@ class PlayerProfile {
     );
   }
 
+  /// Đường dẫn ảnh huy hiệu Rank tương ứng với bậc Rank hiện tại
+  String get rankAssetPath => PvpRankSystem.getRankAssetPath(rankTier);
+
   /// Màu sắc đại diện cho Rank
   Color get rankColor {
     switch (rankTier) {
@@ -226,9 +227,6 @@ class PlayerProfile {
     int? serverRank,
     List<String>? unlockedHeroIds,
     String? selectedHeroId,
-    List<String>? unlockedSkinIds,
-    String? selectedSkinId,
-    bool clearSkin = false,
     List<String>? unlockedCompanionIds,
     String? selectedCompanionId,
     bool clearCompanion = false,
@@ -262,9 +260,6 @@ class PlayerProfile {
       serverRank: serverRank ?? this.serverRank,
       unlockedHeroIds: unlockedHeroIds ?? this.unlockedHeroIds,
       selectedHeroId: selectedHeroId ?? this.selectedHeroId,
-      unlockedSkinIds: unlockedSkinIds ?? this.unlockedSkinIds,
-      selectedSkinId:
-          clearSkin ? null : (selectedSkinId ?? this.selectedSkinId),
       unlockedCompanionIds:
           unlockedCompanionIds ?? this.unlockedCompanionIds,
       selectedCompanionId: clearCompanion
@@ -290,8 +285,6 @@ class PlayerProfile {
       'serverRank': serverRank,
       'unlockedHeroIds': unlockedHeroIds,
       'selectedHeroId': selectedHeroId,
-      'unlockedSkinIds': unlockedSkinIds,
-      'selectedSkinId': selectedSkinId,
       'unlockedCompanionIds': unlockedCompanionIds,
       'selectedCompanionId': selectedCompanionId,
       'lastSpinTimestamp': lastSpinTimestamp,
@@ -315,6 +308,19 @@ class PlayerProfile {
       return fallback;
     }
 
+    List<String> parseStringList(dynamic raw, List<String> fallback) {
+      if (raw is List) {
+        return raw.where((e) => e != null).map((e) => e.toString()).toList();
+      }
+      if (raw is Map) {
+        return raw.values
+            .where((e) => e != null)
+            .map((e) => e.toString())
+            .toList();
+      }
+      return fallback;
+    }
+
     final parsedRp = (json['rankPoints'] as num?)?.toInt() ?? 1000;
     final parsedStars = (json['rankStars'] as num?)?.toInt();
     final parsedChallenger = json['isChallengerTop10'] as bool?;
@@ -330,28 +336,15 @@ class PlayerProfile {
       rankStars: parsedStars,
       isChallengerTop10: parsedChallenger,
       serverRank: parsedServerRank,
-      unlockedHeroIds: (json['unlockedHeroIds'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const ['george'],
+      unlockedHeroIds: parseStringList(json['unlockedHeroIds'], const ['george']),
       selectedHeroId: json['selectedHeroId'] as String? ?? 'george',
-      unlockedSkinIds: (json['unlockedSkinIds'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      selectedSkinId: json['selectedSkinId'] as String?,
-      unlockedCompanionIds: (json['unlockedCompanionIds'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
+      unlockedCompanionIds:
+          parseStringList(json['unlockedCompanionIds'], const []),
       selectedCompanionId: json['selectedCompanionId'] as String?,
       lastSpinTimestamp: (json['lastSpinTimestamp'] as num?)?.toInt() ?? 0,
       heroLevels: parseIntMap(json['heroLevels'], const {'george': 1}),
       heroExp: parseIntMap(json['heroExp'], const {'george': 0}),
-      friendIds: (json['friendIds'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
+      friendIds: parseStringList(json['friendIds'], const []),
     );
   }
 }

@@ -6,15 +6,9 @@ echo ========================================================
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
-REM Anh xa o dia ao Z: de tranh loi duong dan tieng Viet cua Gradle & gen_snapshot tren Windows
-subst Z: /D >nul 2>&1
-subst Z: "%PROJECT_DIR%"
-cd /d Z:\
+cd /d "%PROJECT_DIR%"
 
 call flutter build apk --release --no-tree-shake-icons
-
-cd /d "%PROJECT_DIR%"
-subst Z: /D >nul 2>&1
 
 echo.
 echo [HOAN TAT] File APK da duoc xuat tai:

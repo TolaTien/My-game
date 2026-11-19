@@ -20,6 +20,36 @@
         ".write": "auth != null"
       }
     },
+    "invitations": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "invitation_responses": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friend_requests": {
+      "$toCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friend_request_responses": {
+      "$fromCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friendships": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
     "leaderboard": {
       ".read": true,
       ".write": "auth != null"

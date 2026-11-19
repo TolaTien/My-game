@@ -17,7 +17,7 @@ class _ShopDialogState extends State<ShopDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -186,7 +186,6 @@ class _ShopDialogState extends State<ShopDialog>
                     tabs: const [
                       Tab(text: 'NHÂN VẬT'),
                       Tab(text: 'TRỢ THỦ AI'),
-                      Tab(text: 'TRANG PHỤC (SKIN)'),
                     ],
                   ),
                 ),
@@ -203,9 +202,6 @@ class _ShopDialogState extends State<ShopDialog>
 
                       // TAB 2: TRỢ THỦ AI
                       _buildCompanionsTab(profile),
-
-                      // TAB 3: TRANG PHỤC (SKIN)
-                      _buildSkinsTab(profile),
                     ],
                   ),
                 ),
@@ -220,42 +216,7 @@ class _ShopDialogState extends State<ShopDialog>
   // --- TAB 1: NHÂN VẬT (ĐỒNG GIÁ 100 VÀNG THEO MỤC 6) ---
   Widget _buildHeroesTab(PlayerProfile profile) {
     final heroes = [
-      _HeroItem(
-        id: 'george',
-        name: 'George',
-        subtitle: 'Chiến Binh Búa',
-        role: 'CẬN CHIẾN / TANKER',
-        description: 'Vung búa cuồng phong, nện đất diện rộng, máu cực trâu.',
-        color: const Color(0xFFFF5722),
-        icon: Icons.shield_sharp,
-      ),
-      _HeroItem(
-        id: 'ranger',
-        name: 'Xạ Thủ Ranger',
-        subtitle: 'Cung Thủ Tầm Xa',
-        role: 'TẦM XA / CƠ ĐỘNG',
-        description: 'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
-        color: const Color(0xFF00E676),
-        icon: Icons.gps_fixed_rounded,
-      ),
-      _HeroItem(
-        id: 'tanker',
-        name: 'Hiệp Sĩ Tanker',
-        subtitle: 'Hộ Vệ Hoàng Gia',
-        role: 'PHÒNG THỦ / PHẢN ĐÒN',
-        description: 'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
-        color: const Color(0xFF00B0FF),
-        icon: Icons.security_rounded,
-      ),
-      _HeroItem(
-        id: 'ninja',
-        name: 'Ninja Sát Thủ',
-        subtitle: 'Bóng Đêm Hắc Ám',
-        role: 'CHÍ MẠNG / ÁM SÁT',
-        description: 'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
-        color: const Color(0xFFAB47BC),
-        icon: Icons.flash_on_rounded,
-      ),
+      // === 4 NHÂN VẬT ĐẶC QUYỀN (CUSTOM HEROES) ===
       _HeroItem(
         id: 'nova_blade',
         name: 'Nova Blade',
@@ -265,16 +226,6 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFF00E5FF),
         icon: Icons.electric_bolt_rounded,
         portraitAsset: 'assets/images/heroes/nova/nova_portrait.png',
-      ),
-      _HeroItem(
-        id: 'kaelen',
-        name: 'Kale (Kaelen)',
-        subtitle: 'Kiếm Khách Lôi Quang',
-        role: 'SÁT THỦ / LÔI KIẾM',
-        description: 'Lôi quang trảm chớp nhoáng, bão lốc xoáy lôi điện, thiên phạt cuồng lôi.',
-        color: const Color(0xFFFFD700),
-        icon: Icons.bolt_rounded,
-        portraitAsset: 'assets/images/heroes/kaelen_portrait.png',
       ),
       _HeroItem(
         id: 'shadow_01',
@@ -295,6 +246,48 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFFFF5722),
         icon: Icons.local_fire_department_rounded,
         portraitAsset: 'assets/images/heroes/ember/ember.png',
+      ),
+
+      // === 4 NHÂN VẬT HỆ THỐNG (SYSTEM HEROES) ===
+      _HeroItem(
+        id: 'george',
+        name: 'George',
+        subtitle: 'Chiến Binh Búa',
+        role: 'CẬN CHIẾN / TANKER',
+        description: 'Vung búa cuồng phong, nện đất diện rộng, máu cực trâu.',
+        color: const Color(0xFFFF5722),
+        icon: Icons.shield_sharp,
+        portraitAsset: 'assets/images/heroes/george_portrait.png',
+      ),
+      _HeroItem(
+        id: 'ranger',
+        name: 'Xạ Thủ Ranger',
+        subtitle: 'Cung Thủ Tầm Xa',
+        role: 'TẦM XA / CƠ ĐỘNG',
+        description: 'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
+        color: const Color(0xFF00E676),
+        icon: Icons.gps_fixed_rounded,
+        portraitAsset: 'assets/images/heroes/ranger_portrait.png',
+      ),
+      _HeroItem(
+        id: 'tanker',
+        name: 'Hiệp Sĩ Tanker',
+        subtitle: 'Hộ Vệ Hoàng Gia',
+        role: 'PHÒNG THỦ / PHẢN ĐÒN',
+        description: 'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
+        color: const Color(0xFF00B0FF),
+        icon: Icons.security_rounded,
+        portraitAsset: 'assets/images/heroes/tanker_portrait.png',
+      ),
+      _HeroItem(
+        id: 'ninja',
+        name: 'Ninja Sát Thủ',
+        subtitle: 'Bóng Đêm Hắc Ám',
+        role: 'CHÍ MẠNG / ÁM SÁT',
+        description: 'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
+        color: const Color(0xFFAB47BC),
+        icon: Icons.flash_on_rounded,
+        portraitAsset: 'assets/images/heroes/ninja_portrait.png',
       ),
     ];
 
@@ -543,62 +536,11 @@ class _ShopDialogState extends State<ShopDialog>
       _CompanionItem(
         id: 'aegis_x9',
         name: 'Aegis-X9 Lôi Từ',
-        tag: 'GOLDEN SPIRIT (ASSET 4)',
+        tag: 'GOLDEN SPIRIT',
         description: 'Lõi bát diện Hoàng Kim: Hút vàng 120px, bắn tia Laser & mở Trường Trọng Lực + Khiên Vàng.',
         price: 800,
         color: const Color(0xFFFFD700),
         icon: Icons.auto_awesome_rounded,
-        spriteAsset: 'assets/images/companions/aegis_x9.png',
-      ),
-      _CompanionItem(
-        id: 'cyber_drone',
-        name: 'Cyber Drone (PIXEL-01)',
-        tag: 'SUPPORT • UTILITY (ASSET 1 & 2)',
-        description: 'Drone sừng trắng mắt lam: Bắn đạn Plasma, hồi máu đồng minh & bật Khiên Cầu Năng Lượng.',
-        price: 650,
-        color: const Color(0xFF00E5FF),
-        icon: Icons.smart_toy_rounded,
-        spriteAsset: 'assets/images/companions/cyber_drone.png',
-      ),
-      _CompanionItem(
-        id: 'pyro_frost_dragon',
-        name: 'Pyro-Frost Dragon',
-        tag: 'RỒNG BĂNG HỎA 2 ĐẦU (ASSET 3)',
-        description: 'Phun lửa & tuyết xen kẽ; kích hoạt Hơi Thở Bão Tố đóng băng kẻ địch và buff khiên lửa.',
-        price: 900,
-        color: const Color(0xFFFF5252),
-        icon: Icons.whatshot_rounded,
-        spriteAsset: 'assets/images/companions/pyro_frost_dragon.png',
-      ),
-      _CompanionItem(
-        id: 'gem_tumbler',
-        name: 'Gem-Tumbler',
-        tag: 'TINH THỂ HOÀNG KIM (ASSET 3)',
-        description: 'Phun vụn đá gây choáng; kích hoạt Hoàng Kim Chấn hút vàng từ xa & tăng 30% giáp.',
-        price: 850,
-        color: const Color(0xFFFFB300),
-        icon: Icons.hexagon_rounded,
-        spriteAsset: 'assets/images/companions/gem_tumbler.png',
-      ),
-      _CompanionItem(
-        id: 'luna_fox',
-        name: 'Hồ Ly Luna',
-        tag: 'PET FOX (ASSET 2)',
-        description: 'Linh thú Hồ Ly trắng xanh: Bắn cầu linh lực băng lam làm chậm quái và hồi Ki.',
-        price: 750,
-        color: const Color(0xFF80D8FF),
-        icon: Icons.pets_rounded,
-        spriteAsset: 'assets/images/companions/luna_fox.png',
-      ),
-      _CompanionItem(
-        id: 'orbit_03',
-        name: 'ORBIT-03 Drone',
-        tag: 'MECH SPHERE (ASSET 2)',
-        description: 'Cầu cơ khí Hoàng Kim bắn tia laser năng lượng tốc độ cao liên hoàn.',
-        price: 700,
-        color: const Color(0xFFFFAB00),
-        icon: Icons.radar_rounded,
-        spriteAsset: 'assets/images/companions/orbit_03.png',
       ),
     ];
 
@@ -638,18 +580,9 @@ class _ShopDialogState extends State<ShopDialog>
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: comp.color.withValues(alpha: 0.4)),
                 ),
-                child: comp.spriteAsset != null
-                    ? Image.asset(
-                        comp.spriteAsset!,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.none,
-                        errorBuilder: (_, _, _) => Center(
-                          child: Icon(comp.icon, color: comp.color, size: 40),
-                        ),
-                      )
-                    : Center(
-                        child: Icon(comp.icon, color: comp.color, size: 40),
-                      ),
+                child: Center(
+                  child: Icon(comp.icon, color: comp.color, size: 40),
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -767,244 +700,6 @@ class _ShopDialogState extends State<ShopDialog>
       },
     );
   }
-
-  // --- TAB 3: TRANG PHỤC (SKINS - THUẦN THẨM MỸ, FAIR PLAY) ---
-  Widget _buildSkinsTab(PlayerProfile profile) {
-    final skins = [
-      _SkinItem(
-        id: 'skin_george_gold',
-        name: 'George Hoàng Kim',
-        forHero: 'George',
-        priceGold: 150,
-        color: const Color(0xFFFFD700),
-      ),
-      _SkinItem(
-        id: 'skin_ranger_shadow',
-        name: 'Ranger Bóng Đêm',
-        forHero: 'Xạ Thủ Ranger',
-        priceGold: 120,
-        color: const Color(0xFF7E57C2),
-      ),
-      _SkinItem(
-        id: 'skin_tanker_magma',
-        name: 'Hiệp Sĩ Dung Nham',
-        forHero: 'Hiệp Sĩ Tanker',
-        priceGold: 130,
-        color: const Color(0xFFFF3D00),
-      ),
-      _SkinItem(
-        id: 'skin_ninja_thunder',
-        name: 'Ninja Lôi Thần',
-        forHero: 'Ninja Sát Thủ',
-        priceGold: 150,
-        color: const Color(0xFF651FFF),
-      ),
-      _SkinItem(
-        id: 'skin_kaelen_emperor',
-        name: 'Kaelen Lôi Đế Hoàng Kim',
-        forHero: 'Kaelen Lôi Quang',
-        priceGold: 200,
-        color: const Color(0xFF00E5FF),
-      ),
-    ];
-
-    return Column(
-      children: [
-        // Lưu ý Fair-Play
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.deepPurpleAccent.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Colors.deepPurpleAccent.withValues(alpha: 0.4),
-            ),
-          ),
-          child: Row(
-            children: const [
-              Icon(Icons.verified_rounded,
-                  size: 16, color: Colors.cyanAccent),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'LƯU Ý CÔNG BẰNG: Toàn bộ Trang Phục (Skin) thuần thẩm mỹ, hoàn toàn KHÔNG thay đổi chỉ số!',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.cyanAccent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-
-        Expanded(
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            itemCount: skins.length,
-            itemBuilder: (context, index) {
-              final skin = skins[index];
-              final isUnlocked = profile.unlockedSkinIds.contains(skin.id);
-              final isEquipped = profile.selectedSkinId == skin.id;
-
-              return Container(
-                width: 160,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF232038),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isEquipped
-                        ? skin.color
-                        : isUnlocked
-                            ? Colors.white24
-                            : Colors.white12,
-                    width: isEquipped ? 2.5 : 1,
-                  ),
-                ),
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      height: 70,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            skin.color.withValues(alpha: 0.2),
-                            skin.color.withValues(alpha: 0.05),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: skin.color.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Center(
-                        child: Icon(Icons.checkroom_rounded,
-                            color: skin.color, size: 38),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      skin.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
-                      maxLines: 1,
-                    ),
-                    Text(
-                      'Tướng: ${skin.forHero}',
-                      style: const TextStyle(
-                        fontSize: 9.5,
-                        color: Colors.white60,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (isEquipped) ...[
-                      SizedBox(
-                        height: 30,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: skin.color,
-                            foregroundColor: Colors.black87,
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () async {
-                            await PlayerStorage.selectSkin(null);
-                            _showNotification('Đã gỡ skin mặc định!');
-                          },
-                          child: const Text(
-                            'GỠ SKIN',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else if (isUnlocked) ...[
-                      SizedBox(
-                        height: 30,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple.shade700,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () async {
-                            await PlayerStorage.selectSkin(skin.id);
-                            _showNotification('Đã mặc ${skin.name}!');
-                          },
-                          child: const Text(
-                            'MẶC',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      SizedBox(
-                        height: 30,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber.shade700,
-                            foregroundColor: Colors.black87,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () async {
-                            if (profile.gold < skin.priceGold) {
-                              _showNotification(
-                                  'Không đủ Vàng! Cần ${skin.priceGold} Vàng.',
-                                  isSuccess: false);
-                              return;
-                            }
-                            final success = await PlayerStorage.unlockSkin(
-                                skin.id, skin.priceGold);
-                            if (success) {
-                              _showNotification(
-                                  'Đã sở hữu ${skin.name} (-${skin.priceGold} Vàng)!');
-                            }
-                          },
-                          icon: const Icon(Icons.monetization_on_rounded, size: 14),
-                          label: Text(
-                            '${skin.priceGold} VÀNG',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _CurrencyBadge extends StatelessWidget {
@@ -1078,7 +773,6 @@ class _CompanionItem {
   final int price;
   final Color color;
   final IconData icon;
-  final String? spriteAsset;
 
   const _CompanionItem({
     required this.id,
@@ -1088,22 +782,5 @@ class _CompanionItem {
     required this.price,
     required this.color,
     required this.icon,
-    this.spriteAsset,
-  });
-}
-
-class _SkinItem {
-  final String id;
-  final String name;
-  final String forHero;
-  final int priceGold;
-  final Color color;
-
-  const _SkinItem({
-    required this.id,
-    required this.name,
-    required this.forHero,
-    required this.priceGold,
-    required this.color,
   });
 }

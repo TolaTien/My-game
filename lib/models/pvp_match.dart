@@ -148,8 +148,9 @@ class PvpOpponentInfo {
     String playerHeroId = 'george',
     bool isAlly = false,
     Set<String>? excludeNames,
+    Random? random,
   }) {
-    final rand = Random();
+    final rand = random ?? Random();
     final availableTags = excludeNames == null || excludeNames.isEmpty
         ? gamerTags
         : gamerTags.where((t) => !excludeNames.contains(t)).toList();
@@ -193,19 +194,19 @@ class PvpOpponentInfo {
     String playerHeroId = 'george',
     List<PvpOpponentInfo> onlineAllies = const [],
     List<PvpOpponentInfo> onlineEnemies = const [],
+    int? seed,
   }) {
     final usedNames = <String>{
       ...onlineAllies.map((a) => a.name),
       ...onlineEnemies.map((e) => e.name),
     };
-    final rand = Random();
+    final rand = seed != null ? Random(seed) : Random();
     const extendedHeroes = [
       'george',
       'ranger',
       'tanker',
       'ninja',
       'nova_blade',
-      'kaelen',
       'shadow_01',
       'ember_02',
     ];
@@ -217,6 +218,7 @@ class PvpOpponentInfo {
         playerHeroId: playerHeroId,
         isAlly: true,
         excludeNames: usedNames,
+        random: rand,
       );
       usedNames.add(baseBot.name);
       final hero = extendedHeroes[rand.nextInt(extendedHeroes.length)];
@@ -238,6 +240,7 @@ class PvpOpponentInfo {
         playerHeroId: playerHeroId,
         isAlly: false,
         excludeNames: usedNames,
+        random: rand,
       );
       usedNames.add(baseBot.name);
       final hero = mode == PvpGameMode.solo1v1
@@ -395,6 +398,26 @@ class PvpRankSystem {
     'Bạch Kim',
     'Kim Cương',
   ];
+
+  static String getRankAssetPath(String tier) {
+    switch (tier) {
+      case 'Thách Đấu':
+        return 'assets/images/ranks/rank_thach_dau.png';
+      case 'Huyền Thoại':
+        return 'assets/images/ranks/rank_huyen_thoai.png';
+      case 'Kim Cương':
+        return 'assets/images/ranks/rank_kim_cuong.png';
+      case 'Bạch Kim':
+        return 'assets/images/ranks/rank_bach_kim.png';
+      case 'Vàng':
+        return 'assets/images/ranks/rank_vang.png';
+      case 'Bạc':
+        return 'assets/images/ranks/rank_bac.png';
+      case 'Đồng':
+      default:
+        return 'assets/images/ranks/rank_dong.png';
+    }
+  }
 
   static int tierOrder(String tier) {
     switch (tier) {
