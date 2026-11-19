@@ -3,6 +3,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
+import '../../core/hero_skin_style.dart';
 import '../../core/stat_growth_formula.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
@@ -70,7 +71,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double berserkTimer = 0.0;
 
   // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
-  double damageAbsorption = 0.0;
+  double _baseDamageAbsorption = 0.0;
+  double temporaryPetDamageAbsorption = 0.0;
+  double get damageAbsorption => max(_baseDamageAbsorption,
+      goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0);
+  set damageAbsorption(double value) => _baseDamageAbsorption = value;
   double goldenShieldTimer = 0.0;
   double get shieldHp => goldenShieldTimer > 0
       ? 50.0
@@ -87,11 +92,13 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   Function()? onStatsChanged;
 
   final String heroId;
+  final String? skinId;
   int userHeroLevel;
 
   PlayerComponent({
     required Vector2 position,
     this.heroId = 'george',
+    this.skinId,
     this.userHeroLevel = 1,
   }) : super(
           position: position,
@@ -162,6 +169,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       goldenShieldTimer -= dt;
       if (goldenShieldTimer <= 0) {
         goldenShieldTimer = 0.0;
+        temporaryPetDamageAbsorption = 0.0;
       }
     }
 
@@ -366,6 +374,16 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final skin = HeroSkinStyle.resolve(heroId, skinId);
+    if (skin != null) canvas.saveLayer(null, Paint()..colorFilter = skin.filter);
+    try {
+      _renderAppearance(canvas);
+    } finally {
+      if (skin != null) canvas.restore();
+    }
+  }
+
+  void _renderAppearance(Canvas canvas) {
 
     final center = Offset(size.x / 2, size.y / 2);
 

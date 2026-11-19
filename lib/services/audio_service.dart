@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+
 import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -64,7 +65,8 @@ enum SfxSound {
     for (final sound in values) {
       if (sound.name.toLowerCase() == str.toLowerCase() ||
           sound.fileName.toLowerCase() == str.toLowerCase() ||
-          sound.fileName.replaceAll('.wav', '').toLowerCase() == str.toLowerCase()) {
+          sound.fileName.replaceAll('.wav', '').toLowerCase() ==
+              str.toLowerCase()) {
         return sound;
       }
     }
@@ -80,12 +82,8 @@ class AudioCallEvent {
   final bool? loop;
   final DateTime timestamp;
 
-  AudioCallEvent({
-    required this.method,
-    this.target,
-    this.volume,
-    this.loop,
-  }) : timestamp = DateTime.now();
+  AudioCallEvent({required this.method, this.target, this.volume, this.loop})
+    : timestamp = DateTime.now();
 
   @override
   String toString() =>
@@ -142,8 +140,45 @@ abstract class AudioService {
   void dispose();
 }
 
+/// Small output boundary so the real asynchronous playback ordering can be tested.
+abstract class BgmPlayback {
+  Future<void> play(String file, {required double volume});
+  Future<void> pause();
+  Future<void> resume();
+  Future<void> stop();
+  Future<void> setVolume(double volume);
+}
+
+class _FlameBgmPlayback implements BgmPlayback {
+  @override
+  Future<void> play(String file, {required double volume}) =>
+      FlameAudio.bgm.play(file, volume: volume);
+  @override
+  Future<void> pause() => FlameAudio.bgm.pause();
+  @override
+  Future<void> resume() => FlameAudio.bgm.resume();
+  @override
+  Future<void> stop() => FlameAudio.bgm.stop();
+  @override
+  Future<void> setVolume(double volume) =>
+      FlameAudio.bgm.audioPlayer.setVolume(volume);
+}
+
 /// Production implementation backed by FlameAudio with full zero-crash error suppression.
 class FlameAudioService implements AudioService {
+  FlameAudioService({BgmPlayback? bgmPlayback})
+    : _bgmPlayback = bgmPlayback ?? _FlameBgmPlayback(),
+      _hasCustomBgmPlayback = bgmPlayback != null,
+      _platformAvailable = !isHeadlessTest;
+  final BgmPlayback _bgmPlayback;
+  final bool _hasCustomBgmPlayback;
+  Future<void> get whenBgmSettled => _bgmCommands;
+  Future<void> _bgmCommands = Future<void>.value();
+  int _bgmRevision = 0;
+  bool _wantBgmPlayback = false;
+  bool _outputPlaying = false;
+  String? _loadedBgmFile;
+  double? _trackVolume;
   static const String _keyBgmVolume = 'audio_bgm_vol';
   static const String _keySfxVolume = 'audio_sfx_vol';
   static const String _keyBgmEnabled = 'audio_bgm_on';
@@ -158,7 +193,7 @@ class FlameAudioService implements AudioService {
   String? _rawBgmFileName;
   bool _isPlayingBgm = false;
   bool _initialized = false;
-  bool _platformAvailable = !isHeadlessTest;
+  bool _platformAvailable;
 
   /// Returns true when running in a headless Flutter test environment.
   static bool get isHeadlessTest {
@@ -264,130 +299,103 @@ class FlameAudioService implements AudioService {
     } catch (e) {
       debugPrint('AudioService: [suppressed SharedPreferences init] $e');
     }
+    await _queueBgmSync();
+  }
+
+  // Every request updates desired state immediately. Only one output command
+  // runs at a time; after an awaited play/resume, the latest settings win.
+  Future<void> _queueBgmSync() {
+    final request = ++_bgmRevision;
+    final next = _bgmCommands.then((_) async {
+      if ((!_platformAvailable && !_hasCustomBgmPlayback) ||
+          request != _bgmRevision)
+        return;
+      try {
+        int appliedRevision;
+        do {
+          appliedRevision = _bgmRevision;
+          final file = _rawBgmFileName;
+          if (file == null) {
+            if (_loadedBgmFile != null || _outputPlaying)
+              await _bgmPlayback.stop();
+            _loadedBgmFile = null;
+            _outputPlaying = false;
+          } else if (!isBgmEnabled || !_wantBgmPlayback) {
+            await _bgmPlayback.setVolume(0);
+            await _bgmPlayback.pause();
+            _outputPlaying = false;
+          } else {
+            if (_loadedBgmFile != file) {
+              await _bgmPlayback.play(
+                file,
+                volume: (_trackVolume ?? bgmVolume).clamp(0.0, 1.0),
+              );
+              _loadedBgmFile = file;
+              _outputPlaying = true;
+            } else if (!_outputPlaying) {
+              await _bgmPlayback.resume();
+              _outputPlaying = true;
+            }
+            // A mute or slider change can arrive while play() is awaiting I/O.
+            await _bgmPlayback.setVolume(
+              isBgmEnabled && _wantBgmPlayback
+                  ? (_trackVolume ?? bgmVolume).clamp(0.0, 1.0)
+                  : 0,
+            );
+          }
+        } while (appliedRevision != _bgmRevision);
+      } catch (error) {
+        _isPlayingBgm = false;
+        _outputPlaying = false;
+        _loadedBgmFile = null;
+        _handlePlatformException(error, 'BGM output synchronization');
+      }
+    });
+    _bgmCommands = next;
+    return next;
   }
 
   @override
-  Future<void> playBgm(dynamic track, {double? volume, bool loop = true}) async {
-    String? fileName;
-    BgmTrack? resolvedTrack;
-
-    if (track is BgmTrack) {
-      resolvedTrack = track;
-      fileName = track.fileName;
-    } else if (track is String) {
-      resolvedTrack = BgmTrack.fromName(track);
-      fileName = resolvedTrack?.fileName ?? track;
-    }
-
+  Future<void> playBgm(
+    dynamic track, {
+    double? volume,
+    bool loop = true,
+  }) async {
+    final resolvedTrack = BgmTrack.fromName(track);
+    final fileName =
+        resolvedTrack?.fileName ?? (track is String ? track : null);
     if (fileName == null || fileName.isEmpty) return;
-
     _currentBgmTrack = resolvedTrack;
     _rawBgmFileName = fileName;
-
-    if (!isBgmEnabled) {
-      _isPlayingBgm = false;
-      return;
-    }
-
-    final effectiveVolume = (volume ?? bgmVolume).clamp(0.0, 1.0);
-    _isPlayingBgm = true;
-
-    if (!_platformAvailable) return;
-
-    final completer = Completer<void>();
-    runZonedGuarded(() async {
-      try {
-        await FlameAudio.bgm.play(fileName!, volume: effectiveVolume);
-      } catch (e) {
-        _handlePlatformException(e, 'FlameAudio.bgm.play');
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-      }
-    }, (e, st) {
-      _handlePlatformException(e, 'unhandled zone bgm');
-      if (!completer.isCompleted) completer.complete();
-    });
-
-    return completer.future;
+    _trackVolume = volume?.clamp(0.0, 1.0);
+    _wantBgmPlayback = true;
+    _isPlayingBgm = isBgmEnabled;
+    await _queueBgmSync();
   }
 
   @override
   Future<void> stopBgm() async {
     _isPlayingBgm = false;
+    _wantBgmPlayback = false;
     _currentBgmTrack = null;
     _rawBgmFileName = null;
-
-    if (!_platformAvailable) return;
-
-    final completer = Completer<void>();
-    runZonedGuarded(() async {
-      try {
-        await FlameAudio.bgm.stop();
-      } catch (e) {
-        _handlePlatformException(e, 'FlameAudio.bgm.stop');
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-      }
-    }, (e, st) {
-      _handlePlatformException(e, 'unhandled zone stopBgm');
-      if (!completer.isCompleted) completer.complete();
-    });
-    return completer.future;
+    _trackVolume = null;
+    await _queueBgmSync();
   }
 
   @override
   Future<void> pauseBgm() async {
     _isPlayingBgm = false;
-
-    if (!_platformAvailable) return;
-
-    final completer = Completer<void>();
-    runZonedGuarded(() async {
-      try {
-        await FlameAudio.bgm.pause();
-      } catch (e) {
-        _handlePlatformException(e, 'FlameAudio.bgm.pause');
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-      }
-    }, (e, st) {
-      _handlePlatformException(e, 'unhandled zone pauseBgm');
-      if (!completer.isCompleted) completer.complete();
-    });
-    return completer.future;
+    _wantBgmPlayback = false;
+    await _queueBgmSync();
   }
 
   @override
   Future<void> resumeBgm() async {
-    if (!isBgmEnabled) return;
-    if (_rawBgmFileName == null && _currentBgmTrack == null) return;
-
+    if (!isBgmEnabled || _rawBgmFileName == null) return;
+    _wantBgmPlayback = true;
     _isPlayingBgm = true;
-
-    if (!_platformAvailable) return;
-
-    final completer = Completer<void>();
-    runZonedGuarded(() async {
-      try {
-        await FlameAudio.bgm.resume();
-      } catch (e) {
-        _handlePlatformException(e, 'FlameAudio.bgm.resume');
-        final fileName = _currentBgmTrack?.fileName ?? _rawBgmFileName;
-        if (fileName != null && _platformAvailable) {
-          try {
-            await FlameAudio.bgm.play(fileName, volume: bgmVolume);
-          } catch (inner) {
-            _handlePlatformException(inner, 'FlameAudio.bgm fallback play');
-          }
-        }
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-      }
-    }, (e, st) {
-      _handlePlatformException(e, 'unhandled zone resumeBgm');
-      if (!completer.isCompleted) completer.complete();
-    });
-    return completer.future;
+    await _queueBgmSync();
   }
 
   @override
@@ -410,18 +418,21 @@ class FlameAudioService implements AudioService {
     if (!_platformAvailable) return;
 
     final completer = Completer<void>();
-    runZonedGuarded(() async {
-      try {
-        await FlameAudio.play(fileName!, volume: effectiveVolume);
-      } catch (e) {
-        _handlePlatformException(e, 'FlameAudio.play sfx');
-      } finally {
+    runZonedGuarded(
+      () async {
+        try {
+          await FlameAudio.play(fileName!, volume: effectiveVolume);
+        } catch (e) {
+          _handlePlatformException(e, 'FlameAudio.play sfx');
+        } finally {
+          if (!completer.isCompleted) completer.complete();
+        }
+      },
+      (e, st) {
+        _handlePlatformException(e, 'unhandled zone sfx');
         if (!completer.isCompleted) completer.complete();
-      }
-    }, (e, st) {
-      _handlePlatformException(e, 'unhandled zone sfx');
-      if (!completer.isCompleted) completer.complete();
-    });
+      },
+    );
 
     return completer.future;
   }
@@ -439,10 +450,12 @@ class FlameAudioService implements AudioService {
   @override
   void setBgmVolume(double volume) {
     final clamped = volume.clamp(0.0, 1.0);
+    _trackVolume = null;
     if (_bgmVolumeNotifier.value != clamped) {
       _bgmVolumeNotifier.value = clamped;
       _persistPreference(_keyBgmVolume, clamped);
     }
+    unawaited(_queueBgmSync());
   }
 
   @override
@@ -492,6 +505,7 @@ class FlameAudioService implements AudioService {
 
   @override
   void dispose() {
+    unawaited(stopBgm());
     _bgmVolumeNotifier.dispose();
     _sfxVolumeNotifier.dispose();
     _isBgmEnabledNotifier.dispose();
@@ -573,17 +587,23 @@ class MockAudioService implements AudioService {
   }
 
   @override
-  Future<void> playBgm(dynamic track, {double? volume, bool loop = true}) async {
+  Future<void> playBgm(
+    dynamic track, {
+    double? volume,
+    bool loop = true,
+  }) async {
     final resolved = track is BgmTrack ? track : BgmTrack.fromName(track);
     _currentBgmTrack = resolved;
     _isPlayingBgm = isBgmEnabled;
 
-    callHistory.add(AudioCallEvent(
-      method: 'playBgm',
-      target: track,
-      volume: volume ?? bgmVolume,
-      loop: loop,
-    ));
+    callHistory.add(
+      AudioCallEvent(
+        method: 'playBgm',
+        target: track,
+        volume: volume ?? bgmVolume,
+        loop: loop,
+      ),
+    );
   }
 
   @override
@@ -610,11 +630,13 @@ class MockAudioService implements AudioService {
   @override
   Future<void> playSfx(dynamic sound, {double? volume}) async {
     if (!isSfxEnabled) return;
-    callHistory.add(AudioCallEvent(
-      method: 'playSfx',
-      target: sound,
-      volume: volume ?? sfxVolume,
-    ));
+    callHistory.add(
+      AudioCallEvent(
+        method: 'playSfx',
+        target: sound,
+        volume: volume ?? sfxVolume,
+      ),
+    );
   }
 
   @override

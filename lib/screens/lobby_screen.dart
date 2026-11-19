@@ -15,6 +15,7 @@ import 'lucky_wheel_dialog.dart';
 import 'pvp_arena_screen.dart';
 import 'settings_dialog.dart';
 import 'shop_dialog.dart';
+import '../core/hero_skin_style.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/hero_showcase_painter.dart';
 import 'widgets/lobby_friends_sidebar.dart';
@@ -1160,7 +1161,7 @@ class _LobbyScreenState extends State<LobbyScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               if (profile.selectedCompanionId != null ||
-                  profile.selectedSkinId != null) ...[
+                  HeroSkinStyle.resolve(profile.selectedHeroId, profile.selectedSkinId) != null) ...[
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1170,7 +1171,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                         label: 'TRỢ THỦ AI',
                         color: Colors.cyanAccent,
                       ),
-                    if (profile.selectedSkinId != null) ...[
+                    if (HeroSkinStyle.resolve(profile.selectedHeroId, profile.selectedSkinId) != null) ...[
                       const SizedBox(width: 8),
                       _buildMiniBadge(
                         icon: Icons.auto_awesome_rounded,
@@ -1185,6 +1186,7 @@ class _LobbyScreenState extends State<LobbyScreen>
 
               HeroShowcaseWidget(
                 heroId: profile.selectedHeroId,
+                skinId: profile.selectedSkinId,
                 themeColor: heroInfo.themeColor,
               ),
 
@@ -1457,6 +1459,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                         // CANVAS SHOWCASE NHÂN VẬT
                         HeroShowcaseWidget(
                           heroId: member.heroId,
+                          skinId: member.isMe ? profile.selectedSkinId : null,
                           themeColor: heroInfo.themeColor,
                           width: heroWidth,
                           height: heroHeight,

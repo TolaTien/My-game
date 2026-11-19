@@ -2,9 +2,11 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../registry/sprite_image_cache.dart';
+import '../../core/hero_skin_style.dart';
 
 class HeroShowcaseWidget extends StatefulWidget {
   final String heroId;
+  final String? skinId;
   final Color themeColor;
   final double width;
   final double height;
@@ -12,6 +14,7 @@ class HeroShowcaseWidget extends StatefulWidget {
   const HeroShowcaseWidget({
     super.key,
     required this.heroId,
+    this.skinId,
     required this.themeColor,
     this.width = 260,
     this.height = 270,
@@ -51,6 +54,7 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
           child: CustomPaint(
             painter: _HeroCanvasPainter(
               heroId: widget.heroId,
+              skinId: widget.skinId,
               themeColor: widget.themeColor,
               time: _animController.value * 2 * pi,
               animProgress: _animController.value,
@@ -64,12 +68,14 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
 
 class _HeroCanvasPainter extends CustomPainter {
   final String heroId;
+  final String? skinId;
   final Color themeColor;
   final double time;
   final double animProgress;
 
   _HeroCanvasPainter({
     required this.heroId,
+    this.skinId,
     required this.themeColor,
     required this.time,
     required this.animProgress,
@@ -110,6 +116,17 @@ class _HeroCanvasPainter extends CustomPainter {
     // 4. VẼ NHÂN VẬT TƯƠNG ỨNG VỚI HERO ID
     final breathOffset = sin(time * 2.2) * 4.0;
     final heroCenterY = cy + 6 + breathOffset;
+
+    final skin = HeroSkinStyle.resolve(heroId, skinId);
+    if (skin != null) canvas.saveLayer(null, Paint()..colorFilter = skin.filter);
+    try {
+      _paintHero(canvas, size, cx, heroCenterY, daisCenter);
+    } finally {
+      if (skin != null) canvas.restore();
+    }
+  }
+
+  void _paintHero(Canvas canvas, Size size, double cx, double heroCenterY, Offset daisCenter) {
 
     // 4.1 SHADOW (shadow_01 / shadow): Chạy đầy đủ 16 frames IDLE trong sảnh
     if (heroId == 'shadow_01' || heroId == 'shadow') {
@@ -1760,6 +1777,7 @@ class _HeroCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _HeroCanvasPainter oldDelegate) {
     return oldDelegate.heroId != heroId ||
+        oldDelegate.skinId != skinId ||
         oldDelegate.themeColor != themeColor ||
         oldDelegate.time != time ||
         oldDelegate.animProgress != animProgress;

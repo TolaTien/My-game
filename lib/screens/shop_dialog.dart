@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+
 import '../models/player_profile.dart';
 import '../services/player_storage.dart';
 import '../core/constants.dart';
+import '../core/hero_skin_style.dart';
+import 'widgets/shop_visuals.dart';
 
 class ShopDialog extends StatefulWidget {
   const ShopDialog({super.key});
@@ -13,6 +17,8 @@ class ShopDialog extends StatefulWidget {
 class _ShopDialogState extends State<ShopDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _listControllers = List.generate(3, (_) => ScrollController());
+  final _cardExtents = List.filled(3, 200.0);
 
   @override
   void initState() {
@@ -23,6 +29,9 @@ class _ShopDialogState extends State<ShopDialog>
   @override
   void dispose() {
     _tabController.dispose();
+    for (final controller in _listControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -33,10 +42,106 @@ class _ShopDialogState extends State<ShopDialog>
           message,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: isSuccess ? Colors.green.shade800 : Colors.red.shade800,
+        backgroundColor: isSuccess
+            ? Colors.green.shade800
+            : Colors.red.shade800,
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+
+  Widget _scrollableTab(Widget Function() buildList, int index) {
+    final controller = _listControllers[index];
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final columns = ((bounds.maxWidth - 32) / 210).floor().clamp(1, 4);
+        final extent = (bounds.maxWidth - 32) / columns;
+        _cardExtents[index] = extent;
+        void scroll(int direction) {
+          if (!controller.hasClients) return;
+          final position = controller.position;
+          final currentCard = (position.pixels / extent).round();
+          final target = ((currentCard + direction * columns) * extent)
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+              .toDouble();
+          controller.animateTo(
+            target,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+
+        return Column(
+          children: [
+            Expanded(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    ...ScrollConfiguration.of(context).dragDevices,
+                    PointerDeviceKind.mouse,
+                  },
+                  scrollbars: false,
+                ),
+                child: Scrollbar(
+                  controller: controller,
+                  thumbVisibility: true,
+                  thickness: 3,
+                  radius: const Radius.circular(3),
+                  interactive: true,
+                  notificationPredicate: (notification) =>
+                      notification.depth == 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: buildList(),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 32,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: 'Cuộn sang trái',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 32,
+                    ),
+                    onPressed: () => scroll(-1),
+                    icon: const Icon(
+                      Icons.chevron_left,
+                      color: Colors.amberAccent,
+                    ),
+                  ),
+                  const Flexible(
+                    child: Text(
+                      'Kéo hoặc vuốt để xem thêm',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white60, fontSize: 10),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cuộn sang phải',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 32,
+                    ),
+                    onPressed: () => scroll(1),
+                    icon: const Icon(
+                      Icons.chevron_right,
+                      color: Colors.amberAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -47,7 +152,10 @@ class _ShopDialogState extends State<ShopDialog>
       builder: (context, profile, _) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 14,
+          ),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 760, maxHeight: 420),
             decoration: BoxDecoration(
@@ -73,23 +181,33 @@ class _ShopDialogState extends State<ShopDialog>
               children: [
                 // 1. THANH TIÊU ĐỀ & TIỀN TỆ
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.storefront_rounded,
-                          color: Colors.amberAccent, size: 26),
+                      const Icon(
+                        Icons.storefront_rounded,
+                        color: Colors.amberAccent,
+                        size: 26,
+                      ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'CỬA HÀNG VẬT PHẨM',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                          color: Colors.amberAccent,
+                      const Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'CỬA HÀNG VẬT PHẨM',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              color: Colors.amberAccent,
+                            ),
+                          ),
                         ),
                       ),
-                      const Spacer(),
 
                       // Số dư Xu (1 Xu = 1000 Vàng)
                       InkWell(
@@ -151,8 +269,10 @@ class _ShopDialogState extends State<ShopDialog>
                       // Nút đóng
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded,
-                            color: Colors.white70),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ],
@@ -197,15 +317,16 @@ class _ShopDialogState extends State<ShopDialog>
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
                       // TAB 1: NHÂN VẬT
-                      _buildHeroesTab(profile),
+                      _scrollableTab(() => _buildHeroesTab(profile), 0),
 
                       // TAB 2: TRỢ THỦ AI
-                      _buildCompanionsTab(profile),
+                      _scrollableTab(() => _buildCompanionsTab(profile), 1),
 
                       // TAB 3: TRANG PHỤC (SKIN)
-                      _buildSkinsTab(profile),
+                      _scrollableTab(() => _buildSkinsTab(profile), 2),
                     ],
                   ),
                 ),
@@ -234,7 +355,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Xạ Thủ Ranger',
         subtitle: 'Cung Thủ Tầm Xa',
         role: 'TẦM XA / CƠ ĐỘNG',
-        description: 'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
+        description:
+            'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
         color: const Color(0xFF00E676),
         icon: Icons.gps_fixed_rounded,
       ),
@@ -243,7 +365,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Hiệp Sĩ Tanker',
         subtitle: 'Hộ Vệ Hoàng Gia',
         role: 'PHÒNG THỦ / PHẢN ĐÒN',
-        description: 'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
+        description:
+            'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
         color: const Color(0xFF00B0FF),
         icon: Icons.security_rounded,
       ),
@@ -252,7 +375,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Ninja Sát Thủ',
         subtitle: 'Bóng Đêm Hắc Ám',
         role: 'CHÍ MẠNG / ÁM SÁT',
-        description: 'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
+        description:
+            'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
         color: const Color(0xFFAB47BC),
         icon: Icons.flash_on_rounded,
       ),
@@ -274,14 +398,15 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Lôi quang trảm chớp nhoáng, bão lốc xoáy lôi điện, thiên phạt cuồng lôi.',
         color: const Color(0xFFFFD700),
         icon: Icons.bolt_rounded,
-        portraitAsset: 'assets/images/heroes/kaelen_portrait.png',
+        portraitAsset: 'assets/images/heroes/kale/kaelen_portrait.png',
       ),
       _HeroItem(
         id: 'shadow_01',
         name: 'Shadow (SHADOW-01)',
         subtitle: 'Sát Thủ Hư Không',
         role: 'SÁT THỦ / HƯ KHÔNG',
-        description: 'Plasma xuyên thấu, lướt bóng hư không, xoay bão dao găm bạo kích.',
+        description:
+            'Plasma xuyên thấu, lướt bóng hư không, xoay bão dao găm bạo kích.',
         color: const Color(0xFF9C27B0),
         icon: Icons.nights_stay_rounded,
         portraitAsset: 'assets/images/heroes/shadow_01_portrait.png',
@@ -294,13 +419,16 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Hỏa cầu nổ diện rộng, cột lửa ma pháp thiêu đốt, thái dương bộc phá hủy diệt.',
         color: const Color(0xFFFF5722),
         icon: Icons.local_fire_department_rounded,
-        portraitAsset: 'assets/images/heroes/ember/ember.png',
+        portraitAsset: 'assets/images/heroes/ember/Ember-idle.png',
       ),
     ];
 
     return ListView.builder(
+      controller: _listControllers[0],
+      itemExtent: _cardExtents[0],
+      physics: ShopCardScrollPhysics(_cardExtents[0]),
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: heroes.length,
       itemBuilder: (context, index) {
         final hero = heroes[index];
@@ -317,8 +445,8 @@ class _ShopDialogState extends State<ShopDialog>
               color: isSelected
                   ? Colors.amberAccent
                   : isUnlocked
-                      ? Colors.white24
-                      : Colors.white12,
+                  ? Colors.white24
+                  : Colors.white12,
               width: isSelected ? 2.5 : 1,
             ),
             boxShadow: isSelected
@@ -326,7 +454,7 @@ class _ShopDialogState extends State<ShopDialog>
                     BoxShadow(
                       color: Colors.amberAccent.withValues(alpha: 0.3),
                       blurRadius: 10,
-                    )
+                    ),
                   ]
                 : null,
           ),
@@ -341,16 +469,15 @@ class _ShopDialogState extends State<ShopDialog>
                 decoration: BoxDecoration(
                   color: hero.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: hero.color.withValues(alpha: 0.5),
-                  ),
+                  border: Border.all(color: hero.color.withValues(alpha: 0.5)),
                 ),
                 child: hero.portraitAsset != null
-                    ? Image.asset(
-                        hero.portraitAsset!,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.none,
-                        errorBuilder: (_, _, _) => Center(
+                    ? ShopSpritePreview(
+                        key: ValueKey('shop_hero_${hero.id}'),
+                        asset: hero.portraitAsset!,
+                        columns: hero.id == 'ember_02' ? 5 : 1,
+                        rows: hero.id == 'ember_02' ? 5 : 1,
+                        fallback: Center(
                           child: Icon(hero.icon, color: hero.color, size: 40),
                         ),
                       )
@@ -364,15 +491,19 @@ class _ShopDialogState extends State<ShopDialog>
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      hero.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12.5,
-                        color: Colors.white,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        hero.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.5,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Container(
@@ -481,15 +612,19 @@ class _ShopDialogState extends State<ShopDialog>
                       const price = GameConstants.heroUnlockPrice;
                       if (profile.gold < price) {
                         _showNotification(
-                            'Bạn không đủ Vàng! Cần 100 Vàng để mở khóa.',
-                            isSuccess: false);
+                          'Bạn không đủ Vàng! Cần 100 Vàng để mở khóa.',
+                          isSuccess: false,
+                        );
                         return;
                       }
                       final success = await PlayerStorage.unlockHero(
-                          hero.id, price);
+                        hero.id,
+                        price,
+                      );
                       if (success) {
                         _showNotification(
-                            'Mở khóa thành công ${hero.name} (-100 Vàng)!');
+                          'Mở khóa thành công ${hero.name} (-100 Vàng)!',
+                        );
                       }
                     },
                     icon: const Icon(Icons.monetization_on_rounded, size: 14),
@@ -517,7 +652,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'comp_attack',
         name: 'Trợ Thủ Công Kích',
         tag: 'ATTACK DRONE',
-        description: 'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
+        description:
+            'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
         price: 500,
         color: const Color(0xFFFF5252),
         icon: Icons.rocket_launch_rounded,
@@ -535,7 +671,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'comp_control',
         name: 'Trợ Thủ Khống Chế',
         tag: 'FROST DRONE',
-        description: 'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
+        description:
+            'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
         price: 700,
         color: const Color(0xFF18FFFF),
         icon: Icons.ac_unit_rounded,
@@ -603,8 +740,11 @@ class _ShopDialogState extends State<ShopDialog>
     ];
 
     return ListView.builder(
+      controller: _listControllers[1],
+      itemExtent: _cardExtents[1],
+      physics: ShopCardScrollPhysics(_cardExtents[1]),
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: companions.length,
       itemBuilder: (context, index) {
         final comp = companions[index];
@@ -621,8 +761,8 @@ class _ShopDialogState extends State<ShopDialog>
               color: isEquipped
                   ? Colors.amberAccent
                   : isUnlocked
-                      ? Colors.cyanAccent.withValues(alpha: 0.5)
-                      : Colors.white12,
+                  ? Colors.cyanAccent.withValues(alpha: 0.5)
+                  : Colors.white12,
               width: isEquipped ? 2 : 1,
             ),
           ),
@@ -699,7 +839,10 @@ class _ShopDialogState extends State<ShopDialog>
                     },
                     child: const Text(
                       'GỠ TRANG BỊ',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -721,7 +864,10 @@ class _ShopDialogState extends State<ShopDialog>
                     },
                     child: const Text(
                       'TRANG BỊ',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -739,15 +885,20 @@ class _ShopDialogState extends State<ShopDialog>
                     ),
                     onPressed: () async {
                       if (profile.gold < comp.price) {
-                        _showNotification('Không đủ Vàng để mua trợ thủ!',
-                            isSuccess: false);
+                        _showNotification(
+                          'Không đủ Vàng để mua trợ thủ!',
+                          isSuccess: false,
+                        );
                         return;
                       }
                       final success = await PlayerStorage.unlockCompanion(
-                          comp.id, comp.price);
+                        comp.id,
+                        comp.price,
+                      );
                       if (success) {
                         _showNotification(
-                            'Đã mở khóa ${comp.name} (-${comp.price} Vàng)!');
+                          'Đã mở khóa ${comp.name} (-${comp.price} Vàng)!',
+                        );
                       }
                     },
                     icon: const Icon(Icons.monetization_on_rounded, size: 14),
@@ -823,8 +974,7 @@ class _ShopDialogState extends State<ShopDialog>
           ),
           child: Row(
             children: const [
-              Icon(Icons.verified_rounded,
-                  size: 16, color: Colors.cyanAccent),
+              Icon(Icons.verified_rounded, size: 16, color: Colors.cyanAccent),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -843,13 +993,17 @@ class _ShopDialogState extends State<ShopDialog>
 
         Expanded(
           child: ListView.builder(
+            controller: _listControllers[2],
+            itemExtent: _cardExtents[2],
+            physics: ShopCardScrollPhysics(_cardExtents[2]),
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 6),
             itemCount: skins.length,
             itemBuilder: (context, index) {
               final skin = skins[index];
               final isUnlocked = profile.unlockedSkinIds.contains(skin.id);
-              final isEquipped = profile.selectedSkinId == skin.id;
+              final isEquipped = profile.selectedSkinId == skin.id &&
+                  HeroSkinStyle.resolve(profile.selectedHeroId, skin.id) != null;
 
               return Container(
                 width: 160,
@@ -861,8 +1015,8 @@ class _ShopDialogState extends State<ShopDialog>
                     color: isEquipped
                         ? skin.color
                         : isUnlocked
-                            ? Colors.white24
-                            : Colors.white12,
+                        ? Colors.white24
+                        : Colors.white12,
                     width: isEquipped ? 2.5 : 1,
                   ),
                 ),
@@ -871,7 +1025,7 @@ class _ShopDialogState extends State<ShopDialog>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
-                      height: 70,
+                      height: 50,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -887,8 +1041,11 @@ class _ShopDialogState extends State<ShopDialog>
                         ),
                       ),
                       child: Center(
-                        child: Icon(Icons.checkroom_rounded,
-                            color: skin.color, size: 38),
+                        child: Icon(
+                          Icons.checkroom_rounded,
+                          color: skin.color,
+                          size: 38,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -903,6 +1060,8 @@ class _ShopDialogState extends State<ShopDialog>
                     ),
                     Text(
                       'Tướng: ${skin.forHero}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 9.5,
                         color: Colors.white60,
@@ -947,8 +1106,11 @@ class _ShopDialogState extends State<ShopDialog>
                             ),
                           ),
                           onPressed: () async {
-                            await PlayerStorage.selectSkin(skin.id);
-                            _showNotification('Đã mặc ${skin.name}!');
+                            final equipped = await PlayerStorage.selectSkin(skin.id);
+                            if (!mounted) return;
+                            _showNotification(equipped ? 'Đã mặc ${skin.name}!'
+                                : 'Hãy chọn tướng ${skin.forHero} trước khi mặc skin này.',
+                              isSuccess: equipped);
                           },
                           child: const Text(
                             'MẶC',
@@ -974,18 +1136,27 @@ class _ShopDialogState extends State<ShopDialog>
                           onPressed: () async {
                             if (profile.gold < skin.priceGold) {
                               _showNotification(
-                                  'Không đủ Vàng! Cần ${skin.priceGold} Vàng.',
-                                  isSuccess: false);
+                                'Không đủ Vàng! Cần ${skin.priceGold} Vàng.',
+                                isSuccess: false,
+                              );
                               return;
                             }
                             final success = await PlayerStorage.unlockSkin(
-                                skin.id, skin.priceGold);
+                              skin.id,
+                              skin.priceGold,
+                            );
                             if (success) {
                               _showNotification(
-                                  'Đã sở hữu ${skin.name} (-${skin.priceGold} Vàng)!');
+                                PlayerStorage.currentProfile.selectedSkinId == skin.id
+                                  ? 'Đã mua và mặc ${skin.name} (-${skin.priceGold} Vàng)!'
+                                  : 'Đã sở hữu ${skin.name}. Chọn tướng ${skin.forHero} để mặc.',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.monetization_on_rounded, size: 14),
+                          icon: const Icon(
+                            Icons.monetization_on_rounded,
+                            size: 14,
+                          ),
                           label: Text(
                             '${skin.priceGold} VÀNG',
                             style: const TextStyle(
@@ -1020,8 +1191,10 @@ class _CurrencyBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatted =
-        value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final formatted = value.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(

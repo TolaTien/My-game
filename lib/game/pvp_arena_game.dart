@@ -111,6 +111,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player = PlayerComponent(
       position: _localSpawn,
       heroId: localHero,
+      skinId: PlayerStorage.currentProfile.selectedSkinId,
     );
     bot = PvpBotPlayerComponent(
       position: _opponentSpawn,

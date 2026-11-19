@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/stat_growth_formula.dart';
+import '../core/hero_skin_style.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
 import 'friend_party_service.dart';
@@ -290,6 +291,8 @@ class PlayerStorage {
       gold: currentProfile.gold - price,
       unlockedHeroIds: newUnlocked,
       selectedHeroId: heroId,
+      clearSkin: currentProfile.selectedSkinId != null &&
+          HeroSkinStyle.resolve(heroId, currentProfile.selectedSkinId) == null,
       heroLevels: newLevels,
       heroExp: newExps,
     );
@@ -300,7 +303,9 @@ class PlayerStorage {
   /// Chọn nhân vật xuất chiến
   static Future<void> selectHero(String heroId) async {
     if (!currentProfile.unlockedHeroIds.contains(heroId)) return;
-    final updated = currentProfile.copyWith(selectedHeroId: heroId);
+    final updated = currentProfile.copyWith(selectedHeroId: heroId,
+      clearSkin: currentProfile.selectedSkinId != null &&
+          HeroSkinStyle.resolve(heroId, currentProfile.selectedSkinId) == null);
     await saveProfile(updated);
     unawaited(FriendPartyService.instance.updateMyPartyHero(heroId));
   }
@@ -339,18 +344,24 @@ class PlayerStorage {
     final updated = currentProfile.copyWith(
       gold: currentProfile.gold - goldPrice,
       unlockedSkinIds: newSkins,
-      selectedSkinId: skinId,
+      selectedSkinId: HeroSkinStyle.resolve(currentProfile.selectedHeroId, skinId) != null
+          ? skinId : currentProfile.selectedSkinId,
     );
     await saveProfile(updated);
     return true;
   }
 
   /// Chọn Skin trang phục
-  static Future<void> selectSkin(String? skinId) async {
+  static Future<bool> selectSkin(String? skinId) async {
+    if (skinId != null && (!currentProfile.unlockedSkinIds.contains(skinId) ||
+        HeroSkinStyle.resolve(currentProfile.selectedHeroId, skinId) == null)) {
+      return false;
+    }
     final updated = currentProfile.copyWith(
       selectedSkinId: skinId,
       clearSkin: skinId == null,
     );
     await saveProfile(updated);
+    return true;
   }
 }
