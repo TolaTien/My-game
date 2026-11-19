@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/player_profile.dart';
 import '../services/player_storage.dart';
 import '../core/constants.dart';
@@ -13,6 +14,95 @@ class ShopDialog extends StatefulWidget {
 class _ShopDialogState extends State<ShopDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isConvertingXu = false;
+
+  Future<void> _requestXuConversion(PlayerProfile profile) async {
+    if (_isConvertingXu) return;
+    setState(() => _isConvertingXu = true);
+    try {
+      int? requestedAmount = 1;
+      final amount = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, updateDialog) {
+            final value = requestedAmount ?? 0;
+            final error = profile.xu == 0
+                ? 'Bạn chưa có Xu để đổi.'
+                : value <= 0
+                    ? 'Nhập ít nhất 1 Xu.'
+                    : value > profile.xu
+                        ? 'Không đủ Xu để đổi.'
+                        : null;
+
+            return AlertDialog(
+              scrollable: true,
+              title: const Text('Đổi Xu sang Vàng'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Số dư: ${profile.xu} Xu'),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const Key('xu_conversion_amount_field'),
+                    initialValue: '1',
+                    enabled: profile.xu > 0,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      labelText: 'Số Xu muốn đổi',
+                      errorText: error,
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (text) => updateDialog(() {
+                      requestedAmount = int.tryParse(text);
+                    }),
+                  ),
+                  if (error == null) ...[
+                    const SizedBox(height: 8),
+                    Text('Nhận ${value * PlayerStorage.goldPerXu} Vàng'),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  key: const Key('xu_conversion_cancel_button'),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Hủy'),
+                ),
+                FilledButton(
+                  key: const Key('xu_conversion_confirm_button'),
+                  onPressed: error == null
+                      ? () {
+                          if (ModalRoute.of(dialogContext)?.isCurrent == true) {
+                            Navigator.of(dialogContext).pop(value);
+                          }
+                        }
+                      : null,
+                  child: const Text('Xác nhận đổi'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (amount == null || !mounted) return;
+      final ok = await PlayerStorage.convertXuToGold(amount);
+      if (!mounted) return;
+      if (ok) {
+        _showNotification(
+          'Đã đổi $amount Xu ➔ +${(amount * PlayerStorage.goldPerXu).toString()} Vàng thành công!',
+        );
+      } else {
+        _showNotification(
+          'Số dư Xu đã thay đổi. Vui lòng kiểm tra lại rồi thử lần nữa.',
+          isSuccess: false,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConvertingXu = false);
+    }
+  }
 
   @override
   void initState() {
@@ -47,9 +137,14 @@ class _ShopDialogState extends State<ShopDialog>
       builder: (context, profile, _) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 760, maxHeight: 420),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 370 || constraints.maxWidth < 620;
+              return SizedBox(
+                width: constraints.maxWidth.clamp(0.0, 760.0),
+                height: constraints.maxHeight.clamp(0.0, 420.0),
+                child: Container(
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF1B192E), Color(0xFF100E1C)],
@@ -73,104 +168,100 @@ class _ShopDialogState extends State<ShopDialog>
               children: [
                 // 1. THANH TIÊU ĐỀ & TIỀN TỆ
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 4 : 10),
                   child: Row(
                     children: [
                       const Icon(Icons.storefront_rounded,
                           color: Colors.amberAccent, size: 26),
                       const SizedBox(width: 8),
-                      const Text(
+                      Flexible(
+                        child: Text(
                         'CỬA HÀNG VẬT PHẨM',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: compact ? 14 : 18,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
+                          letterSpacing: compact ? 0.5 : 1.5,
                           color: Colors.amberAccent,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const Spacer(),
+                      ),
+                      if (!compact) const Spacer(),
 
-                      // Số dư Xu (1 Xu = 1000 Vàng)
-                      InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () async {
-                          final ok = await PlayerStorage.convertXuToGold(1);
-                          if (ok) {
-                            _showNotification(
-                              'Đã đổi 1 Xu ➔ +1.000 Vàng thành công!',
-                            );
-                          } else {
-                            _showNotification(
-                              'Không đủ Xu để đổi (1 Xu = 1.000 Vàng)!',
-                              isSuccess: false,
-                            );
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.orangeAccent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.orangeAccent),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.currency_exchange_rounded,
-                                color: Colors.orangeAccent,
-                                size: 15,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                '${profile.xu} XU (Đổi 1K Vàng)',
-                                style: const TextStyle(
-                                  color: Colors.orangeAccent,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                      if (!compact)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _CurrencyBadge(
+                            icon: Icons.monetization_on_rounded,
+                            color: Colors.amberAccent,
+                            value: profile.gold,
                           ),
                         ),
+                      if (!compact)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _CurrencyBadge(
+                            icon: Icons.diamond_rounded,
+                            color: Colors.cyanAccent,
+                            value: profile.diamonds,
+                          ),
+                        ),
+                      const SizedBox(width: 6),
+                      OutlinedButton.icon(
+                        key: const Key('open_xu_conversion_button'),
+                        onPressed: _isConvertingXu ? null : () => _requestXuConversion(profile),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orangeAccent,
+                          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.currency_exchange_rounded, size: 14),
+                        label: const Text('Đổi Xu'),
                       ),
-                      const SizedBox(width: 8),
-
-                      // Số dư Vàng
-                      _CurrencyBadge(
-                        icon: Icons.monetization_on_rounded,
-                        color: Colors.amberAccent,
-                        value: profile.gold,
-                      ),
-                      const SizedBox(width: 10),
-
-                      // Số dư Kim Cương
-                      _CurrencyBadge(
-                        icon: Icons.diamond_rounded,
-                        color: Colors.cyanAccent,
-                        value: profile.diamonds,
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Nút đóng
                       IconButton(
+                        key: const Key('close_shop_button'),
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded,
-                            color: Colors.white70),
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
                         visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                       ),
                     ],
                   ),
                 ),
 
+                Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      children: [
+                        Text(
+                          '${profile.xu} Xu • 1 Xu = ${PlayerStorage.goldPerXu} Vàng',
+                          key: const Key('shop_xu_balance'),
+                          style: const TextStyle(color: Colors.orangeAccent),
+                        ),
+                        if (compact)
+                        _CurrencyBadge(
+                          icon: Icons.monetization_on_rounded,
+                          color: Colors.amberAccent,
+                          value: profile.gold,
+                        ),
+                        if (compact)
+                        _CurrencyBadge(
+                          icon: Icons.diamond_rounded,
+                          color: Colors.cyanAccent,
+                          value: profile.diamonds,
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // 2. TAB SELECTOR
                 Container(
-                  height: 38,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  height: compact ? 32 : 38,
+                  margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(10),
@@ -186,39 +277,37 @@ class _ShopDialogState extends State<ShopDialog>
                     ),
                     labelColor: Colors.black87,
                     unselectedLabelColor: Colors.white70,
-                    labelStyle: const TextStyle(
+                    labelStyle: TextStyle(
                       fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      letterSpacing: 1,
+                      fontSize: compact ? 10 : 13,
+                      letterSpacing: compact ? 0 : 1,
                     ),
                     tabs: const [
                       Tab(text: 'NHÂN VẬT'),
                       Tab(text: 'TRỢ THỦ AI'),
-                      Tab(text: 'TRANG PHỤC (SKIN)'),
+                      Tab(text: 'SKIN'),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                SizedBox(height: compact ? 4 : 10),
 
                 // 3. NỘI DUNG TỪNG TAB
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // TAB 1: NHÂN VẬT
-                      _buildHeroesTab(profile),
-
-                      // TAB 2: TRỢ THỦ AI
-                      _buildCompanionsTab(profile),
-
-                      // TAB 3: TRANG PHỤC (SKIN)
-                      _buildSkinsTab(profile),
+                      _buildHeroesTab(profile, compact: compact),
+                      _buildCompanionsTab(profile, compact: compact),
+                      _buildSkinsTab(profile, compact: compact),
                     ],
                   ),
                 ),
               ],
             ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -226,7 +315,7 @@ class _ShopDialogState extends State<ShopDialog>
   }
 
   // --- TAB 1: NHÂN VẬT (ĐỒNG GIÁ 100 VÀNG THEO MỤC 6) ---
-  Widget _buildHeroesTab(PlayerProfile profile) {
+  Widget _buildHeroesTab(PlayerProfile profile, {required bool compact}) {
     final heroes = [
       _HeroItem(
         id: 'george',
@@ -272,7 +361,7 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Song đao Lôi Hoàng: Lôi Ảnh Trảm (Dash sét), Lôi Điện Hộ Thể (4 kiếm xoay) & Thiên Phạt Lôi Ngục.',
         color: const Color(0xFF00E5FF),
         icon: Icons.bolt_rounded,
-        portraitAsset: 'assets/images/heroes/kaelen_portrait.png',
+        portraitAsset: 'assets/images/heroes/kaelen/kaelen_portrait.png',
       ),
       _HeroItem(
         id: 'nova_blade',
@@ -282,7 +371,7 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Song kiếm Cyber Neon: Energy Slash (120% DMG), Shadow Dash (Lướt tím AoE) & Quantum Burst (Nổ lượng tử).',
         color: const Color(0xFF18FFFF),
         icon: Icons.auto_fix_high_rounded,
-        portraitAsset: 'assets/images/heroes/nova_blade_portrait.png',
+        portraitAsset: 'assets/images/heroes/nova_blade/nova_blade_portrait.png',
       ),
       _HeroItem(
         id: 'valeria',
@@ -292,7 +381,7 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Quyền trượng Băng Tinh: Băng Hỏa Trảm, Vòng Xoáy Nguyên Tố & Mưa Thiên Thạch Băng Hỏa.',
         color: const Color(0xFF40C4FF),
         icon: Icons.ac_unit_rounded,
-        portraitAsset: 'assets/images/heroes/valeria_portrait.png',
+        portraitAsset: 'assets/images/heroes/valenria/valeria_portrait.png',
       ),
       _HeroItem(
         id: 'garrick',
@@ -302,7 +391,7 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Đại đao đá cổ đại: Đất Lở (Gai đá thẳng), Hộ Thể Hoàng Kim (Giáp đá đẩy lùi) & Nội Địa Chấn.',
         color: const Color(0xFFFFD700),
         icon: Icons.fort_rounded,
-        portraitAsset: 'assets/images/heroes/garrick_portrait.png',
+        portraitAsset: 'assets/images/heroes/garrick/garrick_portrait.png',
       ),
       _HeroItem(
         id: 'shadow_01',
@@ -312,7 +401,7 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Song dao năng lượng tím: Plasma Shot tầm xa, Cyber Spin 360° & Phantom Dash phân thân.',
         color: const Color(0xFFE040FB),
         icon: Icons.flare_rounded,
-        portraitAsset: 'assets/images/heroes/shadow_01_portrait.png',
+        portraitAsset: 'assets/images/heroes/shadow/shadow_01_portrait.png',
       ),
       _HeroItem(
         id: 'ember_02',
@@ -322,13 +411,13 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Pháp sư lửa: Hỏa Cầu Liên Hoàn, Cột Lửa Địa Ngục & Thái Dương Bộc Phá diện rộng.',
         color: const Color(0xFFFF6D00),
         icon: Icons.local_fire_department_rounded,
-        portraitAsset: 'assets/images/heroes/ember_02_portrait.png',
+        portraitAsset: 'assets/images/heroes/ember/ember_02_portrait.png',
       ),
     ];
 
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 4 : 8),
       itemCount: heroes.length,
       itemBuilder: (context, index) {
         final hero = heroes[index];
@@ -336,8 +425,8 @@ class _ShopDialogState extends State<ShopDialog>
         final isSelected = profile.selectedHeroId == hero.id;
 
         return Container(
-          width: 165,
-          margin: const EdgeInsets.only(right: 12),
+          width: compact ? 142 : 165,
+          margin: EdgeInsets.only(right: compact ? 8 : 12),
           decoration: BoxDecoration(
             color: const Color(0xFF232038),
             borderRadius: BorderRadius.circular(16),
@@ -358,13 +447,13 @@ class _ShopDialogState extends State<ShopDialog>
                   ]
                 : null,
           ),
-          padding: const EdgeInsets.all(10),
+          padding: EdgeInsets.all(compact ? 7 : 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Icon / Portrait Avatar nhân vật
               Container(
-                height: 70,
+                height: compact ? 48 : 70,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: hero.color.withValues(alpha: 0.15),
@@ -386,7 +475,7 @@ class _ShopDialogState extends State<ShopDialog>
                         child: Icon(hero.icon, color: hero.color, size: 40),
                       ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: compact ? 3 : 6),
 
               // Tên nhân vật + Cấp độ 1-100
               Row(
@@ -394,9 +483,9 @@ class _ShopDialogState extends State<ShopDialog>
                   Expanded(
                     child: Text(
                       hero.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 12.5,
+                        fontSize: compact ? 11 : 12.5,
                         color: Colors.white,
                       ),
                       maxLines: 1,
@@ -427,23 +516,23 @@ class _ShopDialogState extends State<ShopDialog>
                 hero.role,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 9,
+                      fontSize: compact ? 8 : 9,
                   color: hero.color,
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: compact ? 2 : 4),
 
               // Mô tả ngắn
               Expanded(
                 child: Text(
                   hero.description,
-                  style: const TextStyle(
-                    fontSize: 9.5,
+                  style: TextStyle(
+                    fontSize: compact ? 8 : 9.5,
                     color: Colors.white60,
                     height: 1.2,
                   ),
-                  maxLines: 3,
+                  maxLines: compact ? 2 : 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -539,7 +628,7 @@ class _ShopDialogState extends State<ShopDialog>
   }
 
   // --- TAB 2: TRỢ THỦ AI (COMPANIONS) ---
-  Widget _buildCompanionsTab(PlayerProfile profile) {
+  Widget _buildCompanionsTab(PlayerProfile profile, {required bool compact}) {
     final companions = [
       _CompanionItem(
         id: 'comp_attack',
@@ -632,7 +721,7 @@ class _ShopDialogState extends State<ShopDialog>
 
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 4 : 8),
       itemCount: companions.length,
       itemBuilder: (context, index) {
         final comp = companions[index];
@@ -640,8 +729,8 @@ class _ShopDialogState extends State<ShopDialog>
         final isEquipped = profile.selectedCompanionId == comp.id;
 
         return Container(
-          width: 190,
-          margin: const EdgeInsets.only(right: 12),
+          width: compact ? 160 : 190,
+          margin: EdgeInsets.only(right: compact ? 8 : 12),
           decoration: BoxDecoration(
             color: const Color(0xFF232038),
             borderRadius: BorderRadius.circular(16),
@@ -654,12 +743,12 @@ class _ShopDialogState extends State<ShopDialog>
               width: isEquipped ? 2 : 1,
             ),
           ),
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(compact ? 8 : 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                height: 70,
+                height: compact ? 48 : 70,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: comp.color.withValues(alpha: 0.15),
@@ -797,7 +886,7 @@ class _ShopDialogState extends State<ShopDialog>
   }
 
   // --- TAB 3: TRANG PHỤC (SKINS - THUẦN THẨM MỸ, FAIR PLAY) ---
-  Widget _buildSkinsTab(PlayerProfile profile) {
+  Widget _buildSkinsTab(PlayerProfile profile, {required bool compact}) {
     final skins = [
       _SkinItem(
         id: 'skin_george_gold',
@@ -840,8 +929,8 @@ class _ShopDialogState extends State<ShopDialog>
       children: [
         // Lưu ý Fair-Play
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 3 : 6),
           decoration: BoxDecoration(
             color: Colors.deepPurpleAccent.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
@@ -867,12 +956,12 @@ class _ShopDialogState extends State<ShopDialog>
             ],
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: compact ? 2 : 6),
 
         Expanded(
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 3 : 6),
             itemCount: skins.length,
             itemBuilder: (context, index) {
               final skin = skins[index];
@@ -880,8 +969,8 @@ class _ShopDialogState extends State<ShopDialog>
               final isEquipped = profile.selectedSkinId == skin.id;
 
               return Container(
-                width: 160,
-                margin: const EdgeInsets.only(right: 12),
+                width: compact ? 140 : 160,
+                margin: EdgeInsets.only(right: compact ? 8 : 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF232038),
                   borderRadius: BorderRadius.circular(16),
@@ -894,12 +983,12 @@ class _ShopDialogState extends State<ShopDialog>
                     width: isEquipped ? 2.5 : 1,
                   ),
                 ),
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(compact ? 7 : 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
-                      height: 70,
+                      height: compact ? 48 : 70,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
