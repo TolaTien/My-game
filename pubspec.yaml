@@ -36,7 +36,13 @@ flutter:
     - assets/images/heroes/nova_blade/
     - assets/images/heroes/shadow/
     - assets/images/heroes/valenria/
+    - assets/images/heroes/nova/
+    - assets/images/heroes/shadow/idle/
+    - assets/images/heroes/shadow/run/
+    - assets/images/heroes/shadow/attack/
     - assets/images/skills/
     - assets/images/companions/
+    - assets/images/ranks/
     - assets/images/maps/
+    - assets/images/ui/
     - assets/audio/

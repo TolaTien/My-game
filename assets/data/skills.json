@@ -12,6 +12,7 @@
       "damageMultiplier": 1.2,
       "radius": 80.0,
       "iconAsset": "assets/images/skills/nova_energy_slash.png",
+      "effects": {"delivery": "projectile", "knockback": 24.0},
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -25,6 +26,7 @@
       "damageMultiplier": 1.5,
       "radius": 120.0,
       "iconAsset": "assets/images/skills/nova_shadow_dash.png",
+      "effects": {"delivery": "dash", "dashDistance": 120.0},
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -38,6 +40,7 @@
       "damageMultiplier": 2.0,
       "radius": 200.0,
       "iconAsset": "assets/images/skills/nova_quantum_burst.png",
+      "effects": {"delivery": "area", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -50,6 +53,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.6,
       "radius": 140.0,
+      "effects": {"delivery": "projectile", "piercing": true},
       "iconAsset": "assets/images/skills/cyber_skill_effects.png",
       "sfxAsset": "sfx_attack_arrow.wav"
     },
@@ -63,6 +67,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.2,
       "radius": 110.0,
+      "effects": {"delivery": "area"},
       "iconAsset": "assets/images/skills/cyber_skill_effects.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
@@ -76,6 +81,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.2,
       "radius": 170.0,
+      "effects": {"delivery": "area", "dashDistance": 170.0, "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "iconAsset": "assets/images/skills/cyber_skill_effects.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
@@ -89,6 +95,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.7,
       "radius": 130.0,
+      "effects": {"delivery": "projectile"},
       "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
@@ -102,6 +109,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.4,
       "radius": 115.0,
+      "effects": {"delivery": "area"},
       "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
       "sfxAsset": "sfx_skill_smash.wav"
     },
@@ -116,6 +124,7 @@
       "damageMultiplier": 3.5,
       "radius": 180.0,
       "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
+      "effects": {"delivery": "area", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -128,6 +137,7 @@
       "kiCost": 25.0,
       "damageMultiplier": 1.9,
       "radius": 150.0,
+      "effects": {"delivery": "projectile", "piercing": true},
       "iconAsset": "assets/images/skills/valeria_skills.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
@@ -141,6 +151,7 @@
       "kiCost": 40.0,
       "damageMultiplier": 2.6,
       "radius": 110.0,
+      "effects": {"delivery": "area", "duration": 8.0, "tickInterval": 0.5},
       "iconAsset": "assets/images/skills/valeria_skills.png",
       "sfxAsset": "sfx_skill_smash.wav"
     },
@@ -154,6 +165,7 @@
       "kiCost": 60.0,
       "damageMultiplier": 3.6,
       "radius": 180.0,
+      "effects": {"delivery": "area", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "iconAsset": "assets/images/skills/valeria_skills.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
@@ -167,6 +179,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.85,
       "radius": 130.0,
+      "effects": {"delivery": "projectile"},
       "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
@@ -180,6 +193,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.3,
       "radius": 115.0,
+      "effects": {"delivery": "area", "duration": 8.0, "damageReduction": 0.4, "knockback": 24.0},
       "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_smash.wav"
     },
@@ -193,6 +207,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 175.0,
+      "effects": {"delivery": "area", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
@@ -207,6 +222,7 @@
       "damageMultiplier": 1.8,
       "radius": 180.0,
       "iconAsset": "assets/images/skills/kaelen_thunder_flash.png",
+      "effects": {"delivery": "dash", "dashDistance": 180.0, "stunDuration": 0.5},
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -220,6 +236,7 @@
       "damageMultiplier": 4.5,
       "radius": 85.0,
       "iconAsset": "assets/images/skills/kaelen_storm_vortex.png",
+      "effects": {"delivery": "area", "duration": 4.0, "tickInterval": 0.5, "moveSpeedMultiplier": 1.25, "damageReduction": 0.3},
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -233,6 +250,7 @@
       "damageMultiplier": 3.5,
       "radius": 160.0,
       "iconAsset": "assets/images/skills/kaelen_heaven_judgment.png",
+      "effects": {"delivery": "area", "duration": 8.0, "stunDuration": 1.5, "invulnerabilityDuration": 0.6, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -246,6 +264,7 @@
       "damageMultiplier": 1.8,
       "radius": 80.0,
       "iconAsset": "assets/images/skills/george_skill1.png",
+      "effects": {"delivery": "area", "knockback": 24.0},
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -259,6 +278,7 @@
       "damageMultiplier": 2.5,
       "radius": 120.0,
       "iconAsset": "assets/images/skills/george_skill2.png",
+      "effects": {"delivery": "area", "knockback": 32.0, "stunDuration": 0.5},
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -272,6 +292,133 @@
       "damageMultiplier": 3.5,
       "radius": 160.0,
       "iconAsset": "assets/images/skills/george_skill3.png",
+      "effects": {"delivery": "area", "duration": 5.0, "moveSpeedMultiplier": 1.5, "attackMultiplier": 1.6, "damageReduction": 0.4},
+      "sfxAsset": "sfx_skill_berserk.wav"
+    },
+    {
+      "id": "ranger_multishot",
+      "heroId": "ranger",
+      "slot": 1,
+      "name": "Multishot",
+      "description": "Bắn đạn định hướng về phía trước; dùng tổng sát thương cấu hình cho một lần thi triển.",
+      "cooldown": 5.0,
+      "kiCost": 25.0,
+      "damageMultiplier": 1.8,
+      "radius": 85.0,
+      "effects": {"delivery": "projectile"},
+      "iconAsset": "assets/images/skills/nova_energy_slash.png",
+      "sfxAsset": "sfx_attack_arrow.wav"
+    },
+    {
+      "id": "ranger_trap_roll",
+      "heroId": "ranger",
+      "slot": 2,
+      "name": "Trap Roll",
+      "description": "Bắn đạn xuyên phá định hướng theo vai trò xạ thủ; chưa tạo bẫy hay lăn né độc lập.",
+      "cooldown": 8.0,
+      "kiCost": 35.0,
+      "damageMultiplier": 2.5,
+      "radius": 110.0,
+      "effects": {"delivery": "projectile", "piercing": true},
+      "iconAsset": "assets/images/skills/nova_shadow_dash.png",
+      "sfxAsset": "sfx_skill_smash.wav"
+    },
+    {
+      "id": "ranger_star_rain",
+      "heroId": "ranger",
+      "slot": 3,
+      "name": "Star Rain",
+      "description": "Giữ hiệu ứng cũ: hộ thể 8 giây, tăng 50% tốc chạy và giảm 40% sát thương nhận; chưa có mưa đạn gây sát thương.",
+      "cooldown": 12.0,
+      "kiCost": 40.0,
+      "damageMultiplier": 2.5,
+      "radius": 160.0,
+      "effects": {"delivery": "self", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
+      "iconAsset": "assets/images/skills/nova_quantum_burst.png",
+      "sfxAsset": "sfx_skill_berserk.wav"
+    },
+    {
+      "id": "tanker_shield_bash",
+      "heroId": "tanker",
+      "slot": 1,
+      "name": "Shield Bash",
+      "description": "Đánh khiên trong vùng gần, đẩy lùi 24px và gây choáng 0.5 giây.",
+      "cooldown": 5.0,
+      "kiCost": 25.0,
+      "damageMultiplier": 1.8,
+      "radius": 85.0,
+      "effects": {"delivery": "area", "knockback": 24.0, "stunDuration": 0.5},
+      "iconAsset": "assets/images/skills/kaelen_storm_vortex.png",
+      "sfxAsset": "sfx_skill_hurricane.wav"
+    },
+    {
+      "id": "tanker_iron_fortress",
+      "heroId": "tanker",
+      "slot": 2,
+      "name": "Iron Fortress",
+      "description": "Hộ thể bản thân 8 giây, giảm 40% sát thương; không gây sát thương trực tiếp hay phản đòn.",
+      "cooldown": 8.0,
+      "kiCost": 35.0,
+      "damageMultiplier": 2.5,
+      "radius": 110.0,
+      "effects": {"delivery": "self", "duration": 8.0, "damageReduction": 0.4},
+      "iconAsset": "assets/images/skills/kaelen_storm_vortex.png",
+      "sfxAsset": "sfx_skill_smash.wav"
+    },
+    {
+      "id": "tanker_earthquake",
+      "heroId": "tanker",
+      "slot": 3,
+      "name": "Earthquake",
+      "description": "Giữ hiệu ứng cũ: hộ thể 8 giây, tăng 50% tốc chạy và giảm 40% sát thương nhận; chưa gây sát thương chấn động.",
+      "cooldown": 12.0,
+      "kiCost": 40.0,
+      "damageMultiplier": 2.5,
+      "radius": 160.0,
+      "effects": {"delivery": "self", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
+      "iconAsset": "assets/images/skills/kaelen_heaven_judgment.png",
+      "sfxAsset": "sfx_skill_berserk.wav"
+    },
+    {
+      "id": "ninja_shuriken_dash",
+      "heroId": "ninja",
+      "slot": 1,
+      "name": "Shuriken Dash",
+      "description": "Lướt tấn công 85px theo hướng nhìn, gây sát thương trên đường lướt và dừng trước chướng ngại vật.",
+      "cooldown": 5.0,
+      "kiCost": 25.0,
+      "damageMultiplier": 1.8,
+      "radius": 85.0,
+      "effects": {"delivery": "dash", "dashDistance": 85.0},
+      "iconAsset": "assets/images/skills/nova_shadow_dash.png",
+      "sfxAsset": "sfx_skill_hurricane.wav"
+    },
+    {
+      "id": "ninja_smoke_veil",
+      "heroId": "ninja",
+      "slot": 2,
+      "name": "Smoke Veil",
+      "description": "Hộ thể cơ động 8 giây: tăng 50% tốc chạy và giảm 40% sát thương; không tàng hình hay gây sát thương trực tiếp.",
+      "cooldown": 8.0,
+      "kiCost": 35.0,
+      "damageMultiplier": 2.5,
+      "radius": 110.0,
+      "effects": {"delivery": "self", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
+      "iconAsset": "assets/images/skills/cyber_skill_effects.png",
+      "sfxAsset": "sfx_skill_smash.wav"
+    },
+    {
+      "id": "ninja_shadow_execution",
+      "heroId": "ninja",
+      "slot": 3,
+      "name": "Shadow Execution",
+      "description": "Giữ hiệu ứng cũ: hộ thể 8 giây, tăng 50% tốc chạy và giảm 40% sát thương nhận; chưa có đòn kết liễu riêng.",
+      "cooldown": 12.0,
+      "kiCost": 40.0,
+      "damageMultiplier": 2.5,
+      "radius": 160.0,
+      "effects": {"delivery": "self", "duration": 8.0, "moveSpeedMultiplier": 1.5, "damageReduction": 0.4},
+      "iconAsset": "assets/images/skills/cyber_skill_effects.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     }
   ]
