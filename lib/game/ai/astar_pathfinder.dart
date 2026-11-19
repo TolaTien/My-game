@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flame/components.dart';
 import '../../core/constants.dart';
 
@@ -116,10 +117,11 @@ class AStarPathfinder {
   }
 
   /// Builds the canonical 36x24 dungeon walkable matrix.
-  /// Matches perimeter walls and the 6 stone pillars from DungeonMapComponent.
+  /// Matches perimeter walls and the obstacles corresponding to each mapId from DungeonMapComponent.
   static List<List<bool>> buildDungeonWalkableGrid({
     int width = 36,
     int height = 24,
+    String mapId = 'sunken_golden_sanctum',
   }) {
     final grid = List.generate(
       width,
@@ -136,17 +138,7 @@ class AStarPathfinder {
       grid[width - 1][row] = false;
     }
 
-    // 6 stone pillars (each 2x2 tiles)
-    const pillars = [
-      (8, 6),
-      (8, 16),
-      (26, 6),
-      (26, 16),
-      (17, 10),
-      (18, 10),
-    ];
-
-    for (final (pCol, pRow) in pillars) {
+    void block2x2(int pCol, int pRow) {
       if (pCol >= 0 && pCol + 1 < width && pRow >= 0 && pRow + 1 < height) {
         grid[pCol][pRow] = false;
         grid[pCol + 1][pRow] = false;
@@ -155,7 +147,167 @@ class AStarPathfinder {
       }
     }
 
+    void blockArea(int c1, int c2, int r1, int r2) {
+      for (int c = c1; c <= c2; c++) {
+        for (int r = r1; r <= r2; r++) {
+          if (c >= 0 && c < width && r >= 0 && r < height) {
+            grid[c][r] = false;
+          }
+        }
+      }
+    }
+
+    if (mapId == 'map_dao_bang_gia') {
+      // 4 tháp khối băng tinh thể khớp hoàn hảo tranh nền Đảo Băng Tuyết
+      block2x2(6, 6);
+      block2x2(29, 6);
+      block2x2(7, 15);
+      block2x2(28, 15);
+
+      // Các vùng nước biển sâu quanh đảo (không thể đi qua)
+      blockArea(1, 5, 9, 12);
+      blockArea(30, 34, 9, 12);
+      blockArea(1, 3, 1, 2);
+      blockArea(32, 34, 1, 2);
+      blockArea(1, 4, 20, 22);
+      blockArea(31, 34, 20, 22);
+    } else if (mapId == 'map_rung_cay') {
+      // Chướng ngại vật rừng cây cổ thụ và tảng đá phủ rêu
+      block2x2(12, 5);
+      block2x2(24, 5);
+      block2x2(10, 17);
+      block2x2(28, 11);
+    } else if (mapId == 'map_bang') {
+      // 4 trụ đấu trường băng giá đối xứng 4 góc
+      block2x2(8, 6);
+      block2x2(8, 16);
+      block2x2(26, 6);
+      block2x2(26, 16);
+    } else {
+      // Thần Điện Hoàng Kim (mặc định)
+      block2x2(8, 6);
+      block2x2(8, 16);
+      block2x2(26, 6);
+      block2x2(26, 16);
+      block2x2(17, 10);
+    }
+
     return grid;
+  }
+
+  /// Builds the 30x20 PvP Arena walkable matrix matching [PvpArenaMapComponent].
+  /// Marks perimeter walls and all obstacle rects (such as the 4 arena pillars) as unwalkable.
+  static List<List<bool>> buildPvpArenaWalkableGrid({
+    int width = 30,
+    int height = 20,
+    List<Rect>? obstacleRects,
+  }) {
+    final grid = List.generate(
+      width,
+      (_) => List.filled(height, true),
+    );
+
+    // Perimeter boundary walls
+    for (int col = 0; col < width; col++) {
+      grid[col][0] = false;
+      grid[col][height - 1] = false;
+    }
+    for (int row = 0; row < height; row++) {
+      grid[0][row] = false;
+      grid[width - 1][row] = false;
+    }
+
+    final obstacles = obstacleRects ??
+        const <Rect>[
+          Rect.fromLTWH(280 - 24, 200 - 24, 48, 48),
+          Rect.fromLTWH(280 - 24, 440 - 24, 48, 48),
+          Rect.fromLTWH(680 - 24, 200 - 24, 48, 48),
+          Rect.fromLTWH(680 - 24, 440 - 24, 48, 48),
+        ];
+
+    const eps = 0.01;
+    for (final rect in obstacles) {
+      final minCol = ((rect.left + eps) / tileSize).floor().clamp(0, width - 1);
+      final maxCol = ((rect.right - eps) / tileSize).floor().clamp(0, width - 1);
+      final minRow = ((rect.top + eps) / tileSize).floor().clamp(0, height - 1);
+      final maxRow = ((rect.bottom - eps) / tileSize).floor().clamp(0, height - 1);
+      for (int c = minCol; c <= maxCol; c++) {
+        for (int r = minRow; r <= maxRow; r++) {
+          grid[c][r] = false;
+        }
+      }
+    }
+
+    return grid;
+  }
+
+  /// Exact slab-method line segment vs axis-aligned [Rect] intersection test.
+  static bool segmentIntersectsRect(Vector2 start, Vector2 end, Rect rect) {
+    final dx = end.x - start.x;
+    final dy = end.y - start.y;
+
+    double tMin = 0.0;
+    double tMax = 1.0;
+
+    if (dx.abs() < 1e-8) {
+      if (start.x < rect.left || start.x > rect.right) return false;
+    } else {
+      final invD = 1.0 / dx;
+      var t1 = (rect.left - start.x) * invD;
+      var t2 = (rect.right - start.x) * invD;
+      if (t1 > t2) {
+        final tmp = t1;
+        t1 = t2;
+        t2 = tmp;
+      }
+      tMin = max(tMin, t1);
+      tMax = min(tMax, t2);
+      if (tMin > tMax) return false;
+    }
+
+    if (dy.abs() < 1e-8) {
+      if (start.y < rect.top || start.y > rect.bottom) return false;
+    } else {
+      final invD = 1.0 / dy;
+      var t1 = (rect.top - start.y) * invD;
+      var t2 = (rect.bottom - start.y) * invD;
+      if (t1 > t2) {
+        final tmp = t1;
+        t1 = t2;
+        t2 = tmp;
+      }
+      tMin = max(tMin, t1);
+      tMax = min(tMax, t2);
+      if (tMin > tMax) return false;
+    }
+
+    return true;
+  }
+
+  /// Checks whether an agent of [clearanceRadius] can walk straight from [start]
+  /// to [target] without hitting any [obstacleRects] (or unwalkable grid cells).
+  static bool hasClearCorridor(
+    Vector2 start,
+    Vector2 target,
+    List<List<bool>> walkableGrid, {
+    List<Rect>? obstacleRects,
+    double clearanceRadius = 12.0,
+  }) {
+    if (!hasLineOfSight(start, target, walkableGrid)) return false;
+    if (obstacleRects != null && obstacleRects.isNotEmpty) {
+      for (final rect in obstacleRects) {
+        if (segmentIntersectsRect(start, target, rect.inflate(clearanceRadius))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    final diff = target - start;
+    if (diff.length2 < 1.0 || clearanceRadius <= 0) return true;
+    final perp = Vector2(-diff.y, diff.x).normalized() * clearanceRadius;
+    return hasLineOfSight(start + perp, target + perp, walkableGrid) &&
+        hasLineOfSight(start - perp, target - perp, walkableGrid);
   }
 
   /// Raycast Line-of-Sight check sampling along the segment at intervals <= 8px.
@@ -260,8 +412,9 @@ class AStarPathfinder {
   static List<Vector2> findPath(
     Vector2 startPos,
     Vector2 targetPos,
-    List<List<bool>> walkableGrid,
-  ) {
+    List<List<bool>> walkableGrid, {
+    bool allowDirectLineOfSight = true,
+  }) {
     if (walkableGrid.isEmpty || walkableGrid[0].isEmpty) {
       return [targetPos.clone()];
     }
@@ -290,7 +443,9 @@ class AStarPathfinder {
     final isDiagonalBlocked = isDiagonallyAdjacent &&
         (!walkableGrid[startCol][targetRow] || !walkableGrid[targetCol][startRow]);
 
-    if (!isDiagonalBlocked && hasLineOfSight(startPos, targetPos, walkableGrid)) {
+    if (allowDirectLineOfSight &&
+        !isDiagonalBlocked &&
+        hasLineOfSight(startPos, targetPos, walkableGrid)) {
       return [targetPos.clone()];
     }
 

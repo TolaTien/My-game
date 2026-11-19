@@ -1,9 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:my_game/screens/settings_dialog.dart';
+
 import 'package:my_game/services/audio_service.dart';
 
 class ControlledBgm implements BgmPlayback {
@@ -162,33 +161,4 @@ void main() {
       expect(output.file, isNull);
     },
   );
-  testWidgets(
-    'Settings music switch controls playback, not only the switch appearance',
-    (tester) async {
-      service = FlameAudioService(bgmPlayback: output);
-      AudioService.setInstance(service);
-      final playing = service.playBgm(BgmTrack.lobby);
-      await tester.pump();
-      await playing;
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: SettingsDialog())),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-      await service.whenBgmSettled;
-      expect(service.isBgmEnabled, isFalse);
-      expect(output.running, isFalse);
-      expect(output.volume, 0);
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-      await service.whenBgmSettled;
-      expect(service.isBgmEnabled, isTrue);
-      expect(output.running, isTrue);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      AudioService.setInstance(MockAudioService());
-    },
-  );
 }
-

@@ -50,7 +50,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.6,
       "radius": 140.0,
-      "iconAsset": "assets/images/skills/cyber_skill_effects.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_attack_arrow.wav"
     },
     {
@@ -63,7 +63,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.2,
       "radius": 110.0,
-      "iconAsset": "assets/images/skills/cyber_skill_effects.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -76,7 +76,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.2,
       "radius": 170.0,
-      "iconAsset": "assets/images/skills/cyber_skill_effects.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -89,7 +89,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.7,
       "radius": 130.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -102,7 +102,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.4,
       "radius": 115.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -115,7 +115,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 180.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -128,7 +128,7 @@
       "kiCost": 25.0,
       "damageMultiplier": 1.9,
       "radius": 150.0,
-      "iconAsset": "assets/images/skills/valeria_skills.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -141,7 +141,7 @@
       "kiCost": 40.0,
       "damageMultiplier": 2.6,
       "radius": 110.0,
-      "iconAsset": "assets/images/skills/valeria_skills.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -154,7 +154,7 @@
       "kiCost": 60.0,
       "damageMultiplier": 3.6,
       "radius": 180.0,
-      "iconAsset": "assets/images/skills/valeria_skills.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -167,7 +167,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.85,
       "radius": 130.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -180,7 +180,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.3,
       "radius": 115.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -193,46 +193,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 175.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
-      "sfxAsset": "sfx_skill_berserk.wav"
-    },
-    {
-      "id": "kaelen_thunder_flash",
-      "heroId": "kaelen",
-      "slot": 1,
-      "name": "Lôi Ảnh Trảm (Thunder Flash)",
-      "description": "Hóa thành tia chớp lướt cực nhanh 180px qua mục tiêu, gây 180% sát thương và làm choáng 0.5s.",
-      "cooldown": 5.0,
-      "kiCost": 30.0,
-      "damageMultiplier": 1.8,
-      "radius": 180.0,
-      "iconAsset": "assets/images/skills/kaelen_thunder_flash.png",
-      "sfxAsset": "sfx_skill_hurricane.wav"
-    },
-    {
-      "id": "kaelen_storm_vortex",
-      "heroId": "kaelen",
-      "slot": 2,
-      "name": "Lôi Điện Hộ Thể (Storm Blade Vortex)",
-      "description": "Triệu hồi 4 thanh kiếm ánh sáng xoay quanh thân 4s, tăng 25% tốc chạy và giảm 30% sát thương.",
-      "cooldown": 10.0,
-      "kiCost": 55.0,
-      "damageMultiplier": 4.5,
-      "radius": 85.0,
-      "iconAsset": "assets/images/skills/kaelen_storm_vortex.png",
-      "sfxAsset": "sfx_skill_smash.wav"
-    },
-    {
-      "id": "kaelen_heaven_judgment",
-      "heroId": "kaelen",
-      "slot": 3,
-      "name": "Thiên Phạt Lôi Ngục (Heaven's Judgment)",
-      "description": "Nhảy lên không trung bất tử rồi giáng cột sét khổng lồ bán kính 160px, làm choáng 1.5s.",
-      "cooldown": 18.0,
-      "kiCost": 90.0,
-      "damageMultiplier": 3.5,
-      "radius": 160.0,
-      "iconAsset": "assets/images/skills/kaelen_heaven_judgment.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -245,7 +206,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.8,
       "radius": 80.0,
-      "iconAsset": "assets/images/skills/george_skill1.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -258,7 +219,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.5,
       "radius": 120.0,
-      "iconAsset": "assets/images/skills/george_skill2.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -271,7 +232,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 160.0,
-      "iconAsset": "assets/images/skills/george_skill3.png",
+      "iconAsset": "",
       "sfxAsset": "sfx_skill_berserk.wav"
     }
   ]

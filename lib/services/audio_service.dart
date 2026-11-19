@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+
+import 'platform_env_stub.dart' if (dart.library.io) 'platform_env_io.dart';
 
 import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/foundation.dart';
@@ -196,14 +197,7 @@ class FlameAudioService implements AudioService {
   bool _platformAvailable;
 
   /// Returns true when running in a headless Flutter test environment.
-  static bool get isHeadlessTest {
-    if (kIsWeb) return false;
-    try {
-      return Platform.environment.containsKey('FLUTTER_TEST');
-    } catch (_) {
-      return false;
-    }
-  }
+  static bool get isHeadlessTest => !kIsWeb && isFlutterTestEnv;
 
   @visibleForTesting
   void setPlatformAvailableForTesting(bool available) {
@@ -308,16 +302,18 @@ class FlameAudioService implements AudioService {
     final request = ++_bgmRevision;
     final next = _bgmCommands.then((_) async {
       if ((!_platformAvailable && !_hasCustomBgmPlayback) ||
-          request != _bgmRevision)
+          request != _bgmRevision) {
         return;
+      }
       try {
         int appliedRevision;
         do {
           appliedRevision = _bgmRevision;
           final file = _rawBgmFileName;
           if (file == null) {
-            if (_loadedBgmFile != null || _outputPlaying)
+            if (_loadedBgmFile != null || _outputPlaying) {
               await _bgmPlayback.stop();
+            }
             _loadedBgmFile = null;
             _outputPlaying = false;
           } else if (!isBgmEnabled || !_wantBgmPlayback) {

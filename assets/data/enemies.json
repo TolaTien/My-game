@@ -10,7 +10,7 @@
       "speed": 75,
       "expReward": 25,
       "goldReward": 50,
-      "spriteSheet": "assets/images/enemies/zombie_sheet.png"
+      "spriteSheet": ""
     },
     {
       "id": "skeleton",
@@ -22,7 +22,7 @@
       "preferredRange": 160,
       "expReward": 35,
       "goldReward": 75,
-      "spriteSheet": "assets/images/enemies/skeleton_sheet.png"
+      "spriteSheet": ""
     },
     {
       "id": "dungeon_boss",
@@ -33,7 +33,7 @@
       "speed": 95,
       "expReward": 200,
       "goldReward": 500,
-      "spriteSheet": "assets/images/enemies/boss_sheet.png"
+      "spriteSheet": ""
     }
   ]
 }

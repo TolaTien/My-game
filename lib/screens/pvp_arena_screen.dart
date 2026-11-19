@@ -7,20 +7,26 @@ import '../core/game_keyboard_controller.dart';
 import '../game/components/player.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
+import '../models/friend_party_models.dart';
 import '../models/pvp_match.dart';
+import '../registry/asset_registry.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/firebase_bootstrap.dart';
 import '../services/firebase_pvp_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
 import 'settings_dialog.dart';
+import 'widgets/rank_badge.dart';
 
 class PvpArenaScreen extends StatefulWidget {
   final PvpGameMode initialMode;
+  final PartyRoomState? partyRoom;
 
   const PvpArenaScreen({
     super.key,
     this.initialMode = PvpGameMode.solo1v1,
+    this.partyRoom,
   });
 
   @override
@@ -29,10 +35,25 @@ class PvpArenaScreen extends StatefulWidget {
 
 class _PvpArenaScreenState extends State<PvpArenaScreen>
     with TickerProviderStateMixin {
+  static const double _onlineMatchmakingTimeoutSeconds = 20.0;
+  static const double _offlineBotFallbackDelaySeconds = 1.8;
+
   late PvpGameMode _selectedMode;
   bool _isMatchmaking = true;
   double _elapsedSeconds = 0.0;
+  double _currentSearchTimeoutSeconds = _onlineMatchmakingTimeoutSeconds;
+  bool _hasTriggeredFallback = false;
   Timer? _matchmakingTimer;
+  Future<void> _pendingCleanup = Future.value();
+
+  void _enqueueCleanup(Future<void> Function() task) {
+    _pendingCleanup = _pendingCleanup
+        .catchError((_) {})
+        .then((_) => task())
+        .catchError((Object e) {
+      debugPrint('PvP cleanup error: $e');
+    });
+  }
 
   late AnimationController _radarController;
   PvpOpponentInfo? _opponent;
@@ -56,6 +77,19 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   bool _isRebuildScheduled = false;
   bool _hasHandledMatchFinish = false;
 
+  // Party Co-op Matchmaking & Sync
+  final List<StreamSubscription> _partySyncSubs = [];
+  Timer? _partySyncTimer;
+  bool _isPartyStateWritePending = false;
+  bool _hasPoppedFromPartyCancel = false;
+
+  bool get _isInParty => widget.partyRoom != null;
+  bool get _isPartyGuest {
+    final party = widget.partyRoom;
+    if (party == null) return false;
+    return !party.isLeader(FriendPartyService.instance.effectivePlayerCode);
+  }
+
   void _safeSetState([VoidCallback? fn]) {
     if (!mounted) return;
     fn?.call();
@@ -78,21 +112,54 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   @override
   void initState() {
     super.initState();
-    _selectedMode = widget.initialMode;
+    _selectedMode = widget.partyRoom?.mode ?? widget.initialMode;
 
     _radarController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
 
+    if (_isInParty) {
+      FriendPartyService.instance.partyNotifier.addListener(_onPartyRoomUpdated);
+    }
+
     _startMatchmakingCountdown();
+
+    if (_isInParty && widget.partyRoom?.matchStatus == 'in_match') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentParty =
+            FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+        _startPartyMatchLocally(currentParty);
+      });
+    }
+  }
+
+  void _onPartyRoomUpdated() {
+    if (!mounted || !_isInParty) return;
+    final party = FriendPartyService.instance.partyNotifier.value;
+    if (_isPartyGuest && _isMatchmaking) {
+      if (party == null || party.matchStatus == 'idle') {
+        if (!_hasPoppedFromPartyCancel) {
+          _hasPoppedFromPartyCancel = true;
+          _matchmakingTimer?.cancel();
+          Navigator.of(context).pop();
+        }
+        return;
+      }
+      if (party.matchStatus == 'in_match') {
+        _startPartyMatchLocally(party);
+      }
+    }
   }
 
   void _selectMatchmakingMode(PvpGameMode mode) {
+    if (_isInParty) return;
     if (_selectedMode == mode) return;
     _prepareNextSearch();
-    if (_onlineService != null) {
-      unawaited(_onlineService!.leaveQueue());
+    final oldService = _onlineService;
+    if (oldService != null) {
+      _enqueueCleanup(() => oldService.leaveQueue());
     }
     _safeSetState(() {
       _selectedMode = mode;
@@ -107,6 +174,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _readyTimeoutTimer?.cancel();
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
+    _partySyncTimer?.cancel();
+    for (final sub in _partySyncSubs) {
+      sub.cancel();
+    }
+    _partySyncSubs.clear();
+    if (_isInParty) {
+      FriendPartyService.instance.partyNotifier.removeListener(_onPartyRoomUpdated);
+      if (!_isPartyGuest) {
+        unawaited(FriendPartyService.instance.resetPartyMatchStatus());
+      }
+    }
     if (_onlineService != null && _roomId != null) {
       unawaited(_onlineService!.leaveRoom(_roomId!));
     } else if (_onlineService != null) {
@@ -115,40 +193,106 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _radarController.dispose();
     _keyboardController?.detach();
     _focusNode.dispose();
-    FriendPartyService.instance.leaveParty();
     super.dispose();
   }
 
   void _startMatchmakingCountdown() {
     final attempt = ++_searchAttempt;
     _elapsedSeconds = 0.0;
-    _matchmakingStatus = FirebaseBootstrap.isReady
-        ? 'Đang tìm người chơi online...'
-        : 'Firebase chưa cấu hình • sẽ chuyển sang đấu bot';
+    _hasTriggeredFallback = false;
+
+    if (_isInParty) {
+      final party =
+          FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+      if (_isPartyGuest) {
+        _currentSearchTimeoutSeconds = 30.0;
+        _matchmakingStatus =
+            'Đang chờ Chủ Phòng (${party.leaderName}) ghép trận...';
+        _matchmakingTimer?.cancel();
+        _matchmakingTimer =
+            Timer.periodic(const Duration(milliseconds: 100), (_) {
+          if (!mounted) return;
+          _safeSetState(() => _elapsedSeconds += 0.1);
+        });
+        return;
+      }
+
+      // Chủ phòng tổ đội: tìm trận nhanh rồi kéo cả tổ đội vào đấu trường
+      _currentSearchTimeoutSeconds = _offlineBotFallbackDelaySeconds;
+      _matchmakingStatus =
+          'Đang ghép trận cùng Tổ Đội (${party.currentMemberCount}/${party.maxSlots})...';
+      _matchmakingTimer?.cancel();
+      _matchmakingTimer =
+          Timer.periodic(const Duration(milliseconds: 100), (_) {
+        if (!mounted) return;
+        _safeSetState(() => _elapsedSeconds += 0.1);
+        if (!_hasTriggeredFallback &&
+            _elapsedSeconds >= _currentSearchTimeoutSeconds) {
+          _matchmakingTimer?.cancel();
+          if (attempt == _searchAttempt) {
+            _hasTriggeredFallback = true;
+            unawaited(_leaderLaunchPartyMatch());
+          }
+        }
+      });
+      return;
+    }
+
+    final canSearchOnline =
+        FirebaseBootstrap.isReady && AuthService.instance.isSignedIn;
+    _currentSearchTimeoutSeconds = canSearchOnline
+        ? _onlineMatchmakingTimeoutSeconds
+        : _offlineBotFallbackDelaySeconds;
+
+    _matchmakingStatus = canSearchOnline
+        ? 'Đang tìm người chơi online... (tự ghép Bot sau ${_onlineMatchmakingTimeoutSeconds.toInt()}s)'
+        : 'Chưa có người chơi trực tuyến • Đang tự động ghép Bot AI...';
+
     _matchmakingTimer?.cancel();
     _matchmakingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (!mounted) return;
       _safeSetState(() {
         _elapsedSeconds += 0.1;
+        if (canSearchOnline &&
+            !_hasTriggeredFallback &&
+            _elapsedSeconds >= 5.0 &&
+            _elapsedSeconds < _currentSearchTimeoutSeconds) {
+          _matchmakingStatus =
+              'Đang mở rộng phạm vi rank tìm người chơi online...';
+        }
       });
 
-      // Cơ chế 60 giây fallback Bot đúng theo mục 4.2 tài liệu
-      if (_elapsedSeconds >= 60.0) {
+      // Tự động ghép Bot nếu hết thời gian chờ mà không tìm thấy người chơi online
+      if (!_hasTriggeredFallback && _elapsedSeconds >= _currentSearchTimeoutSeconds) {
         _matchmakingTimer?.cancel();
         if (attempt == _searchAttempt) {
           unawaited(_fallbackToBotSafely());
         }
       }
     });
-    if (FirebaseBootstrap.isReady) unawaited(_findOnlineMatch(attempt));
+    if (canSearchOnline) unawaited(_findOnlineMatch(attempt));
+  }
+
+  Future<void> _leaderLaunchPartyMatch() async {
+    if (!mounted || !_isInParty || _isPartyGuest) return;
+    await FriendPartyService.instance.markPartyMatchInProgress();
+    if (!mounted) return;
+    final currentParty =
+        FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+    _startPartyMatchLocally(currentParty);
   }
 
   /// Rút khỏi hàng chờ online trước khi đấu bot. Nếu đúng lúc đó đã bị ghép
   /// với người thật thì vào phòng người thật thay vì bỏ rơi đối thủ.
   Future<void> _fallbackToBotSafely() async {
+    if (_hasTriggeredFallback) return;
+    _hasTriggeredFallback = true;
     final service = _onlineService;
-    if (service != null && _roomId == null && FirebaseBootstrap.isReady) {
-      _safeSetState(() => _matchmakingStatus = 'Đang rút khỏi hàng chờ...');
+    if (service != null &&
+        _roomId == null &&
+        FirebaseBootstrap.isReady &&
+        AuthService.instance.isSignedIn) {
+      _safeSetState(() => _matchmakingStatus = 'Không có người chơi • Đang ghép Bot AI...');
       try {
         final roomId = await service.cancelSearch();
         if (!mounted) return;
@@ -166,6 +310,8 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
 
   Future<void> _findOnlineMatch(int attempt) async {
     try {
+      await _pendingCleanup;
+      if (!mounted || attempt != _searchAttempt) return;
       final service = FirebasePvpService();
       _onlineService = service;
       final roomId = await service.findMatch(
@@ -177,13 +323,19 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         return;
       }
       if (roomId == null) {
-        _safeSetState(() => _matchmakingStatus = 'Chưa tìm thấy đối thủ. Có thể chọn đấu bot.');
+        _safeSetState(() => _matchmakingStatus = 'Không có người chơi online • Đang ghép Bot AI...');
+        _matchmakingTimer?.cancel();
+        if (!_hasTriggeredFallback) unawaited(_fallbackToBotSafely());
         return;
       }
       await _joinOnlineRoom(roomId, service);
     } catch (error) {
       if (!mounted || attempt != _searchAttempt) return;
-      _safeSetState(() => _matchmakingStatus = 'Lỗi kết nối Firebase: $error');
+      _safeSetState(() => _matchmakingStatus = 'Không thể ghép online • Đang ghép Bot AI...');
+      _matchmakingTimer?.cancel();
+      if (!_hasTriggeredFallback && _roomId == null) {
+        unawaited(_fallbackToBotSafely());
+      }
     }
   }
 
@@ -215,10 +367,27 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _roomId = roomId;
     _matchmakingTimer?.cancel();
     if (!mounted) return;
+
+    // Đồng bộ cùng 1 bản đồ cho cả 2 người chơi trong phòng
+    final metaRaw = room['meta'];
+    final metaMap = metaRaw is Map
+        ? metaRaw.map((key, value) => MapEntry(key.toString(), value))
+        : <String, dynamic>{};
+    final roomMapId = (room['mapId'] as String?) ?? (metaMap['mapId'] as String?);
+    final syncedMapConfig = (roomMapId != null && roomMapId.isNotEmpty)
+        ? (GameAssetRegistry.instance.getMap(roomMapId) ??
+            GameAssetRegistry.instance.getMapFromSeed(roomId))
+        : GameAssetRegistry.instance.getMapFromSeed(roomId);
+
     _safeSetState(() {
       _opponent = opponent;
       _isMatchmaking = false;
-      _initGame(opponent, isOnline: true, isPlayerOne: isPlayerOne);
+      _initGame(
+        opponent,
+        isOnline: true,
+        isPlayerOne: isPlayerOne,
+        selectedMapConfig: syncedMapConfig,
+      );
     });
     // Bind TRƯỚC khi báo sẵn sàng để không lỡ sự kiện "ready" của đối thủ.
     _bindOnlineRoom(service, roomId, otherUid);
@@ -282,11 +451,164 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     });
   }
 
+  void _startPartyMatchLocally(PartyRoomState party) {
+    if (!_isMatchmaking) return;
+    _matchmakingTimer?.cancel();
+    _searchAttempt++;
+
+    final profile = PlayerStorage.currentProfile;
+    final myCode =
+        FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+    final leaderCode = party.leaderCode.trim().toUpperCase();
+    final isGuest = leaderCode != myCode;
+
+    final orderedBlueCodes = <String>[
+      leaderCode,
+      ...party.members.map((m) => m.code.trim().toUpperCase()),
+    ];
+    final rawSlotIdx = orderedBlueCodes.indexOf(myCode);
+    final localBlueSlotIndex =
+        (rawSlotIdx >= 0 ? rawSlotIdx : 0).clamp(0, _selectedMode.teamSize - 1);
+
+    final partyAllies =
+        FriendPartyService.instance.getPartyAlliesForMode(_selectedMode);
+    final humanAllyCodes = <int, String>{};
+    var allyPtr = 0;
+    if (isGuest && allyPtr < partyAllies.length) {
+      humanAllyCodes[allyPtr++] = leaderCode;
+    }
+    for (final m in party.members) {
+      final mCode = m.code.trim().toUpperCase();
+      if (mCode != myCode && allyPtr < partyAllies.length) {
+        humanAllyCodes[allyPtr++] = mCode;
+      }
+    }
+
+    final seed =
+        party.matchSeed != 0 ? party.matchSeed : party.partyCode.hashCode;
+    final roster = PvpOpponentInfo.generateTeamRoster(
+      playerRp: profile.rankPoints,
+      mode: _selectedMode,
+      playerHeroId: 'george',
+      onlineAllies: partyAllies,
+      seed: seed,
+    );
+    final opponent = roster.primaryOpponent;
+
+    final roomId = party.activeMatchRoomId ??
+        'party_${party.partyCode.toUpperCase()}_$seed';
+    final syncedMapConfig =
+        (party.activeMapId != null && party.activeMapId!.isNotEmpty)
+            ? (GameAssetRegistry.instance.getMap(party.activeMapId!) ??
+                GameAssetRegistry.instance.getMapFromSeed(roomId))
+            : GameAssetRegistry.instance.getMapFromSeed(roomId);
+
+    _safeSetState(() {
+      _opponent = opponent;
+      _isMatchmaking = false;
+      _initGame(
+        opponent,
+        roster: roster,
+        selectedMapConfig: syncedMapConfig,
+        localBlueSlotIndex: localBlueSlotIndex,
+        humanAllyCodes: humanAllyCodes,
+        isPartyGuest: isGuest,
+        partyRoomId: roomId,
+      );
+    });
+    _bindPartyMatchSync(roomId, myCode, humanAllyCodes, isGuest);
+  }
+
+  void _bindPartyMatchSync(
+    String roomId,
+    String myCode,
+    Map<int, String> humanAllyCodes,
+    bool isGuest,
+  ) {
+    _partySyncTimer?.cancel();
+    for (final sub in _partySyncSubs) {
+      sub.cancel();
+    }
+    _partySyncSubs.clear();
+    _isPartyStateWritePending = false;
+
+    for (final teammateCode in humanAllyCodes.values) {
+      _partySyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyPlayerState(roomId, teammateCode)
+            .listen((snapshot) {
+          _arenaGame?.applyPartyAllySnapshot(teammateCode, snapshot);
+        }),
+      );
+    }
+
+    _partySyncSubs.add(
+      FriendPartyService.instance.watchPartyActions(roomId).listen((action) {
+        final actor =
+            (action['actorCode'] as String? ?? '').trim().toUpperCase();
+        if (actor.isEmpty || actor == myCode) return;
+        _arenaGame?.applyPartyAllyAction(
+          actor,
+          action['action'] as String? ?? '',
+          text: action['text'] as String?,
+        );
+      }),
+    );
+
+    if (isGuest) {
+      _partySyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyHostState(roomId)
+            .listen((hostState) {
+          _arenaGame?.applyPartyHostState(hostState);
+        }),
+      );
+    }
+
+    _partySyncTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      _pushPartySyncTick(roomId, myCode, isGuest);
+    });
+  }
+
+  void _pushPartySyncTick(
+    String roomId,
+    String myCode,
+    bool isGuest, {
+    bool force = false,
+  }) {
+    final game = _arenaGame;
+    if (game == null || !mounted) return;
+    if (_isPartyStateWritePending && !force) return;
+    _isPartyStateWritePending = true;
+    final futures = <Future<void>>[
+      FriendPartyService.instance
+          .writePartyPlayerState(roomId, myCode, game.localSnapshot),
+      if (!isGuest)
+        FriendPartyService.instance
+            .writePartyHostState(roomId, game.partyHostSnapshot),
+    ];
+    Future.wait(futures).whenComplete(() {
+      _isPartyStateWritePending = false;
+    });
+  }
+
   void _pushLocalStateImmediately({bool force = false}) {
     final game = _arenaGame;
+    if (game == null || !mounted) return;
+    if (_isInParty) {
+      final party =
+          FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom;
+      final partyRoomId = party?.activeMatchRoomId;
+      if (partyRoomId != null) {
+        final myCode =
+            FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+        _pushPartySyncTick(partyRoomId, myCode, _isPartyGuest, force: force);
+      }
+      return;
+    }
     final service = _onlineService;
     final roomId = _roomId;
-    if (game == null || service == null || roomId == null || !mounted) return;
+    if (service == null || roomId == null) return;
     if (_isStateWritePending && !force) return;
     _isStateWritePending = true;
     service.writePlayerState(roomId, game.localSnapshot).then((_) {
@@ -340,8 +662,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _readyTimeoutTimer?.cancel();
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
-    if (_onlineService != null && _roomId != null) {
-      unawaited(_onlineService!.leaveRoom(_roomId!));
+    final oldService = _onlineService;
+    final oldRoomId = _roomId;
+    if (oldService != null && oldRoomId != null) {
+      _enqueueCleanup(() => oldService.leaveRoom(oldRoomId));
     }
     _roomId = null;
   }
@@ -351,6 +675,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     bool isOnline = false,
     bool isPlayerOne = true,
     PvpTeamRoster? roster,
+    MapAssetConfig? selectedMapConfig,
+    int localBlueSlotIndex = 0,
+    Map<int, String> humanAllyCodes = const {},
+    bool isPartyGuest = false,
+    String? partyRoomId,
   }) {
     _hasHandledMatchFinish = false;
     final profile = PlayerStorage.currentProfile;
@@ -363,6 +692,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       isPlayerOne: isPlayerOne,
       gameMode: _selectedMode,
       roster: roster,
+      selectedMapConfig: selectedMapConfig,
+      localBlueSlotIndex: localBlueSlotIndex,
+      humanAllyCodes: humanAllyCodes,
+      isPartyGuest: isPartyGuest,
     );
 
     _keyboardController?.detach();
@@ -386,6 +719,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       },
     );
     _keyboardController!.attach();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
 
     _arenaGame!.onStateChanged = () {
       final state = _arenaGame?.matchState;
@@ -409,6 +745,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         if (roomId != null && service != null) {
           unawaited(service.sendAction(roomId, action, text: text));
         }
+      };
+    } else if (partyRoomId != null) {
+      final myCode =
+          FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+      _arenaGame!.onLocalAction = (action, {text}) {
+        _pushLocalStateImmediately(force: true);
+        unawaited(
+          FriendPartyService.instance.sendPartyAction(
+            partyRoomId,
+            myCode,
+            action,
+            text: text,
+          ),
+        );
       };
     }
   }
@@ -473,6 +823,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
           },
           onPlayAgain: () {
             Navigator.of(context).pop();
+            if (_isInParty) {
+              Navigator.of(context).pop();
+              return;
+            }
             _prepareNextSearch();
             _safeSetState(() {
               _isMatchmaking = true;
@@ -518,12 +872,16 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
               child: _buildTopArenaBar(),
             ),
 
-            // 3. BANNER INTRO / ROUND END OVERLAY
+            // 3. BANNER INTRO / CHIẾN! / ROUND END OVERLAY (Không chặn thao tác chạm)
             if (_arenaGame!.matchState == PvpMatchState.waiting)
               Center(child: _buildWaitingOpponentBanner()),
             if (_arenaGame!.matchState == PvpMatchState.roundIntro ||
-                _arenaGame!.matchState == PvpMatchState.roundEnd)
-              Center(child: _buildRoundStatusBanner()),
+                _arenaGame!.matchState == PvpMatchState.roundEnd ||
+                (_arenaGame!.matchState == PvpMatchState.fighting &&
+                    _arenaGame!.fightStartBannerTimer > 0))
+              IgnorePointer(
+                child: Center(child: _buildRoundStatusBanner()),
+              ),
 
             // 4. VIRTUAL JOYSTICK (BÊN TRÁI)
             if (_showTouchControls || GamePlatformHelper.isMobile)
@@ -628,7 +986,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   // --- GIAI ĐOẠN 1: RADAR MATCHMAKING (HỖ TRỢ 1V1 / 2V2 / 4V4) ---
   Widget _buildMatchmakingView() {
     final profile = PlayerStorage.currentProfile;
-    final progress = (_elapsedSeconds / 60.0).clamp(0.0, 1.0);
+    final progress = (_elapsedSeconds / _currentSearchTimeoutSeconds).clamp(0.0, 1.0);
     final teamSize = _selectedMode.teamSize;
 
     return Scaffold(
@@ -660,7 +1018,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         child: InkWell(
                           key: Key('pvp_mode_tab_${mode.shortLabel.toLowerCase()}'),
                           borderRadius: BorderRadius.circular(10),
-                          onTap: () => _selectMatchmakingMode(mode),
+                          onTap: _isInParty ? null : () => _selectMatchmakingMode(mode),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(
@@ -917,9 +1275,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ),
                 const SizedBox(height: 12),
 
-                // Đồng hồ đếm ngược 60s
+                // Đồng hồ đếm ngược ghép trận
                 Text(
-                  '${_elapsedSeconds.toStringAsFixed(1)}s / 60.0s',
+                  '${_elapsedSeconds.toStringAsFixed(1)}s / ${_currentSearchTimeoutSeconds.toStringAsFixed(1)}s',
                   style: const TextStyle(
                     color: Colors.amberAccent,
                     fontSize: 22,
@@ -949,27 +1307,44 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         foregroundColor: Colors.white70,
                         side: const BorderSide(color: Colors.white30),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         _searchAttempt++;
-                        if (_onlineService != null) unawaited(_onlineService!.leaveQueue());
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('HỦY TÌM'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber.shade700,
-                        foregroundColor: Colors.black,
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () {
                         _matchmakingTimer?.cancel();
-                        unawaited(_fallbackToBotSafely());
+                        if (_isInParty) {
+                          if (_isPartyGuest) {
+                            FriendPartyService.instance.leaveParty();
+                          } else {
+                            await FriendPartyService.instance
+                                .resetPartyMatchStatus();
+                          }
+                        } else if (_onlineService != null) {
+                          unawaited(_onlineService!.leaveQueue());
+                        }
+                        if (mounted) Navigator.of(context).pop();
                       },
-                      icon: const Icon(Icons.flash_on),
-                      label: const Text('GHÉP NGAY (AI BOT)'),
+                      child: Text(_isPartyGuest ? 'RỜI PHÒNG' : 'HỦY TÌM'),
                     ),
+                    if (!_isPartyGuest) ...[
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade700,
+                          foregroundColor: Colors.black,
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          _matchmakingTimer?.cancel();
+                          if (_isInParty) {
+                            _hasTriggeredFallback = true;
+                            unawaited(_leaderLaunchPartyMatch());
+                          } else {
+                            unawaited(_fallbackToBotSafely());
+                          }
+                        },
+                        icon: const Icon(Icons.flash_on),
+                        label: const Text('GHÉP NGAY (AI BOT)'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -1296,13 +1671,21 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   Widget _buildRoundStatusBanner() {
     final game = _arenaGame!;
     final isIntro = game.matchState == PvpMatchState.roundIntro;
-    final text = isIntro
-        ? 'HIỆP ${game.currentRound} — CHIẾN!'
-        : (game.lastRoundPlayerWon ? 'THẮNG HIỆP!' : 'THUA HIỆP!');
+    final isFightStart = game.matchState == PvpMatchState.fighting;
+    final countdown = game.stateTimer.ceil().clamp(1, 3);
 
-    final color = isIntro
-        ? Colors.amberAccent
-        : (game.lastRoundPlayerWon ? Colors.greenAccent : Colors.redAccent);
+    final String text;
+    final Color color;
+    if (isIntro) {
+      text = 'HIỆP ${game.currentRound} • CHUẨN BỊ ($countdown)';
+      color = const Color(0xFF00E5FF);
+    } else if (isFightStart) {
+      text = 'HIỆP ${game.currentRound} — CHIẾN!';
+      color = Colors.amberAccent;
+    } else {
+      text = game.lastRoundPlayerWon ? 'THẮNG HIỆP!' : 'THUA HIỆP!';
+      color = game.lastRoundPlayerWon ? Colors.greenAccent : Colors.redAccent;
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1332,48 +1715,54 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         ),
         if (isIntro) ...[
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E2838).withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: (game.currentMapConfig.theme == 'ice_arena' ||
-                        game.currentMapConfig.theme == 'frost_island')
-                    ? const Color(0xFF00E5FF)
-                    : const Color(0xFFFFD700),
-                width: 1.2,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  (game.currentMapConfig.theme == 'ice_arena' ||
-                          game.currentMapConfig.theme == 'frost_island')
-                      ? Icons.ac_unit_rounded
-                      : Icons.account_balance_rounded,
-                  color: (game.currentMapConfig.theme == 'ice_arena' ||
-                          game.currentMapConfig.theme == 'frost_island')
-                      ? const Color(0xFF00E5FF)
-                      : const Color(0xFFFFD700),
-                  size: 14,
+          Builder(
+            builder: (context) {
+              final theme = game.currentMapConfig.theme;
+              final isIce = theme == 'ice_arena' || theme == 'frost_island';
+              final isForest = theme == 'forest' ||
+                  theme == 'nature' ||
+                  game.currentMapConfig.id == 'map_rung_cay';
+              final badgeColor = isIce
+                  ? const Color(0xFF00E5FF)
+                  : isForest
+                      ? const Color(0xFF00E676)
+                      : const Color(0xFFFFD700);
+              final badgeIcon = isIce
+                  ? Icons.ac_unit_rounded
+                  : isForest
+                      ? Icons.park_rounded
+                      : Icons.account_balance_rounded;
+              final textColor = isIce
+                  ? const Color(0xFFE0F7FA)
+                  : isForest
+                      ? const Color(0xFFE8F5E9)
+                      : const Color(0xFFFFF8E1);
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2838).withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: badgeColor, width: 1.2),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  'CHIẾN TRƯỜNG: ${game.currentMapConfig.name.toUpperCase()}',
-                  style: TextStyle(
-                    color: (game.currentMapConfig.theme == 'ice_arena' ||
-                            game.currentMapConfig.theme == 'frost_island')
-                        ? const Color(0xFFE0F7FA)
-                        : const Color(0xFFFFF8E1),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.0,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, color: badgeColor, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'CHIẾN TRƯỜNG: ${game.currentMapConfig.name.toUpperCase()}',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ],
@@ -1718,25 +2107,6 @@ class _PvpResultModal extends StatelessWidget {
     }
   }
 
-  static IconData _tierIcon(String tier) {
-    switch (tier) {
-      case 'Thách Đấu':
-        return Icons.local_fire_department_rounded;
-      case 'Huyền Thoại':
-        return Icons.auto_awesome_rounded;
-      case 'Kim Cương':
-        return Icons.diamond_rounded;
-      case 'Bạch Kim':
-        return Icons.shield_rounded;
-      case 'Vàng':
-        return Icons.military_tech_rounded;
-      case 'Bạc':
-        return Icons.star_rounded;
-      default:
-        return Icons.shield_outlined;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final title = result.isWinner ? 'CHIẾN THẮNG!' : 'THẤT BẠI!';
@@ -1880,10 +2250,9 @@ class _PvpResultModal extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (result.oldRankTier != result.newRankTier) ...[
-                          Icon(
-                            _tierIcon(result.oldRankTier),
-                            color: oldTierColor,
-                            size: 20,
+                          RankBadge(
+                            rankTier: result.oldRankTier,
+                            size: 26,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1903,18 +2272,10 @@ class _PvpResultModal extends StatelessWidget {
                             ),
                           ),
                         ],
-                        Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: newTierColor.withValues(alpha: 0.2),
-                            border: Border.all(color: newTierColor, width: 1.8),
-                          ),
-                          child: Icon(
-                            _tierIcon(result.newRankTier),
-                            color: newTierColor,
-                            size: 24,
-                          ),
+                        RankBadge(
+                          rankTier: result.newRankTier,
+                          size: 46,
+                          showGlow: true,
                         ),
                         const SizedBox(width: 8),
                         Column(

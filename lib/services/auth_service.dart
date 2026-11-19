@@ -10,6 +10,7 @@ import '../firebase_options.dart';
 import '../models/player_profile.dart';
 import 'database_service.dart';
 import 'firebase_bootstrap.dart';
+import 'friend_party_service.dart';
 import 'player_storage.dart';
 
 /// Lỗi xác thực đã được dịch sang tiếng Việt để hiển thị trực tiếp lên UI.
@@ -149,9 +150,10 @@ class AuthService {
     }
   }
 
-  /// Đăng xuất: đẩy nốt dữ liệu đang chờ lên server rồi thoát phiên.
+  /// Đăng xuất: đẩy nốt dữ liệu đang chờ lên server, đặt trạng thái Offline rồi thoát phiên.
   Future<void> logout() async {
     await flushPendingSync();
+    await FriendPartyService.instance.onUserLoggedOut();
     PlayerStorage.detachUser();
     if (isAvailable) {
       try {

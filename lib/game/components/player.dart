@@ -3,7 +3,6 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
-import '../../core/hero_skin_style.dart';
 import '../../core/stat_growth_formula.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
@@ -73,8 +72,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
   double _baseDamageAbsorption = 0.0;
   double temporaryPetDamageAbsorption = 0.0;
-  double get damageAbsorption => max(_baseDamageAbsorption,
-      goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0);
+  double get damageAbsorption => max(_baseDamageAbsorption, goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0);
   set damageAbsorption(double value) => _baseDamageAbsorption = value;
   double goldenShieldTimer = 0.0;
   double get shieldHp => goldenShieldTimer > 0
@@ -92,13 +90,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   Function()? onStatsChanged;
 
   final String heroId;
-  final String? skinId;
   int userHeroLevel;
 
   PlayerComponent({
     required Vector2 position,
     this.heroId = 'george',
-    this.skinId,
     this.userHeroLevel = 1,
   }) : super(
           position: position,
@@ -374,16 +370,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    final skin = HeroSkinStyle.resolve(heroId, skinId);
-    if (skin != null) canvas.saveLayer(null, Paint()..colorFilter = skin.filter);
-    try {
-      _renderAppearance(canvas);
-    } finally {
-      if (skin != null) canvas.restore();
-    }
-  }
-
-  void _renderAppearance(Canvas canvas) {
 
     final center = Offset(size.x / 2, size.y / 2);
 
@@ -397,10 +383,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         final trailPos = afterimagePositions[i] - position;
         final alpha = i < opacities.length ? opacities[i] : 0.05;
         final ghostPaint = Paint()
-          ..color = (heroId == 'kaelen'
-                  ? const Color(0xFF00F0FF)
-                  : const Color(0xFFFFD700))
-              .withValues(alpha: alpha);
+          ..color = const Color(0xFFFFD700).withValues(alpha: alpha);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromCenter(
@@ -417,9 +400,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
-    final bool isKale = heroId == 'kaelen' || heroId == 'kale';
     final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
-    final bool isCustomAnimated = isNova || isShadow || isKale || isEmber;
+    final bool isCustomAnimated = isNova || isShadow || isEmber;
 
     // Hiệu ứng nghiêng thân khi chạy, nhún bước chân và lao người khi tấn công
     final isMoving = !moveDirection.isZero();
@@ -517,85 +499,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         );
       } else {
         _renderClassicHero(canvas, breathOffset, legSwing);
-      }
-    } else if (isKale) {
-      if (isAttacking) {
-        final atkSheet =
-            SpriteImageCache.instance.getHeroAttackImage('kaelen');
-        if (atkSheet != null && atkSheet.width >= 2000) {
-          final row = facingRow.clamp(0, 4);
-          final progress =
-              (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
-          final col = (progress * 5).floor().clamp(0, 4);
-          const cellW = 512.0;
-          const cellH = 512.0;
-          const dstW = 96.0;
-          const dstH = 96.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - (478.0 / 512.0 * dstH);
-          final srcRect =
-              Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          canvas.drawImageRect(
-            atkSheet,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-        } else {
-          _renderClassicHero(canvas, breathOffset, legSwing);
-        }
-      } else if (isMoving) {
-        final frameIndex = (animTime * 14.0).floor() % 16;
-        final runImg = SpriteImageCache.instance
-            .getHeroSequenceFrame('kaelen', 'run', frameIndex);
-        if (runImg != null) {
-          const dstW = 52.0;
-          const dstH = 52.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - dstH;
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          final srcRect = Rect.fromLTWH(
-            0,
-            0,
-            runImg.width.toDouble(),
-            runImg.height.toDouble(),
-          );
-          canvas.drawImageRect(
-            runImg,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-        } else {
-          _renderClassicHero(canvas, breathOffset, legSwing);
-        }
-      } else {
-        // Kale đứng yên: Chạy đầy đủ chu kỳ 16 frames IDLE
-        final frameIndex = (animTime * 11.0).floor() % 16;
-        final idleImg = SpriteImageCache.instance
-            .getHeroSequenceFrame('kaelen', 'idle', frameIndex);
-        if (idleImg != null) {
-          const dstW = 52.0;
-          const dstH = 52.0;
-          final dstLeft = (size.x - dstW) / 2;
-          final dstTop = size.y - 2 - dstH;
-          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
-          final srcRect = Rect.fromLTWH(
-            0,
-            0,
-            idleImg.width.toDouble(),
-            idleImg.height.toDouble(),
-          );
-          canvas.drawImageRect(
-            idleImg,
-            srcRect,
-            dstRect,
-            Paint()..filterQuality = FilterQuality.none,
-          );
-        } else {
-          _renderClassicHero(canvas, breathOffset, legSwing);
-        }
       }
     } else if (isNova) {
       final heroSprite = isAttacking
@@ -775,10 +678,12 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         _renderClassicHero(canvas, breathOffset, legSwing);
       }
     } else {
-      final heroSprite = isAttacking
-          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
-              SpriteImageCache.instance.getHeroImage(heroId))
-          : SpriteImageCache.instance.getHeroImage(heroId);
+      final heroSprite = SpriteImageCache.isProceduralHero(heroId)
+          ? null
+          : (isAttacking
+              ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+                  SpriteImageCache.instance.getHeroImage(heroId))
+              : SpriteImageCache.instance.getHeroImage(heroId));
       if (heroSprite != null) {
         canvas.save();
         final pivotX = size.x / 2;
@@ -897,178 +802,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
   }
 
-  /// Vẽ Kaelen & Nova Blade với đầy đủ Cổ, Khuôn mặt sáng rõ, Vai, 2 Tay cầm Song Đao, Thắt lưng, Đùi & Giày
-  void _renderKaelenThunderblade(Canvas canvas, double breathOffset, double legSwing) {
-    final isNova = heroId == 'nova_blade';
-    final isMoving = !moveDirection.isZero();
-    final leftLift = isMoving ? max(0.0, sin(animTime * 15.0)) * 2.5 : 0.0;
-    final rightLift = isMoving ? max(0.0, -sin(animTime * 15.0)) * 2.5 : 0.0;
-    final armSwing = isMoving ? sin(animTime * 15.0) * 0.30 : sin(animTime * 3.0) * 0.08;
 
-    // 1. CapeLayer (Áo choàng bay phía sau)
-    final capeWave = sin(animTime * 4.0 - 0.5) * 2.8 + (isMoving ? -5.5 : 0.0);
-    final capePath = Path()
-      ..moveTo(9, 14 + breathOffset)
-      ..lineTo(25, 14 + breathOffset)
-      ..quadraticBezierTo(9 + capeWave, 27, 2 + capeWave, 37)
-      ..lineTo(19 + capeWave * 0.5, 36)
-      ..close();
-    final capeShader = LinearGradient(
-      colors: isNova
-          ? const [Color(0xFF7E22CE), Color(0xFF3B0764)]
-          : const [Color(0xFFFFD700), Color(0xFFFF8C00)],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    ).createShader(const Rect.fromLTWH(0, 12, 30, 26));
-    canvas.drawPath(capePath, Paint()..shader = capeShader);
-
-    // 2. Đùi & Giày giáp nối liền hông (FootLeft & FootRight có viền sáng rõ)
-    final legPaint = Paint()..color = const Color(0xFF334155);
-    final trimColor = isNova ? const Color(0xFF00E5FF) : const Color(0xFFFFD700);
-    final lLeg = RRect.fromRectAndRadius(
-      Rect.fromLTWH(9 + legSwing * 0.7, 26 - leftLift, 7.5, 12),
-      const Radius.circular(2.5),
-    );
-    final rLeg = RRect.fromRectAndRadius(
-      Rect.fromLTWH(19.5 - legSwing * 0.7, 26 - rightLift, 7.5, 12),
-      const Radius.circular(2.5),
-    );
-    canvas.drawRRect(lLeg, legPaint);
-    canvas.drawRRect(rLeg, legPaint);
-    canvas.drawRect(
-      Rect.fromLTWH(9 + legSwing * 0.7, 31 - leftLift, 7.5, 2.5),
-      Paint()..color = trimColor,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(19.5 - legSwing * 0.7, 31 - rightLift, 7.5, 2.5),
-      Paint()..color = trimColor,
-    );
-
-    // 3. Tay trái (LeftArm + Hand + Đao trái) nối từ vai trái
-    canvas.save();
-    canvas.translate(9, 17 + breathOffset);
-    canvas.rotate(isAttacking && comboStep == 2 ? attackAngle : -armSwing);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-3, 0, 5.5, 10),
-        const Radius.circular(2),
-      ),
-      Paint()..color = const Color(0xFF475569),
-    );
-    canvas.drawCircle(
-      const Offset(0, 10),
-      3.0,
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-    canvas.drawLine(
-      const Offset(0, 10),
-      const Offset(-11, -10),
-      Paint()
-        ..color = isNova ? const Color(0xFFE040FB) : const Color(0xFFFFD700)
-        ..strokeWidth = 3.0,
-    );
-    canvas.restore();
-
-    // 4. BodyLayer (Thân giáp + Thắt lưng + Lõi năng lượng ngực)
-    final bodyRect = Rect.fromLTWH(8, 14 + breathOffset, 20, 16);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bodyRect, const Radius.circular(4)),
-      Paint()..color = isNova ? const Color(0xFF3730A3) : const Color(0xFF1E3A8A),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bodyRect, const Radius.circular(4)),
-      Paint()
-        ..color = trimColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-    // Thắt lưng nối liền thân và đùi
-    canvas.drawRect(
-      Rect.fromLTWH(8, 25 + breathOffset, 20, 3.5),
-      Paint()..color = trimColor,
-    );
-    // Lõi tinh thể trước ngực
-    canvas.drawCircle(
-      Offset(18, 20 + breathOffset),
-      3.2,
-      Paint()..color = const Color(0xFF00F0FF),
-    );
-
-    // 5. Cổ, Khuôn mặt da người sáng rõ & Tóc trắng bạc dựng ngược
-    canvas.drawRect(
-      Rect.fromLTWH(14, 11 + breathOffset, 8, 4),
-      Paint()..color = const Color(0xFFFBBF24),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(9, 3 + breathOffset, 18, 11),
-        const Radius.circular(4),
-      ),
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-    final hairPath = Path()
-      ..moveTo(7, 7 + breathOffset)
-      ..lineTo(5, 0 + breathOffset)
-      ..lineTo(13, 3 + breathOffset)
-      ..lineTo(18, -3 + breathOffset)
-      ..lineTo(22, 3 + breathOffset)
-      ..lineTo(29, 0 + breathOffset)
-      ..lineTo(27, 7 + breathOffset)
-      ..close();
-    canvas.drawPath(hairPath, Paint()..color = const Color(0xFFF8FAFC));
-    canvas.drawRect(
-      Rect.fromLTWH(9, 5 + breathOffset, 18, 2.2),
-      Paint()..color = trimColor,
-    );
-    // Đôi mắt xanh điện quang
-    canvas.drawRect(
-      Rect.fromLTWH(19, 8.5 + breathOffset, 5, 2.5),
-      Paint()..color = const Color(0xFF0284C7),
-    );
-
-    // 6. Tay phải (RightArm + Hand + Đao phải) nối từ vai phải
-    canvas.save();
-    canvas.translate(27, 18 + breathOffset);
-    if (isAttacking) {
-      final comboRot = comboStep == 2 ? -attackAngle * 1.1 : attackAngle * 1.25;
-      canvas.rotate(comboRot);
-    } else {
-      canvas.rotate(armSwing);
-    }
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-3, -2, 6, 10),
-        const Radius.circular(2),
-      ),
-      Paint()..color = trimColor,
-    );
-    canvas.drawCircle(
-      const Offset(0, 7),
-      3.2,
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-
-    final hiltPaint = Paint()
-      ..color = const Color(0xFFFFD700)
-      ..strokeWidth = 3.2;
-    final bladeGlow = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..strokeWidth = 3.6
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    final bladeCore = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 1.6;
-
-    canvas.drawLine(const Offset(0, 8), const Offset(0, 2), hiltPaint);
-    canvas.drawLine(const Offset(0, 2), const Offset(11, -22), bladeGlow);
-    canvas.drawLine(const Offset(0, 2), const Offset(11, -22), bladeCore);
-    canvas.restore();
-  }
 
   Color get _heroPrimaryColor {
     switch (heroId) {
-      case 'kaelen':
-        return const Color(0xFF00F0FF);
       case 'nova_blade':
         return const Color(0xFF18FFFF);
       case 'shadow_01':
@@ -1093,8 +830,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   Color get _heroSecondaryColor {
     switch (heroId) {
-      case 'kaelen':
-        return const Color(0xFFFFD700);
       case 'nova_blade':
         return const Color(0xFFE040FB);
       case 'shadow_01':
@@ -1537,7 +1272,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           );
         }
       } else if (skill1StartOffset != null) {
-        // Kaelen Lôi Ảnh Trảm / George Búa Cuồng Phong
+        // George Búa Cuồng Phong / Lướt
         final start =
             center + Offset(skill1StartOffset!.x, skill1StartOffset!.y);
         final mid1 = Offset.lerp(start, center, 0.33)! + const Offset(0, -10);
@@ -1659,7 +1394,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           );
         }
       } else {
-        // Kaelen / Nova Blade / Shadow-01 / George: 4 Thanh Kiếm Ánh Sáng xoay 360 độ + Đuôi sáng
+        // Nova Blade / Shadow-01 / George: 4 Thanh Kiếm Ánh Sáng xoay 360 độ + Đuôi sáng
         canvas.drawCircle(
           center,
           45,
@@ -1767,7 +1502,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           Paint()..color = const Color(0xFFE040FB).withValues(alpha: progress * 0.8),
         );
       } else {
-        // Kaelen Thiên Phạt Lôi Ngục / Ember-02 Thái Dương Bộc Phá / George Cuồng Nộ
+        // Ember-02 Thái Dương Bộc Phá / George Cuồng Nộ
         canvas.drawCircle(
           center,
           60,

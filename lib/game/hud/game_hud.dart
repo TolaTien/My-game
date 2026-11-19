@@ -199,16 +199,12 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                     alignment: Alignment.center,
                     children: [
                       Icon(
-                        player.heroId == 'kaelen'
-                            ? Icons.bolt_rounded
-                            : player.heroId == 'ranger' || player.heroId == 'valeria'
-                                ? Icons.gps_fixed_rounded
-                                : player.heroId == 'ninja'
-                                    ? Icons.flash_on_rounded
-                                    : Icons.shield,
-                        color: player.heroId == 'kaelen'
-                            ? const Color(0xFF00E5FF)
-                            : Colors.orangeAccent,
+                        player.heroId == 'ranger' || player.heroId == 'valeria'
+                            ? Icons.gps_fixed_rounded
+                            : player.heroId == 'ninja'
+                                ? Icons.flash_on_rounded
+                                : Icons.shield,
+                        color: Colors.orangeAccent,
                         size: 30,
                       ),
                       Positioned(

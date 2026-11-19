@@ -24,6 +24,7 @@ class LeaderboardEntry {
     required this.lastUpdated,
     this.isLocalPlayer = false,
     this.heroId = 'george',
+    // ignore: prefer_initializing_formals
   }) : _rankStars = rankStars;
 
   /// Tổng số sao tích lũy

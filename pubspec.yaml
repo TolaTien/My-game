@@ -29,20 +29,16 @@ flutter:
   assets:
     - assets/data/
     - assets/images/
+    - assets/images/companions/
     - assets/images/heroes/
     - assets/images/heroes/nova/
     - assets/images/heroes/ember/
-    - assets/images/heroes/kale/
-    - assets/images/heroes/kale/run/
-    - assets/images/heroes/kale/idle/
     - assets/images/heroes/shadow/
     - assets/images/heroes/shadow/idle/
     - assets/images/heroes/shadow/run/
     - assets/images/heroes/shadow/attack/
     - assets/images/skills/
-    - assets/images/companions/
-    - assets/images/enemies/
+    - assets/images/ranks/
     - assets/images/maps/
-    - assets/images/pickups/
     - assets/images/ui/
     - assets/audio/

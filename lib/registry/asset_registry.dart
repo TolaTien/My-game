@@ -366,9 +366,6 @@ class GameAssetRegistry {
     if (heroId == 'nova') {
       return _heroes['nova'] ?? _heroes['nova_blade'] ?? _heroes['george']!;
     }
-    if (heroId == 'kale') {
-      return _heroes['kale'] ?? _heroes['kaelen'] ?? _heroes['george']!;
-    }
     if (heroId == 'shadow') {
       return _heroes['shadow'] ?? _heroes['shadow_01'] ?? _heroes['george']!;
     }
@@ -381,7 +378,6 @@ class GameAssetRegistry {
   List<SkillAssetConfig> getSkillsForHero(String heroId) {
     var effectiveId = heroId;
     if (effectiveId == 'nova') effectiveId = 'nova_blade';
-    if (effectiveId == 'kale') effectiveId = 'kaelen';
     if (effectiveId == 'shadow') effectiveId = 'shadow_01';
     if (effectiveId == 'ember') effectiveId = 'ember_02';
     final list = _skills.values
@@ -406,7 +402,8 @@ class GameAssetRegistry {
     final list = _maps.values.where((m) =>
       m.id == 'sunken_golden_sanctum' ||
       m.id == 'map_bang' ||
-      m.id == 'map_dao_bang_gia'
+      m.id == 'map_dao_bang_gia' ||
+      m.id == 'map_rung_cay'
     ).toList();
     if (list.isNotEmpty) return list;
     if (_maps.isNotEmpty) return _maps.values.toList();
@@ -421,6 +418,21 @@ class GameAssetRegistry {
         : pool;
     final effectivePool = candidates.isNotEmpty ? candidates : pool;
     return effectivePool[Random().nextInt(effectivePool.length)];
+  }
+
+  /// Chọn bản đồ đồng bộ tất định theo [seed] (ví dụ `roomId` trong PvP Online).
+  /// Dùng FNV-1a 32-bit trên `codeUnits` + sắp xếp theo `id` để mọi nền tảng
+  /// (Web, Android, Windows) luôn cho ra cùng 1 bản đồ cho cùng 1 trận đấu.
+  MapAssetConfig getMapFromSeed(String seed) {
+    final pool = List<MapAssetConfig>.from(availableMatchMaps)
+      ..sort((a, b) => a.id.compareTo(b.id));
+    if (pool.length <= 1) return pool.first;
+    int hash = 0x811c9dc5;
+    for (final unit in seed.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0x7fffffff;
+    }
+    return pool[hash % pool.length];
   }
 
   MapAssetConfig getMapForStage(int stage) {
@@ -537,34 +549,9 @@ class GameAssetRegistry {
         ),
         skillIds: ['george_hurricane', 'george_earth_smash', 'george_berserk'],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/george_idle.png',
-          runSheet: 'assets/images/heroes/Tien-run-trimmed.png',
-          attackSheet: 'assets/images/heroes/george_attack.png',
-          skill1Sheet: 'assets/images/heroes/Tien-asm_hammer_hammer_hurricane.png',
-        ),
-      ),
-      const HeroAssetConfig(
-        id: 'kaelen',
-        name: 'Kaelen — Kiếm Khách Lôi Quang',
-        role: 'Sát Thủ / Đấu Sĩ Cơ Động',
-        classType: 'assassin',
-        priceGold: 5000,
-        unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 110, ki: 120, attack: 32, speed: 175),
-        growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 11.5,
-          kiPerLevel: 4.5,
-          attackPerLevel: 3.0,
-        ),
-        skillIds: [
-          'kaelen_thunder_flash',
-          'kaelen_storm_vortex',
-          'kaelen_heaven_judgment',
-        ],
-        sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/kaelen_idle.png',
-          runSheet: 'assets/images/heroes/kaelen_run.png',
-          attackSheet: 'assets/images/heroes/kaelen_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
       const HeroAssetConfig(
@@ -582,9 +569,9 @@ class GameAssetRegistry {
         ),
         skillIds: ['ranger_multishot', 'ranger_trap_roll', 'ranger_star_rain'],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/ranger_idle.png',
-          runSheet: 'assets/images/heroes/ranger_run.png',
-          attackSheet: 'assets/images/heroes/ranger_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
       const HeroAssetConfig(
@@ -606,9 +593,9 @@ class GameAssetRegistry {
           'tanker_earthquake',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/tanker_idle.png',
-          runSheet: 'assets/images/heroes/tanker_run.png',
-          attackSheet: 'assets/images/heroes/tanker_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
       const HeroAssetConfig(
@@ -630,9 +617,9 @@ class GameAssetRegistry {
           'ninja_shadow_execution',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/ninja_idle.png',
-          runSheet: 'assets/images/heroes/ninja_run.png',
-          attackSheet: 'assets/images/heroes/ninja_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
       const HeroAssetConfig(
@@ -654,9 +641,9 @@ class GameAssetRegistry {
           'valeria_absolute_zero',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/valeria_idle.png',
-          runSheet: 'assets/images/heroes/valeria_run.png',
-          attackSheet: 'assets/images/heroes/valeria_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
       const HeroAssetConfig(
@@ -678,9 +665,9 @@ class GameAssetRegistry {
           'garrick_orbital_barrage',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/garrick_idle.png',
-          runSheet: 'assets/images/heroes/garrick_run.png',
-          attackSheet: 'assets/images/heroes/garrick_attack.png',
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
         ),
       ),
     ];
@@ -702,8 +689,8 @@ class GameAssetRegistry {
       bossSpawn: [20, 14],
       monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
       buffNodes: [[20, 4], [10, 14], [30, 14]],
-      tilesetImage: 'assets/images/maps/volcanic_frost_tileset.png',
-      tiledMapFile: 'assets/images/maps/volcanic_frost_ruins_map.png',
+      tilesetImage: '',
+      tiledMapFile: '',
       imageAsset: '',
       theme: 'volcanic',
       description: 'Vùng phế tích núi lửa đan xen hàn băng cổ xưa.',
@@ -720,8 +707,8 @@ class GameAssetRegistry {
       bossSpawn: [20, 14],
       monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
       buffNodes: [[20, 4], [10, 14], [30, 14]],
-      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
-      tiledMapFile: 'assets/images/maps/neon_city_map.png',
+      tilesetImage: '',
+      tiledMapFile: '',
       imageAsset: '',
       theme: 'neon',
       description: 'Đô thị tương lai ánh sáng neon rực rỡ.',
@@ -738,8 +725,8 @@ class GameAssetRegistry {
       bossSpawn: [20, 14],
       monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
       buffNodes: [[20, 4], [10, 14], [30, 14]],
-      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
-      tiledMapFile: 'assets/images/maps/cyber_factory_map.png',
+      tilesetImage: '',
+      tiledMapFile: '',
       imageAsset: '',
       theme: 'cyber',
       description: 'Nhà máy cơ khí và robot công nghệ cao.',
@@ -756,8 +743,8 @@ class GameAssetRegistry {
       bossSpawn: [20, 14],
       monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
       buffNodes: [[20, 4], [10, 14], [30, 14]],
-      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
-      tiledMapFile: 'assets/images/maps/space_station_map.png',
+      tilesetImage: '',
+      tiledMapFile: '',
       imageAsset: '',
       theme: 'space',
       description: 'Trạm không gian ngoài quỹ đạo Trái Đất.',
@@ -774,14 +761,15 @@ class GameAssetRegistry {
       bossSpawn: [20, 14],
       monsterPortals: [[5, 5], [34, 5], [5, 22], [34, 22]],
       buffNodes: [[20, 4], [10, 14], [30, 14]],
-      tilesetImage: 'assets/images/maps/neon_city_tileset.png',
-      tiledMapFile: 'assets/images/maps/alien_ruins_map.png',
+      tilesetImage: '',
+      tiledMapFile: '',
       imageAsset: '',
       theme: 'alien',
       description: 'Di tích sinh vật ngoài hành tinh cổ xưa.',
     );
     _maps['map_bang'] = defaultFrostArenaMap;
     _maps['map_dao_bang_gia'] = defaultFrostIslandMap;
+    _maps['map_rung_cay'] = defaultForestMap;
   }
 
   static const MapAssetConfig defaultSanctumMap = MapAssetConfig(
@@ -848,8 +836,36 @@ class GameAssetRegistry {
     cols: 36,
     rows: 24,
     tileSize: 32,
-    playerSpawn: [12, 9],
-    bossSpawn: [28, 12],
+    playerSpawn: [13, 11],
+    bossSpawn: [24, 11],
+    monsterPortals: [
+      [6, 4],
+      [29, 4],
+      [7, 18],
+      [28, 18],
+    ],
+    buffNodes: [
+      [18, 5],
+      [12, 12],
+      [24, 12],
+    ],
+    tilesetImage: '',
+    tiledMapFile: '',
+    imageAsset: 'assets/images/maps/map-dao-bang-gia.png',
+    theme: 'frost_island',
+    description: 'Quần đảo băng trôi tráng lệ giữa vùng biển bắc cực huyền bí.',
+  );
+
+  static const MapAssetConfig defaultForestMap = MapAssetConfig(
+    id: 'map_rung_cay',
+    stage: 4,
+    name: 'Rừng Cây Cổ Thụ',
+    mode: 'all',
+    cols: 36,
+    rows: 24,
+    tileSize: 32,
+    playerSpawn: [12, 10],
+    bossSpawn: [24, 12],
     monsterPortals: [
       [4, 4],
       [31, 4],
@@ -858,13 +874,13 @@ class GameAssetRegistry {
     ],
     buffNodes: [
       [18, 4],
-      [9, 12],
-      [27, 12],
+      [8, 12],
+      [24, 18],
     ],
     tilesetImage: '',
     tiledMapFile: '',
-    imageAsset: 'assets/images/maps/map-dao-bang-gia.png',
-    theme: 'frost_island',
-    description: 'Quần đảo băng trôi tráng lệ giữa vùng biển bắc cực huyền bí.',
+    imageAsset: 'assets/images/maps/map-rung-cay.png',
+    theme: 'forest',
+    description: 'Khu rừng rậm nguyên sinh với thảm thực vật kỳ ảo và những tán cây cổ thụ ngút ngàn.',
   );
 }
