@@ -30,10 +30,13 @@ flutter:
     - assets/data/
     - assets/images/
     - assets/images/heroes/
+    - assets/images/heroes/ember/
+    - assets/images/heroes/garrick/
+    - assets/images/heroes/kaelen/
+    - assets/images/heroes/nova_blade/
+    - assets/images/heroes/shadow/
+    - assets/images/heroes/valenria/
     - assets/images/skills/
     - assets/images/companions/
-    - assets/images/enemies/
     - assets/images/maps/
-    - assets/images/pickups/
-    - assets/images/ui/
     - assets/audio/

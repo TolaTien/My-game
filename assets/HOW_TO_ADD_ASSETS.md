@@ -31,7 +31,7 @@ assets/
 
 ## 🦸 2. Cách Thêm Nhân Vật Mới (Hero)
 
-1. Copy các file sprite sheet PNG của nhân vật vào `assets/images/heroes/` (ví dụ: `my_hero_idle.png`, `my_hero_run.png`, `my_hero_attack.png`).
+1. Copy các file sprite sheet PNG của nhân vật vào `assets/images/heroes/` hoặc thư mục con của nhân vật (ví dụ: `assets/images/heroes/my_hero/my_hero_idle.png`). Nếu dùng thư mục con, khai báo chính thư mục đó trong `flutter.assets` của `pubspec.yaml`: Flutter không tự đóng kèm ảnh nằm trong các thư mục con chỉ từ khai báo thư mục cha. Giữ đường dẫn trong JSON và bộ cache đồng bộ với vị trí thực tế. Các thư mục hiện có gồm `ember/`, `garrick/`, `kaelen/`, `nova_blade/`, `shadow/` và `valenria/`.
 2. Mở file `assets/data/heroes.json` và thêm một object mới vào mảng `"heroes"`:
 
 ```json

@@ -52,9 +52,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/nova_blade_portrait.png",
-        "runSheet": "assets/images/heroes/nova_blade_sheet.png",
-        "attackSheet": "assets/images/heroes/nova_blade_sheet.png",
+        "idleSheet": "assets/images/heroes/nova_blade/nova_blade_portrait.png",
+        "runSheet": "assets/images/heroes/nova_blade/nova_blade_sheet.png",
+        "attackSheet": "assets/images/heroes/nova_blade/nova_blade_sheet.png",
         "skill1Sheet": "assets/images/skills/nova_energy_slash.png",
         "useProceduralFallback": true
       }
@@ -81,9 +81,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/shadow_01_portrait.png",
-        "runSheet": "assets/images/heroes/shadow_01_sheet.png",
-        "attackSheet": "assets/images/heroes/shadow_01_sheet.png",
+        "idleSheet": "assets/images/heroes/shadow/shadow_01_portrait.png",
+        "runSheet": "assets/images/heroes/shadow/shadow_01_sheet.png",
+        "attackSheet": "assets/images/heroes/shadow/shadow_01_sheet.png",
         "skill1Sheet": "assets/images/skills/cyber_skill_effects.png",
         "useProceduralFallback": true
       }
@@ -110,9 +110,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/ember_02_portrait.png",
-        "runSheet": "assets/images/heroes/ember_02_sheet.png",
-        "attackSheet": "assets/images/heroes/ember_02_sheet.png",
+        "idleSheet": "assets/images/heroes/ember/ember_02_portrait.png",
+        "runSheet": "assets/images/heroes/ember/ember_02_sheet.png",
+        "attackSheet": "assets/images/heroes/ember/ember_02_sheet.png",
         "useProceduralFallback": true
       }
     },
@@ -138,9 +138,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/valeria_portrait.png",
-        "runSheet": "assets/images/heroes/valeria_sheet.png",
-        "attackSheet": "assets/images/heroes/valeria_sheet.png",
+        "idleSheet": "assets/images/heroes/valenria/valeria_portrait.png",
+        "runSheet": "assets/images/heroes/valenria/valeria_sheet.png",
+        "attackSheet": "assets/images/heroes/valenria/valeria_sheet.png",
         "skill1Sheet": "assets/images/skills/valeria_skills.png",
         "useProceduralFallback": true
       }
@@ -167,9 +167,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/garrick_portrait.png",
-        "runSheet": "assets/images/heroes/garrick_sheet.png",
-        "attackSheet": "assets/images/heroes/garrick_sheet.png",
+        "idleSheet": "assets/images/heroes/garrick/garrick_portrait.png",
+        "runSheet": "assets/images/heroes/garrick/garrick_sheet.png",
+        "attackSheet": "assets/images/heroes/garrick/garrick_sheet.png",
         "useProceduralFallback": true
       }
     },
@@ -195,9 +195,9 @@
       "sprites": {
         "frameWidth": 48,
         "frameHeight": 48,
-        "idleSheet": "assets/images/heroes/kaelen_portrait.png",
-        "runSheet": "assets/images/heroes/kaelen_sheet.png",
-        "attackSheet": "assets/images/heroes/kaelen_sheet.png",
+        "idleSheet": "assets/images/heroes/kaelen/kaelen_portrait.png",
+        "runSheet": "assets/images/heroes/kaelen/kaelen_sheet.png",
+        "attackSheet": "assets/images/heroes/kaelen/kaelen_sheet.png",
         "skill1Sheet": "assets/images/skills/kaelen_thunder_flash.png",
         "useProceduralFallback": true
       }

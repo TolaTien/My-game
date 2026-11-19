@@ -89,7 +89,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.7,
       "radius": 130.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -102,7 +102,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.4,
       "radius": 115.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -115,7 +115,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 180.0,
-      "iconAsset": "assets/images/heroes/ember_02_sheet.png",
+      "iconAsset": "assets/images/heroes/ember/ember_02_sheet.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
@@ -167,7 +167,7 @@
       "kiCost": 20.0,
       "damageMultiplier": 1.85,
       "radius": 130.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
+      "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_hurricane.wav"
     },
     {
@@ -180,7 +180,7 @@
       "kiCost": 35.0,
       "damageMultiplier": 2.3,
       "radius": 115.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
+      "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_smash.wav"
     },
     {
@@ -193,7 +193,7 @@
       "kiCost": 50.0,
       "damageMultiplier": 3.5,
       "radius": 175.0,
-      "iconAsset": "assets/images/heroes/garrick_sheet.png",
+      "iconAsset": "assets/images/heroes/garrick/garrick_sheet.png",
       "sfxAsset": "sfx_skill_berserk.wav"
     },
     {
