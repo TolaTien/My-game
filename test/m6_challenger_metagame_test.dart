@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flame/components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,24 +13,30 @@ import 'package:my_game/services/audio_service.dart';
 import 'package:my_game/services/database_service.dart';
 import 'package:my_game/services/player_storage.dart';
 
+import 'support/leaderboard_fixture.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('xyz.luan/audioplayers.global'),
-      (MethodCall methodCall) async => 1,
-    );
+          const MethodChannel('xyz.luan/audioplayers.global'),
+          (MethodCall methodCall) async => 1,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('xyz.luan/audioplayers'),
-      (MethodCall methodCall) async => 1,
-    );
+          const MethodChannel('xyz.luan/audioplayers'),
+          (MethodCall methodCall) async => 1,
+        );
   });
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      MockDatabaseService.storageKeyLeaderboard: jsonEncode(
+        leaderboardFixture().map((entry) => entry.toJson()).toList(),
+      ),
+    });
     await PlayerStorage.loadProfile();
   });
 
@@ -42,83 +49,165 @@ void main() {
       expect(p0.canSpinToday(), isTrue, reason: 'Timestamp 0 must permit spin');
 
       const pNeg1 = PlayerProfile(lastSpinTimestamp: -1);
-      expect(pNeg1.canSpinToday(), isTrue, reason: 'Timestamp -1 must permit spin');
+      expect(
+        pNeg1.canSpinToday(),
+        isTrue,
+        reason: 'Timestamp -1 must permit spin',
+      );
 
       // 64-bit minInt edge (-9223372036854775808)
       const minInt = -9223372036854775808;
       const pMin = PlayerProfile(lastSpinTimestamp: minInt);
-      expect(pMin.canSpinToday(), isTrue, reason: 'Timestamp minInt must not throw DateTime error and permit spin');
+      expect(
+        pMin.canSpinToday(),
+        isTrue,
+        reason:
+            'Timestamp minInt must not throw DateTime error and permit spin',
+      );
     });
 
     test('Anti-Cheat: Device clock turned backwards into past epoch blocks spinning', () {
       final nowUtc = DateTime.now().toUtc();
-      
+
       // Scenario A: Player spun "in the future" (e.g. tomorrow or next year), then turned clock back to today
-      final futureSpinMs = nowUtc.add(const Duration(days: 1)).millisecondsSinceEpoch;
-      final profileCheatedFuture = PlayerProfile(lastSpinTimestamp: futureSpinMs);
-      expect(profileCheatedFuture.canSpinToday(), isFalse,
-          reason: 'If recorded spin date is in the future relative to device clock, spin must be denied');
+      final futureSpinMs = nowUtc
+          .add(const Duration(days: 1))
+          .millisecondsSinceEpoch;
+      final profileCheatedFuture = PlayerProfile(
+        lastSpinTimestamp: futureSpinMs,
+      );
+      expect(
+        profileCheatedFuture.canSpinToday(),
+        isFalse,
+        reason: 'If recorded spin date is in the future relative to device clock, spin must be denied',
+      );
 
       // Scenario B: User spun earlier today, then rolled system clock back by 2 hours (still same day)
       final spinEarlierToday = nowUtc.millisecondsSinceEpoch;
       final profileSameDay = PlayerProfile(lastSpinTimestamp: spinEarlierToday);
-      expect(profileSameDay.canSpinToday(), isFalse,
-          reason: 'Rolling clock backwards within same day must still reject spin');
+      expect(
+        profileSameDay.canSpinToday(),
+        isFalse,
+        reason:
+            'Rolling clock backwards within same day must still reject spin',
+      );
 
       // Scenario C: Far future spin timestamp (e.g. 5 days ahead) vs today
-      final farFutureSpin = nowUtc.add(const Duration(days: 5)).millisecondsSinceEpoch;
+      final farFutureSpin = nowUtc
+          .add(const Duration(days: 5))
+          .millisecondsSinceEpoch;
       final profileFarFuture = PlayerProfile(lastSpinTimestamp: farFutureSpin);
-      expect(profileFarFuture.canSpinToday(), isFalse,
-          reason: 'Far future timestamp must remain blocked until real time overtakes it');
+      expect(
+        profileFarFuture.canSpinToday(),
+        isFalse,
+        reason: 'Far future timestamp must remain blocked until real time overtakes it',
+      );
     });
 
-    test('Future timestamps into year 2038 or across leap years operate safely', () {
-      // Unix 32-bit overflow boundary: 2038-01-19T03:14:07Z (2147483647 seconds)
-      final y2038Utc = DateTime.utc(2038, 1, 19, 3, 14, 7);
-      final profile2038 = PlayerProfile(lastSpinTimestamp: y2038Utc.millisecondsSinceEpoch);
-      expect(profile2038.lastSpinTimestamp, equals(y2038Utc.millisecondsSinceEpoch));
+    test(
+      'Future timestamps into year 2038 or across leap years operate safely',
+      () {
+        // Unix 32-bit overflow boundary: 2038-01-19T03:14:07Z (2147483647 seconds)
+        final y2038Utc = DateTime.utc(2038, 1, 19, 3, 14, 7);
+        final profile2038 = PlayerProfile(
+          lastSpinTimestamp: y2038Utc.millisecondsSinceEpoch,
+        );
+        expect(
+          profile2038.lastSpinTimestamp,
+          equals(y2038Utc.millisecondsSinceEpoch),
+        );
 
-      // Leap year boundary calculation: Feb 28 to Feb 29 (2028 leap)
-      final leapSpin = DateTime.utc(2028, 2, 28, 23, 59, 59, 999);
-      final leapNextDay = DateTime.utc(2028, 2, 29, 0, 0, 0, 1);
-      final lastDateUtc = DateTime.utc(leapSpin.year, leapSpin.month, leapSpin.day);
-      final nowDateUtc = DateTime.utc(leapNextDay.year, leapNextDay.month, leapNextDay.day);
-      expect(nowDateUtc.isAfter(lastDateUtc), isTrue, reason: '2028 leap day transition resets daily spin');
+        // Leap year boundary calculation: Feb 28 to Feb 29 (2028 leap)
+        final leapSpin = DateTime.utc(2028, 2, 28, 23, 59, 59, 999);
+        final leapNextDay = DateTime.utc(2028, 2, 29, 0, 0, 0, 1);
+        final lastDateUtc = DateTime.utc(
+          leapSpin.year,
+          leapSpin.month,
+          leapSpin.day,
+        );
+        final nowDateUtc = DateTime.utc(
+          leapNextDay.year,
+          leapNextDay.month,
+          leapNextDay.day,
+        );
+        expect(
+          nowDateUtc.isAfter(lastDateUtc),
+          isTrue,
+          reason: '2028 leap day transition resets daily spin',
+        );
 
-      // Leap day to March 1 (2028)
-      final leapMar1 = DateTime.utc(2028, 3, 1, 0, 0, 0, 1);
-      final leapMar1Date = DateTime.utc(leapMar1.year, leapMar1.month, leapMar1.day);
-      final leapDayDate = DateTime.utc(leapNextDay.year, leapNextDay.month, leapNextDay.day);
-      expect(leapMar1Date.isAfter(leapDayDate), isTrue);
+        // Leap day to March 1 (2028)
+        final leapMar1 = DateTime.utc(2028, 3, 1, 0, 0, 0, 1);
+        final leapMar1Date = DateTime.utc(
+          leapMar1.year,
+          leapMar1.month,
+          leapMar1.day,
+        );
+        final leapDayDate = DateTime.utc(
+          leapNextDay.year,
+          leapNextDay.month,
+          leapNextDay.day,
+        );
+        expect(leapMar1Date.isAfter(leapDayDate), isTrue);
 
-      // Non-leap year: Feb 28 2027 to March 1 2027
-      final nonLeapSpin = DateTime.utc(2027, 2, 28, 23, 59, 59);
-      final nonLeapMar1 = DateTime.utc(2027, 3, 1, 0, 0, 1);
-      final lastNonLeap = DateTime.utc(nonLeapSpin.year, nonLeapSpin.month, nonLeapSpin.day);
-      final nowNonLeap = DateTime.utc(nonLeapMar1.year, nonLeapMar1.month, nonLeapMar1.day);
-      expect(nowNonLeap.isAfter(lastNonLeap), isTrue);
-    });
+        // Non-leap year: Feb 28 2027 to March 1 2027
+        final nonLeapSpin = DateTime.utc(2027, 2, 28, 23, 59, 59);
+        final nonLeapMar1 = DateTime.utc(2027, 3, 1, 0, 0, 1);
+        final lastNonLeap = DateTime.utc(
+          nonLeapSpin.year,
+          nonLeapSpin.month,
+          nonLeapSpin.day,
+        );
+        final nowNonLeap = DateTime.utc(
+          nonLeapMar1.year,
+          nonLeapMar1.month,
+          nonLeapMar1.day,
+        );
+        expect(nowNonLeap.isAfter(lastNonLeap), isTrue);
+      },
+    );
 
     test('Precision Boundary: Consecutive evaluations 1ms before and after 00:00:00.000 UTC', () {
       final nowUtc = DateTime.now().toUtc();
-      final todayMidnightUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
+      final todayMidnightUtc = DateTime.utc(
+        nowUtc.year,
+        nowUtc.month,
+        nowUtc.day,
+      );
 
       // 1 ms before today's 00:00:00.000 UTC was yesterday's 23:59:59.999 UTC
-      final yesterdayLastMs = todayMidnightUtc.subtract(const Duration(milliseconds: 1)).millisecondsSinceEpoch;
-      final profileYesterday = PlayerProfile(lastSpinTimestamp: yesterdayLastMs);
-      expect(profileYesterday.canSpinToday(), isTrue,
-          reason: 'Spin at 23:59:59.999 UTC yesterday MUST permit spin today');
+      final yesterdayLastMs = todayMidnightUtc
+          .subtract(const Duration(milliseconds: 1))
+          .millisecondsSinceEpoch;
+      final profileYesterday = PlayerProfile(
+        lastSpinTimestamp: yesterdayLastMs,
+      );
+      expect(
+        profileYesterday.canSpinToday(),
+        isTrue,
+        reason: 'Spin at 23:59:59.999 UTC yesterday MUST permit spin today',
+      );
 
       // 1 ms after today's 00:00:00.000 UTC was today's 00:00:00.001 UTC
-      final todayFirstMs = todayMidnightUtc.add(const Duration(milliseconds: 1)).millisecondsSinceEpoch;
+      final todayFirstMs = todayMidnightUtc
+          .add(const Duration(milliseconds: 1))
+          .millisecondsSinceEpoch;
       final profileToday = PlayerProfile(lastSpinTimestamp: todayFirstMs);
-      expect(profileToday.canSpinToday(), isFalse,
-          reason: 'Spin at 00:00:00.001 UTC today MUST reject spin today');
+      expect(
+        profileToday.canSpinToday(),
+        isFalse,
+        reason: 'Spin at 00:00:00.001 UTC today MUST reject spin today',
+      );
 
       // Exact 00:00:00.000 UTC today
-      final profileExactMidnight = PlayerProfile(lastSpinTimestamp: todayMidnightUtc.millisecondsSinceEpoch);
-      expect(profileExactMidnight.canSpinToday(), isFalse,
-          reason: 'Spin at exactly 00:00:00.000 UTC today MUST reject spin today');
+      final profileExactMidnight = PlayerProfile(
+        lastSpinTimestamp: todayMidnightUtc.millisecondsSinceEpoch,
+      );
+      expect(
+        profileExactMidnight.canSpinToday(),
+        isFalse,
+        reason: 'Spin at exactly 00:00:00.000 UTC today MUST reject spin today',
+      );
     });
 
     test('timeUntilNextReset invariants: duration is non-negative and strictly <= 24 hours', () {
@@ -151,28 +240,60 @@ void main() {
 
       final unlockSuccess = await PlayerStorage.unlockHero('tanker', 100);
       expect(unlockSuccess, isTrue);
-      expect(PlayerStorage.currentProfile.gold, equals(0), reason: '100 gold - 100 gold == exactly 0 gold');
-      expect(PlayerStorage.currentProfile.unlockedHeroIds.contains('tanker'), isTrue);
+      expect(
+        PlayerStorage.currentProfile.gold,
+        equals(0),
+        reason: '100 gold - 100 gold == exactly 0 gold',
+      );
+      expect(
+        PlayerStorage.currentProfile.unlockedHeroIds.contains('tanker'),
+        isTrue,
+      );
 
       // 2. Direct spendGold invariance (500 gold cost, 500 balance)
-      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(gold: 500));
+      await PlayerStorage.saveProfile(
+        PlayerStorage.currentProfile.copyWith(gold: 500),
+      );
       final spendSuccess = await PlayerStorage.spendGold(500);
       expect(spendSuccess, isTrue);
-      expect(PlayerStorage.currentProfile.gold, equals(0), reason: '500 gold - 500 gold == exactly 0 gold');
+      expect(
+        PlayerStorage.currentProfile.gold,
+        equals(0),
+        reason: '500 gold - 500 gold == exactly 0 gold',
+      );
 
       // 3. Companion purchase invariance (600 gold cost, 600 balance)
-      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(gold: 600));
-      final companionSuccess = await PlayerStorage.unlockCompanion('drone_attack', 600);
+      await PlayerStorage.saveProfile(
+        PlayerStorage.currentProfile.copyWith(gold: 600),
+      );
+      final companionSuccess = await PlayerStorage.unlockCompanion(
+        'drone_attack',
+        600,
+      );
       expect(companionSuccess, isTrue);
       expect(PlayerStorage.currentProfile.gold, equals(0));
-      expect(PlayerStorage.currentProfile.unlockedCompanionIds.contains('drone_attack'), isTrue);
+      expect(
+        PlayerStorage.currentProfile.unlockedCompanionIds.contains(
+          'drone_attack',
+        ),
+        isTrue,
+      );
 
       // 4. Diamond Skin purchase invariance (50 diamonds cost, 50 balance)
-      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(diamonds: 50));
+      await PlayerStorage.saveProfile(
+        PlayerStorage.currentProfile.copyWith(diamonds: 50),
+      );
       final skinSuccess = await PlayerStorage.unlockSkin('skin_cyber', 50);
       expect(skinSuccess, isTrue);
-      expect(PlayerStorage.currentProfile.diamonds, equals(0), reason: '50 - 50 == exactly 0 diamonds');
-      expect(PlayerStorage.currentProfile.unlockedSkinIds.contains('skin_cyber'), isTrue);
+      expect(
+        PlayerStorage.currentProfile.diamonds,
+        equals(0),
+        reason: '50 - 50 == exactly 0 diamonds',
+      );
+      expect(
+        PlayerStorage.currentProfile.unlockedSkinIds.contains('skin_cyber'),
+        isTrue,
+      );
     });
 
     test('99 gold rejection: cost 100 gold with 99 gold balance strictly rejects without partial deduction', () async {
@@ -185,28 +306,58 @@ void main() {
 
       // Attempt 1: unlockHero
       final heroUnlock = await PlayerStorage.unlockHero('ninja', 100);
-      expect(heroUnlock, isFalse, reason: 'Must reject hero unlock when balance is 99 vs 100 cost');
-      expect(PlayerStorage.currentProfile.gold, equals(99), reason: 'Balance must remain strictly 99 gold');
-      expect(PlayerStorage.currentProfile.unlockedHeroIds.contains('ninja'), isFalse);
+      expect(
+        heroUnlock,
+        isFalse,
+        reason: 'Must reject hero unlock when balance is 99 vs 100 cost',
+      );
+      expect(
+        PlayerStorage.currentProfile.gold,
+        equals(99),
+        reason: 'Balance must remain strictly 99 gold',
+      );
+      expect(
+        PlayerStorage.currentProfile.unlockedHeroIds.contains('ninja'),
+        isFalse,
+      );
 
       // Attempt 2: spendGold
       final spendResult = await PlayerStorage.spendGold(100);
       expect(spendResult, isFalse, reason: 'spendGold(100) must return false');
-      expect(PlayerStorage.currentProfile.gold, equals(99), reason: 'Balance must remain strictly 99 gold');
+      expect(
+        PlayerStorage.currentProfile.gold,
+        equals(99),
+        reason: 'Balance must remain strictly 99 gold',
+      );
 
       // Attempt 3: Companion 500 cost with 499 gold
-      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(gold: 499));
-      final companionResult = await PlayerStorage.unlockCompanion('drone_shield', 500);
+      await PlayerStorage.saveProfile(
+        PlayerStorage.currentProfile.copyWith(gold: 499),
+      );
+      final companionResult = await PlayerStorage.unlockCompanion(
+        'drone_shield',
+        500,
+      );
       expect(companionResult, isFalse);
       expect(PlayerStorage.currentProfile.gold, equals(499));
-      expect(PlayerStorage.currentProfile.unlockedCompanionIds.contains('drone_shield'), isFalse);
+      expect(
+        PlayerStorage.currentProfile.unlockedCompanionIds.contains(
+          'drone_shield',
+        ),
+        isFalse,
+      );
 
       // Attempt 4: Skin 50 diamonds cost with 49 diamonds
-      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(diamonds: 49));
+      await PlayerStorage.saveProfile(
+        PlayerStorage.currentProfile.copyWith(diamonds: 49),
+      );
       final skinResult = await PlayerStorage.unlockSkin('skin_fire', 50);
       expect(skinResult, isFalse);
       expect(PlayerStorage.currentProfile.diamonds, equals(49));
-      expect(PlayerStorage.currentProfile.unlockedSkinIds.contains('skin_fire'), isFalse);
+      expect(
+        PlayerStorage.currentProfile.unlockedSkinIds.contains('skin_fire'),
+        isFalse,
+      );
     });
 
     test('Progression cap: Gaining 1,000,000 EXP halts at Level 15 and strictly clamps stats', () {
@@ -220,21 +371,41 @@ void main() {
       player.gainExp(1000000);
 
       // Level must strictly cap at 15
-      expect(player.level, equals(15), reason: 'Progression must strictly cap at Level 15');
+      expect(
+        player.level,
+        equals(15),
+        reason: 'Progression must strictly cap at Level 15',
+      );
 
       // 14 Level-ups: +15 HP, +10 Ki, +5 Dmg per level
       // Max HP: 100 + 14 * 15 = 310
       // Max Ki: 100 + 14 * 10 = 240
       // Damage: 20 + 14 * 5 = 90
-      expect(player.maxHp, equals(310.0), reason: 'Level 15 Max HP must be 310.0');
-      expect(player.maxKi, equals(240.0), reason: 'Level 15 Max Ki must be 240.0');
-      expect(player.damage, equals(90.0), reason: 'Level 15 Damage must be 90.0');
+      expect(
+        player.maxHp,
+        equals(310.0),
+        reason: 'Level 15 Max HP must be 310.0',
+      );
+      expect(
+        player.maxKi,
+        equals(240.0),
+        reason: 'Level 15 Max Ki must be 240.0',
+      );
+      expect(
+        player.damage,
+        equals(90.0),
+        reason: 'Level 15 Damage must be 90.0',
+      );
       expect(player.currentHp, equals(310.0));
       expect(player.currentKi, equals(240.0));
 
       // Secondary massive EXP injection at max cap: another 5,000,000 EXP
       player.gainExp(5000000);
-      expect(player.level, equals(15), reason: 'Level must not increment past 15');
+      expect(
+        player.level,
+        equals(15),
+        reason: 'Level must not increment past 15',
+      );
       expect(player.maxHp, equals(310.0));
       expect(player.maxKi, equals(240.0));
       expect(player.damage, equals(90.0));
@@ -247,7 +418,11 @@ void main() {
       // Case 1: 95 HP + 25 heal -> 100 HP (not 120 HP)
       player.currentHp = 95.0;
       player.heal(25.0);
-      expect(player.currentHp, equals(100.0), reason: 'Must clamp to maxHp 100.0');
+      expect(
+        player.currentHp,
+        equals(100.0),
+        reason: 'Must clamp to maxHp 100.0',
+      );
 
       // Case 2: 99.9 HP + 25 heal -> 100 HP
       player.currentHp = 99.9;
@@ -264,42 +439,53 @@ void main() {
       player.maxHp = 310.0;
       player.currentHp = 300.0;
       player.heal(25.0);
-      expect(player.currentHp, equals(310.0), reason: 'Must clamp to Level 15 maxHp 310.0');
+      expect(
+        player.currentHp,
+        equals(310.0),
+        reason: 'Must clamp to Level 15 maxHp 310.0',
+      );
     });
 
     test('Immutable 1:1000 exchange rate: 1 coin collected in dungeon yields 1,000 gold', () {
       expect(GameConstants.goldPerCoinPickup, equals(1000));
-      
+
       const coinsCollected = 7;
       final walletGoldAdded = coinsCollected * GameConstants.goldPerCoinPickup;
       expect(walletGoldAdded, equals(7000));
     });
 
-    test('Combat invariant: Rapid Berserk triggers reject recast and preserve Ki', () {
-      final player = PlayerComponent(position: Vector2.zero());
-      expect(player.currentKi, equals(100.0));
-      expect(player.isBerserk, isFalse);
+    test(
+      'Combat invariant: Rapid Berserk triggers reject recast and preserve Ki',
+      () {
+        final player = PlayerComponent(position: Vector2.zero());
+        expect(player.currentKi, equals(100.0));
+        expect(player.isBerserk, isFalse);
 
-      // First activation: consumes 40 Ki, activates berserk for 8.0s
-      final success1 = player.useSkill3();
-      expect(success1, isTrue);
-      expect(player.currentKi, equals(60.0));
-      expect(player.isBerserk, isTrue);
-      expect(player.berserkTimer, equals(8.0));
+        // First activation: consumes 40 Ki, activates berserk for 8.0s
+        final success1 = player.useSkill3();
+        expect(success1, isTrue);
+        expect(player.currentKi, equals(60.0));
+        expect(player.isBerserk, isTrue);
+        expect(player.berserkTimer, equals(8.0));
 
-      // 50 rapid recast attempts while active: must ALL fail and keep Ki at 60.0
-      for (int i = 0; i < 50; i++) {
-        final recast = player.useSkill3();
-        expect(recast, isFalse);
-      }
-      expect(player.currentKi, equals(60.0), reason: 'Ki must not be deducted on blocked recasts');
-      expect(player.isBerserk, isTrue);
-    });
+        // 50 rapid recast attempts while active: must ALL fail and keep Ki at 60.0
+        for (int i = 0; i < 50; i++) {
+          final recast = player.useSkill3();
+          expect(recast, isFalse);
+        }
+        expect(
+          player.currentKi,
+          equals(60.0),
+          reason: 'Ki must not be deducted on blocked recasts',
+        );
+        expect(player.isBerserk, isTrue);
+      },
+    );
 
     test('Health potion boundary: heal(0.0) or extreme healing behaves predictably', () {
       final player = PlayerComponent(position: Vector2.zero());
       player.currentHp = 50.0;
-      
+
       // Zero heal
       player.heal(0.0);
       expect(player.currentHp, equals(50.0));
@@ -328,8 +514,14 @@ void main() {
       await Future.wait(futures);
 
       // Verify all 100 events were recorded safely
-      final sfxEvents = mockAudio.callHistory.where((e) => e.method == 'playSfx').toList();
-      expect(sfxEvents.length, equals(100), reason: 'All 100 SFX requests processed without drop or race');
+      final sfxEvents = mockAudio.callHistory
+          .where((e) => e.method == 'playSfx')
+          .toList();
+      expect(
+        sfxEvents.length,
+        equals(100),
+        reason: 'All 100 SFX requests processed without drop or race',
+      );
 
       // Now verify FlameAudioService headless resilience with 100 rapid concurrent calls
       final flameAudio = FlameAudioService();
@@ -388,50 +580,91 @@ void main() {
       // NaN fuzzing: verify zero crashes or exceptions and whether NaN leaks into state
       expect(() => audio.setBgmVolume(double.nan), returnsNormally);
       expect(() => audio.setSfxVolume(double.nan), returnsNormally);
-      final bgmIsClamped = !audio.bgmVolume.isNaN && audio.bgmVolume >= 0.0 && audio.bgmVolume <= 1.0;
-      final sfxIsClamped = !audio.sfxVolume.isNaN && audio.sfxVolume >= 0.0 && audio.sfxVolume <= 1.0;
-      expect(bgmIsClamped, isTrue, reason: 'NaN volume must be clamped safely to [0.0, 1.0] rather than propagating NaN');
-      expect(sfxIsClamped, isTrue, reason: 'NaN volume must be clamped safely to [0.0, 1.0] rather than propagating NaN');
+      final bgmIsClamped =
+          !audio.bgmVolume.isNaN &&
+          audio.bgmVolume >= 0.0 &&
+          audio.bgmVolume <= 1.0;
+      final sfxIsClamped =
+          !audio.sfxVolume.isNaN &&
+          audio.sfxVolume >= 0.0 &&
+          audio.sfxVolume <= 1.0;
+      expect(
+        bgmIsClamped,
+        isTrue,
+        reason: 'NaN volume must be clamped safely to [0.0, 1.0] rather than propagating NaN',
+      );
+      expect(
+        sfxIsClamped,
+        isTrue,
+        reason: 'NaN volume must be clamped safely to [0.0, 1.0] rather than propagating NaN',
+      );
 
       // Playback with fuzzed volume parameters
-      await expectLater(audio.playBgm(BgmTrack.lobby, volume: -10.0), completes);
-      await expectLater(audio.playBgm(BgmTrack.lobby, volume: 100.0), completes);
-      await expectLater(audio.playBgm(BgmTrack.lobby, volume: double.infinity), completes);
-      await expectLater(audio.playBgm(BgmTrack.lobby, volume: double.nan), completes);
+      await expectLater(
+        audio.playBgm(BgmTrack.lobby, volume: -10.0),
+        completes,
+      );
+      await expectLater(
+        audio.playBgm(BgmTrack.lobby, volume: 100.0),
+        completes,
+      );
+      await expectLater(
+        audio.playBgm(BgmTrack.lobby, volume: double.infinity),
+        completes,
+      );
+      await expectLater(
+        audio.playBgm(BgmTrack.lobby, volume: double.nan),
+        completes,
+      );
 
-      await expectLater(audio.playSfx(SfxSound.uiClick, volume: -10.0), completes);
-      await expectLater(audio.playSfx(SfxSound.uiClick, volume: 100.0), completes);
-      await expectLater(audio.playSfx(SfxSound.uiClick, volume: double.infinity), completes);
-      await expectLater(audio.playSfx(SfxSound.uiClick, volume: double.nan), completes);
+      await expectLater(
+        audio.playSfx(SfxSound.uiClick, volume: -10.0),
+        completes,
+      );
+      await expectLater(
+        audio.playSfx(SfxSound.uiClick, volume: 100.0),
+        completes,
+      );
+      await expectLater(
+        audio.playSfx(SfxSound.uiClick, volume: double.infinity),
+        completes,
+      );
+      await expectLater(
+        audio.playSfx(SfxSound.uiClick, volume: double.nan),
+        completes,
+      );
     });
 
-    test('Toggle mute states rapidly while sounds are actively playing', () async {
-      final audio = FlameAudioService();
-      await audio.initialize();
+    test(
+      'Toggle mute states rapidly while sounds are actively playing',
+      () async {
+        final audio = FlameAudioService();
+        await audio.initialize();
 
-      // Start BGM
-      await audio.playBgm(BgmTrack.lobby);
-      expect(audio.isPlayingBgm, isTrue);
+        // Start BGM
+        await audio.playBgm(BgmTrack.lobby);
+        expect(audio.isPlayingBgm, isTrue);
 
-      // Interleave 40 rapid mute toggles with SFX triggers
-      for (int i = 0; i < 40; i++) {
-        audio.playSfx(SfxSound.attackHammer);
-        audio.toggleMute();
-        if (i % 5 == 0) {
-          audio.toggleBgm();
+        // Interleave 40 rapid mute toggles with SFX triggers
+        for (int i = 0; i < 40; i++) {
+          audio.playSfx(SfxSound.attackHammer);
+          audio.toggleMute();
+          if (i % 5 == 0) {
+            audio.toggleBgm();
+          }
+          if (i % 7 == 0) {
+            audio.toggleSfx();
+          }
         }
-        if (i % 7 == 0) {
-          audio.toggleSfx();
-        }
-      }
 
-      // Final restore to known unmuted state
-      if (!audio.isBgmEnabled || !audio.isSfxEnabled) {
-        audio.toggleMute();
-      }
-      expect(audio.isBgmEnabled, isTrue);
-      expect(audio.isSfxEnabled, isTrue);
-    });
+        // Final restore to known unmuted state
+        if (!audio.isBgmEnabled || !audio.isSfxEnabled) {
+          audio.toggleMute();
+        }
+        expect(audio.isBgmEnabled, isTrue);
+        expect(audio.isSfxEnabled, isTrue);
+      },
+    );
   });
 
   // =========================================================================
@@ -493,18 +726,26 @@ void main() {
       await service.updateLeaderboard(profileA);
 
       final entriesAfterA = await service.streamTopLeaderboard(limit: 25).first;
-      final alphaEntry = entriesAfterA.firstWhere((e) => e.name == 'ĐồngĐiểm_Alpha');
+      final alphaEntry = entriesAfterA.firstWhere(
+        (e) => e.name == 'ĐồngĐiểm_Alpha',
+      );
       expect(alphaEntry.rankPoints, equals(2080));
 
       // Verify that all ranks remain strictly 1..N contiguous without holes or collisions
       for (int i = 0; i < entriesAfterA.length; i++) {
-        expect(entriesAfterA[i].rankNumber, equals(i + 1),
-            reason: 'Rank numbers must be contiguous 1..N even with identical RP ties');
+        expect(
+          entriesAfterA[i].rankNumber,
+          equals(i + 1),
+          reason: 'Rank numbers must be contiguous 1..N even with identical RP ties',
+        );
       }
 
       // Verify monotonic descending order of rank points
       for (int i = 0; i < entriesAfterA.length - 1; i++) {
-        expect(entriesAfterA[i].rankPoints >= entriesAfterA[i + 1].rankPoints, isTrue);
+        expect(
+          entriesAfterA[i].rankPoints >= entriesAfterA[i + 1].rankPoints,
+          isTrue,
+        );
       }
     });
 
@@ -639,7 +880,10 @@ void main() {
         'ticketId': 't1',
         'timestamp': 1715385600000,
       });
-      expect(epochTicket.timestamp.millisecondsSinceEpoch, equals(1715385600000));
+      expect(
+        epochTicket.timestamp.millisecondsSinceEpoch,
+        equals(1715385600000),
+      );
 
       // PvpMatchSession with empty map
       final minimalSession = PvpMatchSession.fromJson({});
@@ -684,8 +928,11 @@ void main() {
       final raw = prefs.getString('gold_rush_player_profile');
       expect(raw, isNotNull);
 
-      expect(() => jsonDecode(raw!), returnsNormally,
-          reason: 'Concurrent writes must not cause corrupted JSON truncation or syntax errors');
+      expect(
+        () => jsonDecode(raw!),
+        returnsNormally,
+        reason: 'Concurrent writes must not cause corrupted JSON truncation or syntax errors',
+      );
 
       final loaded = await service.loadProfile('local_player');
       expect(loaded, isNotNull);
@@ -738,8 +985,11 @@ void main() {
       });
 
       // The newer timestamp (tNew) must tie-break to Rank #1
-      expect(entries.first.uid, equals('p_new'),
-          reason: 'When RP and win rate are identical, the more recently updated entry must rank higher');
+      expect(
+        entries.first.uid,
+        equals('p_new'),
+        reason: 'When RP and win rate are identical, the more recently updated entry must rank higher',
+      );
 
       // 2. Integration verification with MockDatabaseService:
       // Local player with 2080 RP ties with seed_8 KiếmThánh_VN (2080 RP)
@@ -756,13 +1006,18 @@ void main() {
       await service.updateLeaderboard(profileTied);
 
       final topEntries = await service.streamTopLeaderboard(limit: 25).first;
-      final localEntry = topEntries.firstWhere((e) => e.name == 'ChiếnBinh_TieTest');
+      final localEntry = topEntries.firstWhere(
+        (e) => e.name == 'ChiếnBinh_TieTest',
+      );
       final seed8Entry = topEntries.firstWhere((e) => e.name == 'KiếmThánh_VN');
 
       expect(localEntry.rankPoints, equals(seed8Entry.rankPoints));
       // Since local player was updated strictly after seed_8, local player ranks ahead of seed_8
-      expect(localEntry.rankNumber < seed8Entry.rankNumber, isTrue,
-          reason: 'More recently updated local player strictly tie-breaks ahead of older seed with identical RP');
+      expect(
+        localEntry.rankNumber < seed8Entry.rankNumber,
+        isTrue,
+        reason: 'More recently updated local player strictly tie-breaks ahead of older seed with identical RP',
+      );
 
       // Sequentiality check: All ranks must be 1..N contiguous
       for (int i = 0; i < topEntries.length; i++) {
@@ -790,12 +1045,16 @@ void main() {
       expect(floatProfile.rankPoints, equals(1500));
       expect(floatProfile.lastSpinTimestamp, equals(1600000000));
 
-      // 3. Non-list JSON values for List fields throw TypeError as expected
+      // Main's tolerant parser falls back safely for malformed collection fields.
       final stringListJson = {'unlockedHeroIds': 'george'};
+      expect(PlayerProfile.fromJson(stringListJson).unlockedHeroIds, [
+        'george',
+      ]);
       expect(
-        () => PlayerProfile.fromJson(stringListJson),
-        throwsA(isA<TypeError>()),
-        reason: 'Empirically confirms `json[unlockedHeroIds] as List<dynamic>?` throws on non-List JSON values',
+        PlayerProfile.fromJson({
+          'unlockedHeroIds': ['george', 123, 'ranger'],
+        }).unlockedHeroIds,
+        ['george', 'ranger'],
       );
     });
   });

@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flame/game.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/ai/astar_pathfinder.dart';
@@ -41,15 +42,15 @@ void main() {
 
       expect(path.length, 1);
       expect(path.first.distanceTo(target), closeTo(0.0, 0.001));
-      expect(AStarPathfinder.hasLineOfSight(start, target, canonicalGrid), isTrue);
+      expect(
+        AStarPathfinder.hasLineOfSight(start, target, canonicalGrid),
+        isTrue,
+      );
     });
 
     test('Unreachable Goal: Target point completely enclosed by 4-wall solid barrier', () {
       // 15x15 custom grid with an isolated 1-tile room at (7, 7) sealed by walls
-      final isolatedGrid = List.generate(
-        15,
-        (_) => List.filled(15, true),
-      );
+      final isolatedGrid = List.generate(15, (_) => List.filled(15, true));
 
       // Construct a sealed wall perimeter around (7, 7)
       for (int c = 6; c <= 8; c++) {
@@ -65,104 +66,163 @@ void main() {
       final targetPos = Vector2(7.5 * 32, 7.5 * 32); // Inner sealed room
 
       // LoS must be blocked
-      expect(AStarPathfinder.hasLineOfSight(startPos, targetPos, isolatedGrid), isFalse);
+      expect(
+        AStarPathfinder.hasLineOfSight(startPos, targetPos, isolatedGrid),
+        isFalse,
+      );
 
       // A* must gracefully exhaust heap and return empty path without crashing or looping
       final path = AStarPathfinder.findPath(startPos, targetPos, isolatedGrid);
       expect(path, isEmpty, reason: 'Enclosed goal must return empty list');
     });
 
-    test('Unreachable Goal: Start point completely enclosed inside sealed cell', () {
-      final trappedGrid = List.generate(
-        15,
-        (_) => List.filled(15, true),
-      );
-      // Seal (3, 3)
-      for (int c = 2; c <= 4; c++) {
-        for (int r = 2; r <= 4; r++) {
-          if (c != 3 || r != 3) {
-            trappedGrid[c][r] = false;
+    test(
+      'Unreachable Goal: Start point completely enclosed inside sealed cell',
+      () {
+        final trappedGrid = List.generate(15, (_) => List.filled(15, true));
+        // Seal (3, 3)
+        for (int c = 2; c <= 4; c++) {
+          for (int r = 2; r <= 4; r++) {
+            if (c != 3 || r != 3) {
+              trappedGrid[c][r] = false;
+            }
           }
         }
-      }
-      trappedGrid[3][3] = true;
+        trappedGrid[3][3] = true;
 
-      final startPos = Vector2(3.5 * 32, 3.5 * 32); // Trapped
-      final targetPos = Vector2(10.5 * 32, 10.5 * 32); // Outside
+        final startPos = Vector2(3.5 * 32, 3.5 * 32); // Trapped
+        final targetPos = Vector2(10.5 * 32, 10.5 * 32); // Outside
 
-      final path = AStarPathfinder.findPath(startPos, targetPos, trappedGrid);
-      expect(path, isEmpty, reason: 'Trapped start cannot reach outside goal');
-    });
+        final path = AStarPathfinder.findPath(startPos, targetPos, trappedGrid);
+        expect(
+          path,
+          isEmpty,
+          reason: 'Trapped start cannot reach outside goal',
+        );
+      },
+    );
 
-    test('Target inside solid wall block with no walkable tile within radius 4', () {
-      // 20x20 grid where the entire right half (cols 10..19) is solid wall
-      final halfWallGrid = List.generate(
-        20,
-        (c) => List.filled(20, c < 10),
-      );
+    test(
+      'Target inside solid wall block with no walkable tile within radius 4',
+      () {
+        // 20x20 grid where the entire right half (cols 10..19) is solid wall
+        final halfWallGrid = List.generate(20, (c) => List.filled(20, c < 10));
 
-      final startPos = Vector2(2.5 * 32, 2.5 * 32);
-      final deepWallTarget = Vector2(18.5 * 32, 18.5 * 32); // 8+ tiles away from any floor
+        final startPos = Vector2(2.5 * 32, 2.5 * 32);
+        final deepWallTarget = Vector2(
+          18.5 * 32,
+          18.5 * 32,
+        ); // 8+ tiles away from any floor
 
-      final path = AStarPathfinder.findPath(startPos, deepWallTarget, halfWallGrid);
-      expect(path, isEmpty, reason: 'Deep solid wall target has no walkable neighbor');
-    });
+        final path = AStarPathfinder.findPath(
+          startPos,
+          deepWallTarget,
+          halfWallGrid,
+        );
+        expect(
+          path,
+          isEmpty,
+          reason: 'Deep solid wall target has no walkable neighbor',
+        );
+      },
+    );
 
-    test('Out of Bounds: Negative coordinates clamped safely without RangeError', () {
-      final negStart = Vector2(-200.0, -450.0);
-      final validTarget = Vector2(200.0, 200.0);
+    test(
+      'Out of Bounds: Negative coordinates clamped safely without RangeError',
+      () {
+        final negStart = Vector2(-200.0, -450.0);
+        final validTarget = Vector2(200.0, 200.0);
 
-      // LoS with negative start must return false safely
-      expect(AStarPathfinder.hasLineOfSight(negStart, validTarget, canonicalGrid), isFalse);
+        // LoS with negative start must return false safely
+        expect(
+          AStarPathfinder.hasLineOfSight(negStart, validTarget, canonicalGrid),
+          isFalse,
+        );
 
-      // findPath clamps negative coordinates to (0, 0) and finds nearest walkable
-      final path = AStarPathfinder.findPath(negStart, validTarget, canonicalGrid);
-      expect(path, isNotEmpty);
-      expect(path.last.distanceTo(validTarget), closeTo(0.0, 0.001));
-    });
+        // findPath clamps negative coordinates to (0, 0) and finds nearest walkable
+        final path = AStarPathfinder.findPath(
+          negStart,
+          validTarget,
+          canonicalGrid,
+        );
+        expect(path, isNotEmpty);
+        expect(path.last.distanceTo(validTarget), closeTo(0.0, 0.001));
+      },
+    );
 
-    test('Out of Bounds: Huge positive coordinates beyond grid dimensions clamped safely', () {
+    test('Out of Bounds: Huge target ends at a safe reachable tile', () {
       final validStart = Vector2(200.0, 200.0);
       final hugeTarget = Vector2(10000.0, 10000.0);
 
-      expect(AStarPathfinder.hasLineOfSight(validStart, hugeTarget, canonicalGrid), isFalse);
-
-      final path = AStarPathfinder.findPath(validStart, hugeTarget, canonicalGrid);
-      expect(path, isNotEmpty);
-      expect(path.last.distanceTo(hugeTarget), closeTo(0.0, 0.001));
-    });
-
-    test('Out of Bounds: Both start and target completely outside grid bounds', () {
-      final negStart = Vector2(-1000.0, -1000.0);
-      final hugeTarget = Vector2(99999.0, 99999.0);
-
-      final path = AStarPathfinder.findPath(negStart, hugeTarget, canonicalGrid);
-      expect(path, isNotEmpty);
-      expect(path.last.distanceTo(hugeTarget), closeTo(0.0, 0.001));
-    });
-
-    test('Completely Closed Map: 100% impassable wall matrix returns empty path', () {
-      final closedGrid = List.generate(
-        12,
-        (_) => List.filled(12, false),
+      expect(
+        AStarPathfinder.hasLineOfSight(validStart, hugeTarget, canonicalGrid),
+        isFalse,
       );
 
-      final start = Vector2(2.5 * 32, 2.5 * 32);
-      final target = Vector2(9.5 * 32, 9.5 * 32);
-
-      expect(AStarPathfinder.hasLineOfSight(start, target, closedGrid), isFalse);
-      final path = AStarPathfinder.findPath(start, target, closedGrid);
-      expect(path, isEmpty);
+      final path = AStarPathfinder.findPath(
+        validStart,
+        hugeTarget,
+        canonicalGrid,
+      );
+      expect(path, isNotEmpty);
+      expect(path.last, isNot(hugeTarget));
+      for (final point in path) {
+        final (col, row) = AStarPathfinder.worldToGrid(point);
+        expect(col, inInclusiveRange(0, canonicalGrid.length - 1));
+        expect(row, inInclusiveRange(0, canonicalGrid[col].length - 1));
+        expect(canonicalGrid[col][row], isTrue);
+      }
     });
 
-    test('Completely Closed Map: Start equals target on closed map returns single waypoint', () {
-      final closedGrid = List.generate(10, (_) => List.filled(10, false));
-      final pos = Vector2(64.0, 64.0); // Exactly col 2, row 2
+    test(
+      'Out of Bounds: Both start and target completely outside grid bounds',
+      () {
+        final negStart = Vector2(-1000.0, -1000.0);
+        final hugeTarget = Vector2(99999.0, 99999.0);
 
-      final path = AStarPathfinder.findPath(pos, pos, closedGrid);
-      expect(path.length, 1);
-      expect(path.first, equals(pos));
-    });
+        final path = AStarPathfinder.findPath(
+          negStart,
+          hugeTarget,
+          canonicalGrid,
+        );
+        expect(path, isNotEmpty);
+        expect(path.last, isNot(hugeTarget));
+        for (final point in path) {
+          final (col, row) = AStarPathfinder.worldToGrid(point);
+          expect(col, inInclusiveRange(0, canonicalGrid.length - 1));
+          expect(row, inInclusiveRange(0, canonicalGrid[col].length - 1));
+          expect(canonicalGrid[col][row], isTrue);
+        }
+      },
+    );
+
+    test(
+      'Completely Closed Map: 100% impassable wall matrix returns empty path',
+      () {
+        final closedGrid = List.generate(12, (_) => List.filled(12, false));
+
+        final start = Vector2(2.5 * 32, 2.5 * 32);
+        final target = Vector2(9.5 * 32, 9.5 * 32);
+
+        expect(
+          AStarPathfinder.hasLineOfSight(start, target, closedGrid),
+          isFalse,
+        );
+        final path = AStarPathfinder.findPath(start, target, closedGrid);
+        expect(path, isEmpty);
+      },
+    );
+
+    test(
+      'Completely Closed Map: Identical blocked endpoints have no safe path',
+      () {
+        final closedGrid = List.generate(10, (_) => List.filled(10, false));
+        final pos = Vector2(64.0, 64.0); // Exactly col 2, row 2
+
+        final path = AStarPathfinder.findPath(pos, pos, closedGrid);
+        expect(path, isEmpty);
+      },
+    );
 
     test('Empty Grid Matrix: List is empty or has empty row returns fallback target', () {
       final List<List<bool>> emptyGrid = [];
@@ -187,11 +247,27 @@ void main() {
       final targetPos = Vector2(5.5 * 32, 4.5 * 32); // Cell (5, 4)
 
       // Both points are on floor, but the line crosses through touching wall corners
-      final hasLoS = AStarPathfinder.hasLineOfSight(startPos, targetPos, diagGrid);
-      expect(hasLoS, isFalse, reason: 'Raycast must not penetrate touching diagonal corners');
+      final hasLoS = AStarPathfinder.hasLineOfSight(
+        startPos,
+        targetPos,
+        diagGrid,
+      );
+      expect(
+        hasLoS,
+        isFalse,
+        reason: 'Raycast must not penetrate touching diagonal corners',
+      );
 
-      final reverseLoS = AStarPathfinder.hasLineOfSight(targetPos, startPos, diagGrid);
-      expect(reverseLoS, isFalse, reason: 'Reverse raycast must also be blocked');
+      final reverseLoS = AStarPathfinder.hasLineOfSight(
+        targetPos,
+        startPos,
+        diagGrid,
+      );
+      expect(
+        reverseLoS,
+        isFalse,
+        reason: 'Reverse raycast must also be blocked',
+      );
     });
 
     test('Narrow 1-Tile Diagonal Chokepoint: Checkerboard maze strictly enforces orthogonal clearance', () {
@@ -218,10 +294,16 @@ void main() {
         final (c1, r1) = AStarPathfinder.worldToGrid(path[i]);
         final (c2, r2) = AStarPathfinder.worldToGrid(path[i + 1]);
         if (c1 != c2 && r1 != r2) {
-          expect(checkerGrid[c1][r2], isTrue,
-              reason: 'Orthogonal corner 1 must be walkable for diagonal step');
-          expect(checkerGrid[c2][r1], isTrue,
-              reason: 'Orthogonal corner 2 must be walkable for diagonal step');
+          expect(
+            checkerGrid[c1][r2],
+            isTrue,
+            reason: 'Orthogonal corner 1 must be walkable for diagonal step',
+          );
+          expect(
+            checkerGrid[c2][r1],
+            isTrue,
+            reason: 'Orthogonal corner 2 must be walkable for diagonal step',
+          );
         }
       }
     });
@@ -229,13 +311,34 @@ void main() {
     test('Path Invariant: All generated waypoints in canonical dungeon avoid cutting pillar corners', () {
       // Test 8 distinct traversals across canonical dungeon map with 6 stone pillars
       final routes = [
-        (Vector2(6.5 * 32, 6.5 * 32), Vector2(11.5 * 32, 7.5 * 32)), // Around Pillar 1
-        (Vector2(11.5 * 32, 7.5 * 32), Vector2(6.5 * 32, 6.5 * 32)), // Reverse Pillar 1
-        (Vector2(6.5 * 32, 15.5 * 32), Vector2(11.5 * 32, 17.5 * 32)), // Around Pillar 2
-        (Vector2(24.5 * 32, 6.5 * 32), Vector2(28.5 * 32, 7.5 * 32)), // Around Pillar 3
-        (Vector2(24.5 * 32, 15.5 * 32), Vector2(28.5 * 32, 17.5 * 32)), // Around Pillar 4
-        (Vector2(15.5 * 32, 10.5 * 32), Vector2(20.5 * 32, 11.5 * 32)), // Through center pillars
-        (Vector2(3.5 * 32, 3.5 * 32), Vector2(32.5 * 32, 20.5 * 32)), // Full diagonal cross
+        (
+          Vector2(6.5 * 32, 6.5 * 32),
+          Vector2(11.5 * 32, 7.5 * 32),
+        ), // Around Pillar 1
+        (
+          Vector2(11.5 * 32, 7.5 * 32),
+          Vector2(6.5 * 32, 6.5 * 32),
+        ), // Reverse Pillar 1
+        (
+          Vector2(6.5 * 32, 15.5 * 32),
+          Vector2(11.5 * 32, 17.5 * 32),
+        ), // Around Pillar 2
+        (
+          Vector2(24.5 * 32, 6.5 * 32),
+          Vector2(28.5 * 32, 7.5 * 32),
+        ), // Around Pillar 3
+        (
+          Vector2(24.5 * 32, 15.5 * 32),
+          Vector2(28.5 * 32, 17.5 * 32),
+        ), // Around Pillar 4
+        (
+          Vector2(15.5 * 32, 10.5 * 32),
+          Vector2(20.5 * 32, 11.5 * 32),
+        ), // Through center pillars
+        (
+          Vector2(3.5 * 32, 3.5 * 32),
+          Vector2(32.5 * 32, 20.5 * 32),
+        ), // Full diagonal cross
       ];
 
       for (final (from, to) in routes) {
@@ -253,10 +356,18 @@ void main() {
 
           // If step is diagonal, both orthogonal neighbors must be walkable
           if (c1 != c2 && r1 != r2) {
-            expect(canonicalGrid[c1][r2], isTrue,
-                reason: 'Diagonal step from ($c1, $r1) to ($c2, $r2) cuts corner ($c1, $r2)');
-            expect(canonicalGrid[c2][r1], isTrue,
-                reason: 'Diagonal step from ($c1, $r1) to ($c2, $r2) cuts corner ($c2, $r1)');
+            expect(
+              canonicalGrid[c1][r2],
+              isTrue,
+              reason:
+                  'Diagonal step from ($c1, $r1) to ($c2, $r2) cuts corner ($c1, $r2)',
+            );
+            expect(
+              canonicalGrid[c2][r1],
+              isTrue,
+              reason:
+                  'Diagonal step from ($c1, $r1) to ($c2, $r2) cuts corner ($c2, $r1)',
+            );
           }
         }
       }
@@ -278,7 +389,11 @@ void main() {
 
       // Overkill with 1000 damage
       boss.takeDamage(1000.0);
-      expect(boss.currentHp, 0.0, reason: 'HP must clamp strictly to 0.0 without underflow');
+      expect(
+        boss.currentHp,
+        0.0,
+        reason: 'HP must clamp strictly to 0.0 without underflow',
+      );
       expect(boss.isDefeated, isTrue);
       expect(boss.state, BossState.defeated);
 
@@ -288,47 +403,58 @@ void main() {
       expect(boss.isDefeated, isTrue);
     });
 
-    testWidgets('Overkill In-Game: Loot cascade and victory portal do not duplicate on repeated hits', (tester) async {
-      final game = GoldRushGame(playerProfile: const PlayerProfile());
-      await tester.pumpWidget(GameWidget(game: game));
-      await tester.pump();
+    testWidgets(
+      'Overkill In-Game: Loot cascade and victory portal do not duplicate on repeated hits',
+      (tester) async {
+        final game = GoldRushGame(playerProfile: const PlayerProfile());
+        await tester.pumpWidget(GameWidget(game: game));
+        await tester.pump();
 
-      final boss = game.boss;
-      expect(boss, isNotNull);
-      expect(boss!.isMounted, isTrue);
+        final boss = game.boss;
+        expect(boss, isNotNull);
+        expect(boss!.isMounted, isTrue);
 
-      final initialPickups = game.pickups.length;
+        final initialPickups = game.pickups.length;
 
-      // Bring boss to 10 HP
-      boss.takeDamage(590.0);
-      expect(boss.currentHp, 10.0);
+        // Bring boss to 10 HP
+        boss.takeDamage(590.0);
+        expect(boss.currentHp, 10.0);
 
-      // Deal 1000 overkill damage
-      boss.takeDamage(1000.0);
-      await tester.pump();
+        // Deal 1000 overkill damage
+        boss.takeDamage(1000.0);
+        await tester.pump();
 
-      expect(boss.currentHp, 0.0);
-      expect(boss.isDefeated, isTrue);
+        expect(boss.currentHp, 0.0);
+        expect(boss.isDefeated, isTrue);
 
-      // Exactly 15 pickups (12 gold coins + 3 potions) created
-      final afterFirstDefeatPickups = game.pickups.length;
-      expect(afterFirstDefeatPickups - initialPickups, 15);
+        // Exactly 15 pickups (12 gold coins + 3 potions) created
+        final afterFirstDefeatPickups = game.pickups.length;
+        expect(afterFirstDefeatPickups - initialPickups, 15);
 
-      final victoryPortals = game.world.children.whereType<BossVictoryPortal>().toList();
-      expect(victoryPortals.length, 1);
+        final victoryPortals = game.world.children
+            .whereType<BossVictoryPortal>()
+            .toList();
+        expect(victoryPortals.length, 1);
 
-      // Attempt repeated damage attacks on defeated boss in subsequent frames
-      boss.takeDamage(500.0);
-      boss.takeDamage(999.0);
-      await tester.pump();
+        // Attempt repeated damage attacks on defeated boss in subsequent frames
+        boss.takeDamage(500.0);
+        boss.takeDamage(999.0);
+        await tester.pump();
 
-      expect(game.pickups.length, afterFirstDefeatPickups,
-          reason: 'Loot cascade must NOT duplicate on subsequent damage');
-      expect(game.world.children.whereType<BossVictoryPortal>().length, 1,
-          reason: 'Victory portal must NOT duplicate');
+        expect(
+          game.pickups.length,
+          afterFirstDefeatPickups,
+          reason: 'Loot cascade must NOT duplicate on subsequent damage',
+        );
+        expect(
+          game.world.children.whereType<BossVictoryPortal>().length,
+          1,
+          reason: 'Victory portal must NOT duplicate',
+        );
 
-      game.onRemove();
-    });
+        game.onRemove();
+      },
+    );
 
     test('Phase 2 Enraged threshold at exactly 300.0 HP (50.0% of 600)', () {
       final player = PlayerComponent(position: Vector2(100, 100));
@@ -344,7 +470,11 @@ void main() {
       // 2. Damage 0.1 HP to reach exactly 300.0 HP (Phase 2 switch)
       boss.takeDamage(0.1);
       expect(boss.currentHp, closeTo(300.0, 0.001));
-      expect(boss.phase, 2, reason: 'Phase 2 must activate at exactly 50% (300.0 HP)');
+      expect(
+        boss.phase,
+        2,
+        reason: 'Phase 2 must activate at exactly 50% (300.0 HP)',
+      );
       expect(boss.isEnraged, isTrue);
       expect(boss.currentSpeed, BossEnemy.speedPhase2);
 
@@ -392,41 +522,44 @@ void main() {
       expect(boss.summonedWave30, isTrue);
     });
 
-    testWidgets('Wave summoning in-game spawns exact minion counts without duplication', (tester) async {
-      final game = GoldRushGame(playerProfile: const PlayerProfile());
-      await tester.pumpWidget(GameWidget(game: game));
-      await tester.pump();
+    testWidgets(
+      'Wave summoning in-game spawns exact minion counts without duplication',
+      (tester) async {
+        final game = GoldRushGame(playerProfile: const PlayerProfile());
+        await tester.pumpWidget(GameWidget(game: game));
+        await tester.pump();
 
-      final boss = game.boss!;
-      final initialSkeletons = game.skeletons.length;
-      final initialZombies = game.enemies.length;
+        final boss = game.boss!;
+        final initialSkeletons = game.skeletons.length;
+        final initialZombies = game.enemies.length;
 
-      // Hit exactly 420.0 HP: spawns 2 skeletons, 2 zombies
-      boss.takeDamage(180.0);
-      expect(boss.currentHp, 420.0);
-      expect(game.skeletons.length, initialSkeletons + 2);
-      expect(game.enemies.length, initialZombies + 2);
+        // Hit exactly 420.0 HP: spawns 2 skeletons, 2 zombies
+        boss.takeDamage(180.0);
+        expect(boss.currentHp, 420.0);
+        expect(game.skeletons.length, initialSkeletons + 2);
+        expect(game.enemies.length, initialZombies + 2);
 
-      // Hit 3 times hovering at 420 HP: verify zero additional spawns
-      boss.takeDamage(0.0);
-      boss.takeDamage(0.0);
-      boss.takeDamage(0.0);
-      expect(game.skeletons.length, initialSkeletons + 2);
-      expect(game.enemies.length, initialZombies + 2);
+        // Hit 3 times hovering at 420 HP: verify zero additional spawns
+        boss.takeDamage(0.0);
+        boss.takeDamage(0.0);
+        boss.takeDamage(0.0);
+        expect(game.skeletons.length, initialSkeletons + 2);
+        expect(game.enemies.length, initialZombies + 2);
 
-      // Hit exactly 180.0 HP: spawns another 2 skeletons, 2 zombies
-      boss.takeDamage(240.0);
-      expect(boss.currentHp, 180.0);
-      expect(game.skeletons.length, initialSkeletons + 4);
-      expect(game.enemies.length, initialZombies + 4);
+        // Hit exactly 180.0 HP: spawns another 2 skeletons, 2 zombies
+        boss.takeDamage(240.0);
+        expect(boss.currentHp, 180.0);
+        expect(game.skeletons.length, initialSkeletons + 4);
+        expect(game.enemies.length, initialZombies + 4);
 
-      // Hover at 180 HP
-      boss.takeDamage(0.0);
-      expect(game.skeletons.length, initialSkeletons + 4);
-      expect(game.enemies.length, initialZombies + 4);
+        // Hover at 180 HP
+        boss.takeDamage(0.0);
+        expect(game.skeletons.length, initialSkeletons + 4);
+        expect(game.enemies.length, initialZombies + 4);
 
-      game.onRemove();
-    });
+        game.onRemove();
+      },
+    );
 
     test('Massive single hit (450 dmg from 600 HP) flags both waves and phase 2 simultaneously', () {
       final player = PlayerComponent(position: Vector2(100, 100));
@@ -451,8 +584,11 @@ void main() {
       boss.takeDamage(-100.0);
 
       // Hardened implementation clamps currentHp to [0.0, maxHp]
-      expect(boss.currentHp, boss.maxHp,
-          reason: 'Hardened defense: Boss takeDamage clamps currentHp so it cannot exceed maxHp');
+      expect(
+        boss.currentHp,
+        boss.maxHp,
+        reason: 'Hardened defense: Boss takeDamage clamps currentHp so it cannot exceed maxHp',
+      );
       expect(boss.currentHp <= boss.maxHp, isTrue);
     });
   });
@@ -563,11 +699,17 @@ void main() {
 
       // Bronze aims towards (100, 300) -> dir.x ~ 0, dir.y > 0 (subject to error)
       expect(bronzeDir.length, closeTo(1.0, 0.001));
-      expect(bronzeDir.y, greaterThan(0.0),
-          reason: 'Bronze AI aims downward towards target');
+      expect(
+        bronzeDir.y,
+        greaterThan(0.0),
+        reason: 'Bronze AI aims downward towards target',
+      );
       // Diamond leads ahead in X direction -> dir.x > 0 significantly
-      expect(diamondDir.x, greaterThan(0.5),
-          reason: 'Diamond AI must lead target in direction of movement');
+      expect(
+        diamondDir.x,
+        greaterThan(0.5),
+        reason: 'Diamond AI must lead target in direction of movement',
+      );
     });
 
     test('Elo Calculator: Bronze loss mitigation and 0 RP floor', () {
@@ -611,7 +753,11 @@ void main() {
         matchDuration: const Duration(seconds: 75),
       );
       expect(resSweep.isWinner, isTrue);
-      expect(resSweep.rpDelta, 35, reason: 'Clean sweep 2-0 awards 30 + 5 = 35 RP');
+      expect(
+        resSweep.rpDelta,
+        35,
+        reason: 'Clean sweep 2-0 awards 30 + 5 = 35 RP',
+      );
       expect(resSweep.newRankPoints, 1535);
       expect(resSweep.goldReward, 1500);
 
@@ -637,7 +783,11 @@ void main() {
       expect(resSilver.newRankPoints, 1180);
       expect(resSilver.oldRankTier, 'Bạc');
       expect(resSilver.newRankTier, 'Đồng');
-      expect(resSilver.isPromotion, isFalse, reason: 'Demotion must not flag promotion');
+      expect(
+        resSilver.isPromotion,
+        isFalse,
+        reason: 'Demotion must not flag promotion',
+      );
     });
 
     test('Win Rate Calculation: 0 matches played handled safely without division by zero', () {
@@ -660,24 +810,31 @@ void main() {
       expect(computeWinRate(0, 10), '0%');
     });
 
-    test('LeaderboardEntry deserializes gracefully with null or missing winRate', () {
-      final entryNullWinRate = LeaderboardEntry.fromJson({
-        'uid': 'test_player',
-        'name': 'Test',
-        'rankPoints': 1400,
-        'winRate': null, // Missing winRate
-      });
-      expect(entryNullWinRate.winRate, '50%', reason: 'Null winRate must fallback to 50%');
+    test(
+      'LeaderboardEntry deserializes gracefully with null or missing winRate',
+      () {
+        final entryNullWinRate = LeaderboardEntry.fromJson({
+          'uid': 'test_player',
+          'name': 'Test',
+          'rankPoints': 1400,
+          'winRate': null, // Missing winRate
+        });
+        expect(
+          entryNullWinRate.winRate,
+          '50%',
+          reason: 'Null winRate must fallback to 50%',
+        );
 
-      final entryZeroRp = LeaderboardEntry.fromJson({
-        'uid': 'test_zero',
-        'name': 'Zero',
-        'rankPoints': 0,
-        'winRate': '0%',
-      });
-      expect(entryZeroRp.rankPoints, 0);
-      expect(entryZeroRp.winRate, '0%');
-    });
+        final entryZeroRp = LeaderboardEntry.fromJson({
+          'uid': 'test_zero',
+          'name': 'Zero',
+          'rankPoints': 0,
+          'winRate': '0%',
+        });
+        expect(entryZeroRp.rankPoints, 0);
+        expect(entryZeroRp.winRate, '0%');
+      },
+    );
   });
 
   // ===========================================================================
@@ -734,7 +891,11 @@ void main() {
       bot.currentKi = 20.0;
       bot.executeSkill1();
       expect(bot.currentKi, 20.0, reason: 'Ki must NOT be deducted');
-      expect(player.currentHp, initialPlayerHp, reason: 'Damage must NOT be dealt');
+      expect(
+        player.currentHp,
+        initialPlayerHp,
+        reason: 'Damage must NOT be dealt',
+      );
 
       // 2. Try Skill 2 with 30 Ki (< 35 Ki)
       bot.currentKi = 30.0;
@@ -781,8 +942,16 @@ void main() {
 
       // Attempt to recast Skill 3 while already Berserk
       bot.executeSkill3();
-      expect(bot.currentKi, 60.0, reason: 'Ki must NOT be deducted on recast attempt');
-      expect(bot.berserkTimer, 6.0, reason: 'Active timer must NOT reset prematurely');
+      expect(
+        bot.currentKi,
+        60.0,
+        reason: 'Ki must NOT be deducted on recast attempt',
+      );
+      expect(
+        bot.berserkTimer,
+        6.0,
+        reason: 'Active timer must NOT reset prematurely',
+      );
     });
 
     test('Diamond Bot AI Tactics: Conserves Ki and does not execute combo skills when Ki is depleted', () {

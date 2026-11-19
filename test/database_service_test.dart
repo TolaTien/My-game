@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/models/database_models.dart';
 import 'package:my_game/models/player_profile.dart';
@@ -6,11 +8,17 @@ import 'package:my_game/services/database_service.dart';
 import 'package:my_game/services/firebase_database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/leaderboard_fixture.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      MockDatabaseService.storageKeyLeaderboard: jsonEncode(
+        leaderboardFixture().map((entry) => entry.toJson()).toList(),
+      ),
+    });
     DatabaseService.setInstance(MockDatabaseService());
   });
 
@@ -163,41 +171,76 @@ void main() {
   });
 
   group('Group 3: MockDatabaseService 20 Seeded Players & Persistence', () {
-    test('Initializes with exactly 20 seeded Vietnamese gamer tags', () async {
-      final service = MockDatabaseService();
-      await service.initialize();
+    test(
+      'Production default stays empty rather than inventing ranked players',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final service = MockDatabaseService();
+        await service.initialize();
+        expect(MockDatabaseService.createDefaultLeaderboard(), isEmpty);
+        expect(await service.streamTopLeaderboard().first, isEmpty);
+      },
+    );
 
-      final entries = await service.streamTopLeaderboard(limit: 20).first;
-      expect(entries.length, equals(20));
+    test(
+      'Old auto-seeded entries are removed when loading persisted ranks',
+      () async {
+        final fixture = leaderboardFixture();
+        final oldSeed = fixture.first.toJson()..['uid'] = 'seed_1';
+        SharedPreferences.setMockInitialValues({
+          MockDatabaseService.storageKeyLeaderboard: jsonEncode([
+            oldSeed,
+            fixture.last.toJson(),
+          ]),
+        });
+        final service = MockDatabaseService();
+        await service.initialize();
+        final loaded = await service.streamTopLeaderboard().first;
+        expect(loaded.length, 1);
+        expect(loaded.single.uid, fixture.last.uid);
+      },
+    );
 
-      // Rank #1 is BáĐạo99 with 2850 RP
-      expect(entries.first.name, equals('BáĐạo99'));
-      expect(entries.first.rankPoints, equals(2850));
-      expect(entries.first.rankTier, equals('Thách Đấu'));
-      expect(entries.first.rankNumber, equals(1));
+    test(
+      'Loads exactly 20 explicitly supplied leaderboard fixture players',
+      () async {
+        final service = MockDatabaseService();
+        await service.initialize();
 
-      // Rank #20 is ĐạiHiệpBấtTử with 1290 RP
-      expect(entries.last.name, equals('ĐạiHiệpBấtTử'));
-      expect(entries.last.rankPoints, equals(1290));
-      expect(entries.last.rankNumber, equals(20));
+        final entries = await service.streamTopLeaderboard(limit: 20).first;
+        expect(entries.length, equals(20));
 
-      // Ranks are strictly 1..20 sequential
-      for (int i = 0; i < entries.length; i++) {
-        expect(entries[i].rankNumber, equals(i + 1));
-      }
+        // Rank #1 is BáĐạo99 with 2850 RP
+        expect(entries.first.name, equals('BáĐạo99'));
+        expect(entries.first.rankPoints, equals(2850));
+        expect(entries.first.rankTier, equals('Thách Đấu'));
+        expect(entries.first.rankNumber, equals(1));
 
-      // Rank points are strictly descending
-      for (int i = 0; i < entries.length - 1; i++) {
-        expect(entries[i].rankPoints >= entries[i + 1].rankPoints, isTrue);
-      }
-    });
+        // Rank #20 is ĐạiHiệpBấtTử with 1290 RP
+        expect(entries.last.name, equals('ĐạiHiệpBấtTử'));
+        expect(entries.last.rankPoints, equals(1290));
+        expect(entries.last.rankNumber, equals(20));
+
+        // Ranks are strictly 1..20 sequential
+        for (int i = 0; i < entries.length; i++) {
+          expect(entries[i].rankNumber, equals(i + 1));
+        }
+
+        // Rank points are strictly descending
+        for (int i = 0; i < entries.length - 1; i++) {
+          expect(entries[i].rankPoints >= entries[i + 1].rankPoints, isTrue);
+        }
+      },
+    );
 
     test('Leaderboard persists to SharedPreferences', () async {
       final service1 = MockDatabaseService();
       await service1.initialize();
 
       final prefs = await SharedPreferences.getInstance();
-      final storedData = prefs.getString(MockDatabaseService.storageKeyLeaderboard);
+      final storedData = prefs.getString(
+        MockDatabaseService.storageKeyLeaderboard,
+      );
       expect(storedData, isNotNull);
       expect(storedData!.contains('BáĐạo99'), isTrue);
 
@@ -211,27 +254,30 @@ void main() {
   });
 
   group('Group 4: Dynamic Re-ranking & Real-Time Stream Updates', () {
-    test('Submitting top score (2900 RP) places local player at Rank #1', () async {
-      final service = MockDatabaseService();
-      await service.initialize();
+    test(
+      'Submitting top score (2900 RP) places local player at Rank #1',
+      () async {
+        final service = MockDatabaseService();
+        await service.initialize();
 
-      final profile = PlayerProfile(
-        playerName: 'VuaChiếnBinh',
-        rankPoints: 2900,
-      );
+        final profile = PlayerProfile(
+          playerName: 'VuaChiếnBinh',
+          rankPoints: 2900,
+        );
 
-      await service.updateLeaderboard(profile);
+        await service.updateLeaderboard(profile);
 
-      final topEntries = await service.streamTopLeaderboard(limit: 20).first;
-      expect(topEntries.first.name, equals('VuaChiếnBinh'));
-      expect(topEntries.first.rankPoints, equals(2900));
-      expect(topEntries.first.rankNumber, equals(1));
-      expect(topEntries.first.isLocalPlayer, isTrue);
+        final topEntries = await service.streamTopLeaderboard(limit: 20).first;
+        expect(topEntries.first.name, equals('VuaChiếnBinh'));
+        expect(topEntries.first.rankPoints, equals(2900));
+        expect(topEntries.first.rankNumber, equals(1));
+        expect(topEntries.first.isLocalPlayer, isTrue);
 
-      // Previous #1 BáĐạo99 is pushed to Rank #2
-      expect(topEntries[1].name, equals('BáĐạo99'));
-      expect(topEntries[1].rankNumber, equals(2));
-    });
+        // Previous #1 BáĐạo99 is pushed to Rank #2
+        expect(topEntries[1].name, equals('BáĐạo99'));
+        expect(topEntries[1].rankNumber, equals(2));
+      },
+    );
 
     test('Submitting mid-tier score (1750 RP) dynamically inserts between Rank 13 and 14', () async {
       final service = MockDatabaseService();
@@ -245,7 +291,9 @@ void main() {
       await service.updateLeaderboard(profile);
 
       final entries = await service.streamTopLeaderboard(limit: 20).first;
-      final playerEntry = entries.firstWhere((e) => e.name == 'ChiếnBinhTânBinh');
+      final playerEntry = entries.firstWhere(
+        (e) => e.name == 'ChiếnBinhTânBinh',
+      );
 
       // 1760 (HắcBạchCôngTử) > 1750 > 1710 (TiểuLongNữ)
       expect(playerEntry.rankNumber, equals(14));
@@ -257,61 +305,75 @@ void main() {
       }
     });
 
-    test('Updating profile again updates existing entry without duplication', () async {
-      final service = MockDatabaseService();
-      await service.initialize();
+    test(
+      'Updating profile again updates existing entry without duplication',
+      () async {
+        final service = MockDatabaseService();
+        await service.initialize();
 
-      final profile1 = PlayerProfile(playerName: 'LocalHero', rankPoints: 1600);
-      await service.updateLeaderboard(profile1);
+        final profile1 = PlayerProfile(
+          playerName: 'LocalHero',
+          rankPoints: 1600,
+        );
+        await service.updateLeaderboard(profile1);
 
-      final profile2 = PlayerProfile(playerName: 'LocalHero', rankPoints: 2250);
-      await service.updateLeaderboard(profile2);
+        final profile2 = PlayerProfile(
+          playerName: 'LocalHero',
+          rankPoints: 2250,
+        );
+        await service.updateLeaderboard(profile2);
 
-      final entries = await service.streamTopLeaderboard(limit: 25).first;
-      final matching = entries.where((e) => e.name == 'LocalHero').toList();
-      expect(matching.length, equals(1));
-      expect(matching.first.rankPoints, equals(2250));
-    });
+        final entries = await service.streamTopLeaderboard(limit: 25).first;
+        final matching = entries.where((e) => e.name == 'LocalHero').toList();
+        expect(matching.length, equals(1));
+        expect(matching.first.rankPoints, equals(2250));
+      },
+    );
   });
 
   group('Group 5: Matchmaking Queue Simulation Lifecycle', () {
-    test('joinMatchmakingQueue creates searching session then pairs with bot', () async {
-      final service = MockDatabaseService(
-        matchSimulatedDelay: const Duration(milliseconds: 50),
-      );
-      await service.initialize();
+    test(
+      'joinMatchmakingQueue creates searching session then pairs with bot',
+      () async {
+        final service = MockDatabaseService(
+          matchSimulatedDelay: const Duration(milliseconds: 50),
+        );
+        await service.initialize();
 
-      final ticket = PvpQueueTicket(
-        ticketId: 'test_ticket_01',
-        userId: 'player_user_1',
-        playerName: 'Knight_Tester',
-        rankPoints: 1650,
-        timestamp: DateTime.now(),
-        rankTier: 'Bạch Kim',
-        heroId: 'tanker',
-      );
+        final ticket = PvpQueueTicket(
+          ticketId: 'test_ticket_01',
+          userId: 'player_user_1',
+          playerName: 'Knight_Tester',
+          rankPoints: 1650,
+          timestamp: DateTime.now(),
+          rankTier: 'Bạch Kim',
+          heroId: 'tanker',
+        );
 
-      await service.joinMatchmakingQueue(ticket);
+        await service.joinMatchmakingQueue(ticket);
 
-      final sessionId = 'session_test_ticket_01';
-      final stream = service.streamMatchSession(sessionId);
+        final sessionId = 'session_test_ticket_01';
+        final stream = service.streamMatchSession(sessionId);
 
-      // Verify immediate session state is searching
-      final initialSession = await stream.first;
-      expect(initialSession, isNotNull);
-      expect(initialSession!.state, equals(PvpMatchSessionState.searching));
-      expect(initialSession.player1.name, equals('Knight_Tester'));
-      expect(initialSession.player2, isNull);
+        // Verify immediate session state is searching
+        final initialSession = await stream.first;
+        expect(initialSession, isNotNull);
+        expect(initialSession!.state, equals(PvpMatchSessionState.searching));
+        expect(initialSession.player1.name, equals('Knight_Tester'));
+        expect(initialSession.player2, isNull);
 
-      // Wait for simulated bot matching
-      await Future.delayed(const Duration(milliseconds: 100));
+        // Wait for simulated bot matching
+        await Future.delayed(const Duration(milliseconds: 100));
 
-      final matchedSession = await service.streamMatchSession(sessionId).first;
-      expect(matchedSession!.state, equals(PvpMatchSessionState.matched));
-      expect(matchedSession.player2, isNotNull);
-      expect(matchedSession.player2!.isBot, isTrue);
-      expect(matchedSession.matchedAt, isNotNull);
-    });
+        final matchedSession = await service
+            .streamMatchSession(sessionId)
+            .first;
+        expect(matchedSession!.state, equals(PvpMatchSessionState.matched));
+        expect(matchedSession.player2, isNotNull);
+        expect(matchedSession.player2!.isBot, isTrue);
+        expect(matchedSession.matchedAt, isNotNull);
+      },
+    );
 
     test('leaveMatchmakingQueue cancels searching queue session', () async {
       final service = MockDatabaseService(
@@ -406,14 +468,18 @@ void main() {
       await firebaseService.initialize();
       expect(firebaseService.isOnline, isFalse);
 
-      final topEntries = await firebaseService.streamTopLeaderboard(limit: 5).first;
+      final topEntries = await firebaseService
+          .streamTopLeaderboard(limit: 5)
+          .first;
       expect(topEntries.length, equals(5));
       expect(topEntries.first.name, equals('BáĐạo99'));
     });
 
     test('FirebaseDatabaseService delegates operations safely without throwing exceptions', () async {
       final firebaseService = FirebaseDatabaseService(
-        fallback: MockDatabaseService(matchSimulatedDelay: const Duration(milliseconds: 50)),
+        fallback: MockDatabaseService(
+          matchSimulatedDelay: const Duration(milliseconds: 50),
+        ),
       );
       await firebaseService.initialize();
 
@@ -434,7 +500,9 @@ void main() {
       await firebaseService.joinMatchmakingQueue(ticket);
       await firebaseService.leaveMatchmakingQueue('fb_user_1');
 
-      final session = await firebaseService.streamMatchSession('session_fb_ticket_1').first;
+      final session = await firebaseService
+          .streamMatchSession('session_fb_ticket_1')
+          .first;
       expect(session!.state, equals(PvpMatchSessionState.cancelled));
 
       final legacyLeaderboard = await firebaseService.fetchLeaderboard();

@@ -8,22 +8,22 @@ void main() {
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('xyz.luan/audioplayers.global'),
-      (MethodCall methodCall) async => 1,
-    );
+          const MethodChannel('xyz.luan/audioplayers.global'),
+          (MethodCall methodCall) async => 1,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('xyz.luan/audioplayers'),
-      (MethodCall methodCall) async => 1,
-    );
+          const MethodChannel('xyz.luan/audioplayers'),
+          (MethodCall methodCall) async => 1,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/shared_preferences'),
-      (MethodCall methodCall) async {
-        if (methodCall.method == 'getAll') return <String, Object>{};
-        return true;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/shared_preferences'),
+          (MethodCall methodCall) async {
+            if (methodCall.method == 'getAll') return <String, Object>{};
+            return true;
+          },
+        );
   });
 
   group('Group 1: AudioService Default State & ValueNotifiers', () {
@@ -149,7 +149,7 @@ void main() {
     });
 
     test('BgmTrack enum provides exact filenames and descriptions', () {
-      expect(BgmTrack.lobby.fileName, equals('lobby_bgm.mp3'));
+      expect(BgmTrack.lobby.fileName, equals('nhac-sanh-cho.mp3'));
       expect(BgmTrack.dungeon.fileName, equals('dungeon_bgm.mp3'));
       expect(BgmTrack.boss.fileName, equals('boss_bgm.mp3'));
       expect(BgmTrack.pvp.fileName, equals('pvp_bgm.mp3'));
@@ -157,15 +157,18 @@ void main() {
       expect(BgmTrack.values.length, equals(4));
     });
 
-    test('BgmTrack.fromName resolves by enum name, file name, or base name', () {
-      expect(BgmTrack.fromName('lobby'), equals(BgmTrack.lobby));
-      expect(BgmTrack.fromName('lobby_bgm.mp3'), equals(BgmTrack.lobby));
-      expect(BgmTrack.fromName('dungeon_bgm'), equals(BgmTrack.dungeon));
-      expect(BgmTrack.fromName('BOSS'), equals(BgmTrack.boss));
-      expect(BgmTrack.fromName('pvp'), equals(BgmTrack.pvp));
-      expect(BgmTrack.fromName('non_existent'), isNull);
-      expect(BgmTrack.fromName(null), isNull);
-    });
+    test(
+      'BgmTrack.fromName resolves by enum name, file name, or base name',
+      () {
+        expect(BgmTrack.fromName('lobby'), equals(BgmTrack.lobby));
+        expect(BgmTrack.fromName('lobby_bgm.mp3'), equals(BgmTrack.lobby));
+        expect(BgmTrack.fromName('dungeon_bgm'), equals(BgmTrack.dungeon));
+        expect(BgmTrack.fromName('BOSS'), equals(BgmTrack.boss));
+        expect(BgmTrack.fromName('pvp'), equals(BgmTrack.pvp));
+        expect(BgmTrack.fromName('non_existent'), isNull);
+        expect(BgmTrack.fromName(null), isNull);
+      },
+    );
 
     test('playBgm transitions tracks and sets playing state', () async {
       await audioService.playBgm(BgmTrack.lobby);
@@ -177,21 +180,24 @@ void main() {
       expect(audioService.isPlayingBgm, isTrue);
     });
 
-    test('pauseBgm, resumeBgm, and stopBgm transition states accurately', () async {
-      await audioService.playBgm(BgmTrack.pvp);
+    test(
+      'pauseBgm, resumeBgm, and stopBgm transition states accurately',
+      () async {
+        await audioService.playBgm(BgmTrack.pvp);
 
-      await audioService.pauseBgm();
-      expect(audioService.isPlayingBgm, isFalse);
-      expect(audioService.currentBgmTrack, equals(BgmTrack.pvp));
+        await audioService.pauseBgm();
+        expect(audioService.isPlayingBgm, isFalse);
+        expect(audioService.currentBgmTrack, equals(BgmTrack.pvp));
 
-      await audioService.resumeBgm();
-      expect(audioService.isPlayingBgm, isTrue);
-      expect(audioService.currentBgmTrack, equals(BgmTrack.pvp));
+        await audioService.resumeBgm();
+        expect(audioService.isPlayingBgm, isTrue);
+        expect(audioService.currentBgmTrack, equals(BgmTrack.pvp));
 
-      await audioService.stopBgm();
-      expect(audioService.isPlayingBgm, isFalse);
-      expect(audioService.currentBgmTrack, isNull);
-    });
+        await audioService.stopBgm();
+        expect(audioService.isPlayingBgm, isFalse);
+        expect(audioService.currentBgmTrack, isNull);
+      },
+    );
   });
 
   group('Group 5: SFX Trigger Matrix & AudioCallEvent Tracking', () {
@@ -206,7 +212,10 @@ void main() {
 
       expect(SfxSound.attackHammer.fileName, equals('sfx_attack_hammer.wav'));
       expect(SfxSound.attackArrow.fileName, equals('sfx_attack_arrow.wav'));
-      expect(SfxSound.skillHurricane.fileName, equals('sfx_skill_hurricane.wav'));
+      expect(
+        SfxSound.skillHurricane.fileName,
+        equals('sfx_skill_hurricane.wav'),
+      );
       expect(SfxSound.skillSmash.fileName, equals('sfx_skill_smash.wav'));
       expect(SfxSound.skillBerserk.fileName, equals('sfx_skill_berserk.wav'));
       expect(SfxSound.pickupCoin.fileName, equals('sfx_pickup_coin.wav'));
@@ -219,24 +228,36 @@ void main() {
 
     test('SfxSound.fromName resolves various string formats', () {
       expect(SfxSound.fromName('attackHammer'), equals(SfxSound.attackHammer));
-      expect(SfxSound.fromName('sfx_attack_arrow.wav'), equals(SfxSound.attackArrow));
-      expect(SfxSound.fromName('skillHurricane'), equals(SfxSound.skillHurricane));
-      expect(SfxSound.fromName('sfx_wheel_jackpot'), equals(SfxSound.wheelJackpot));
+      expect(
+        SfxSound.fromName('sfx_attack_arrow.wav'),
+        equals(SfxSound.attackArrow),
+      );
+      expect(
+        SfxSound.fromName('skillHurricane'),
+        equals(SfxSound.skillHurricane),
+      );
+      expect(
+        SfxSound.fromName('sfx_wheel_jackpot'),
+        equals(SfxSound.wheelJackpot),
+      );
       expect(SfxSound.fromName('invalid_sfx'), isNull);
       expect(SfxSound.fromName(null), isNull);
     });
 
-    test('All 11 SFX triggers are recorded in MockAudioService callHistory', () async {
-      for (final sfx in SfxSound.values) {
-        await mockAudio.playSfx(sfx);
-      }
+    test(
+      'All 11 SFX triggers are recorded in MockAudioService callHistory',
+      () async {
+        for (final sfx in SfxSound.values) {
+          await mockAudio.playSfx(sfx);
+        }
 
-      expect(mockAudio.callHistory.length, equals(11));
-      for (int i = 0; i < SfxSound.values.length; i++) {
-        expect(mockAudio.callHistory[i].method, equals('playSfx'));
-        expect(mockAudio.callHistory[i].target, equals(SfxSound.values[i]));
-      }
-    });
+        expect(mockAudio.callHistory.length, equals(11));
+        for (int i = 0; i < SfxSound.values.length; i++) {
+          expect(mockAudio.callHistory[i].method, equals('playSfx'));
+          expect(mockAudio.callHistory[i].target, equals(SfxSound.values[i]));
+        }
+      },
+    );
 
     test('SFX playback is suppressed when isSfxEnabled is false', () async {
       mockAudio.isSfxEnabled = false;
@@ -255,46 +276,70 @@ void main() {
     });
   });
 
-  group('Group 6: Zero-Crash Error Resilience (Headless FlameAudioService)', () {
-    late FlameAudioService flameAudio;
+  group(
+    'Group 6: Zero-Crash Error Resilience (Headless FlameAudioService)',
+    () {
+      late FlameAudioService flameAudio;
 
-    setUp(() {
-      flameAudio = FlameAudioService();
-    });
+      setUp(() {
+        flameAudio = FlameAudioService();
+      });
 
-    test('initialize completes without throwing unhandled exceptions in test environment', () async {
-      await expectLater(flameAudio.initialize(), completes);
-    });
+      test('initialize completes without throwing unhandled exceptions in test environment', () async {
+        await expectLater(flameAudio.initialize(), completes);
+      });
 
-    test('playBgm handles headless test environment defensively', () async {
-      await expectLater(flameAudio.playBgm(BgmTrack.lobby), completes);
-      expect(flameAudio.currentBgmTrack, equals(BgmTrack.lobby));
-      expect(flameAudio.isPlayingBgm, isTrue);
-    });
+      test('playBgm handles headless test environment defensively', () async {
+        await expectLater(flameAudio.playBgm(BgmTrack.lobby), completes);
+        expect(flameAudio.currentBgmTrack, equals(BgmTrack.lobby));
+        expect(flameAudio.isPlayingBgm, isTrue);
+      });
 
-    test('stopBgm, pauseBgm, resumeBgm handle headless environment safely', () async {
-      await expectLater(flameAudio.playBgm(BgmTrack.dungeon), completes);
-      await expectLater(flameAudio.pauseBgm(), completes);
-      expect(flameAudio.isPlayingBgm, isFalse);
+      test(
+        'stopBgm, pauseBgm, resumeBgm handle headless environment safely',
+        () async {
+          await expectLater(flameAudio.playBgm(BgmTrack.dungeon), completes);
+          await expectLater(flameAudio.pauseBgm(), completes);
+          expect(flameAudio.isPlayingBgm, isFalse);
 
-      await expectLater(flameAudio.resumeBgm(), completes);
-      expect(flameAudio.isPlayingBgm, isTrue);
+          await expectLater(flameAudio.resumeBgm(), completes);
+          expect(flameAudio.isPlayingBgm, isTrue);
 
-      await expectLater(flameAudio.stopBgm(), completes);
-      expect(flameAudio.isPlayingBgm, isFalse);
-      expect(flameAudio.currentBgmTrack, isNull);
-    });
+          await expectLater(flameAudio.stopBgm(), completes);
+          expect(flameAudio.isPlayingBgm, isFalse);
+          expect(flameAudio.currentBgmTrack, isNull);
+        },
+      );
 
-    test('playSfx completes without throwing even with MissingPluginException', () async {
-      await expectLater(flameAudio.playSfx(SfxSound.attackHammer), completes);
-      await expectLater(flameAudio.playSfx(SfxSound.uiClick, volume: 0.8), completes);
-    });
+      test(
+        'playSfx completes without throwing even with MissingPluginException',
+        () async {
+          await expectLater(
+            flameAudio.playSfx(SfxSound.attackHammer),
+            completes,
+          );
+          await expectLater(
+            flameAudio.playSfx(SfxSound.uiClick, volume: 0.8),
+            completes,
+          );
+        },
+      );
 
-    test('Unknown track or sfx strings handle safely without crashing', () async {
-      await expectLater(flameAudio.playBgm('mystery_nonexistent_track.mp3'), completes);
-      await expectLater(flameAudio.playSfx('nonexistent_sfx.wav'), completes);
-    });
-  });
+      test(
+        'Unknown track or sfx strings handle safely without crashing',
+        () async {
+          await expectLater(
+            flameAudio.playBgm('mystery_nonexistent_track.mp3'),
+            completes,
+          );
+          await expectLater(
+            flameAudio.playSfx('nonexistent_sfx.wav'),
+            completes,
+          );
+        },
+      );
+    },
+  );
 
   group('Group 7: Reactive UI Integration (ValueNotifier Listeners)', () {
     late AudioService audioService;
@@ -326,21 +371,24 @@ void main() {
       expect(notifiedVal, closeTo(0.55, 0.001));
     });
 
-    test('isBgmEnabledNotifier and isSfxEnabledNotifier notify on mute toggles', () {
-      int bgmToggleCount = 0;
-      int sfxToggleCount = 0;
+    test(
+      'isBgmEnabledNotifier and isSfxEnabledNotifier notify on mute toggles',
+      () {
+        int bgmToggleCount = 0;
+        int sfxToggleCount = 0;
 
-      audioService.isBgmEnabledNotifier.addListener(() => bgmToggleCount++);
-      audioService.isSfxEnabledNotifier.addListener(() => sfxToggleCount++);
+        audioService.isBgmEnabledNotifier.addListener(() => bgmToggleCount++);
+        audioService.isSfxEnabledNotifier.addListener(() => sfxToggleCount++);
 
-      audioService.toggleMute();
-      expect(bgmToggleCount, equals(1));
-      expect(sfxToggleCount, equals(1));
+        audioService.toggleMute();
+        expect(bgmToggleCount, equals(1));
+        expect(sfxToggleCount, equals(1));
 
-      audioService.toggleMute();
-      expect(bgmToggleCount, equals(2));
-      expect(sfxToggleCount, equals(2));
-    });
+        audioService.toggleMute();
+        expect(bgmToggleCount, equals(2));
+        expect(sfxToggleCount, equals(2));
+      },
+    );
   });
 
   group('Group 8: MockAudioService Spy & Project Contract Compatibility', () {

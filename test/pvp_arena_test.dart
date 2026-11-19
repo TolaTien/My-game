@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flame/components.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/ai/pvp_bot_ai.dart';
@@ -153,29 +154,28 @@ void main() {
   });
 
   group('Group 3: Match State Machine & Bo3 Logic', () {
-    test('Initial state is roundIntro and transitions to fighting after 3s', () {
-      final opponent = PvpOpponentInfo.generateBot(1300);
-      final game = PvpArenaGame(
-        opponentInfo: opponent,
-        playerCurrentRp: 1300,
-      );
+    test(
+      'Initial state is roundIntro and transitions to fighting after 1.5s',
+      () {
+        final opponent = PvpOpponentInfo.generateBot(1300);
+        final game = PvpArenaGame(
+          opponentInfo: opponent,
+          playerCurrentRp: 1300,
+        );
 
-      expect(game.matchState, equals(PvpMatchState.roundIntro));
-      expect(game.currentRound, equals(1));
-      expect(game.stateTimer, equals(3.0));
+        expect(game.matchState, equals(PvpMatchState.roundIntro));
+        expect(game.currentRound, equals(1));
+        expect(game.stateTimer, equals(1.5));
 
-      // Advance by 3.1s
-      game.update(3.1);
-      expect(game.matchState, equals(PvpMatchState.fighting));
-      expect(game.roundTimeRemaining, equals(90.0));
-    });
+        game.update(1.6);
+        expect(game.matchState, equals(PvpMatchState.fighting));
+        expect(game.roundTimeRemaining, equals(90.0));
+      },
+    );
 
     test('2-0 match completes in 2 rounds with winner declared', () {
       final opponent = PvpOpponentInfo.generateBot(1300);
-      final game = PvpArenaGame(
-        opponentInfo: opponent,
-        playerCurrentRp: 1300,
-      );
+      final game = PvpArenaGame(opponentInfo: opponent, playerCurrentRp: 1300);
 
       // Start round 1
       game.player = PlayerComponent(position: Vector2(200, 320));
@@ -226,10 +226,7 @@ void main() {
 
     test('2-1 match completes in 3 rounds with winner declared', () {
       final opponent = PvpOpponentInfo.generateBot(1300);
-      final game = PvpArenaGame(
-        opponentInfo: opponent,
-        playerCurrentRp: 1300,
-      );
+      final game = PvpArenaGame(opponentInfo: opponent, playerCurrentRp: 1300);
 
       game.player = PlayerComponent(position: Vector2(200, 320));
       game.bot = PvpBotPlayerComponent(
@@ -273,10 +270,7 @@ void main() {
 
     test('90s timeout awards round to higher HP percentage', () {
       final opponent = PvpOpponentInfo.generateBot(1300);
-      final game = PvpArenaGame(
-        opponentInfo: opponent,
-        playerCurrentRp: 1300,
-      );
+      final game = PvpArenaGame(opponentInfo: opponent, playerCurrentRp: 1300);
 
       game.player = PlayerComponent(position: Vector2(200, 320));
       game.bot = PvpBotPlayerComponent(
@@ -308,14 +302,18 @@ void main() {
       expect(goldAi.aimErrorRate, equals(0.15));
       expect(goldAi.dodgeChance, equals(0.70));
 
-      final challengerAi = PvpBotAi(difficulty: BotDifficulty.diamondChallenger);
+      final challengerAi = PvpBotAi(
+        difficulty: BotDifficulty.diamondChallenger,
+      );
       expect(challengerAi.decisionInterval, equals(0.1));
       expect(challengerAi.aimErrorRate, equals(0.0));
       expect(challengerAi.dodgeChance, equals(0.90));
     });
 
     test('Diamond AI uses predictive lead vector based on target velocity', () {
-      final challengerAi = PvpBotAi(difficulty: BotDifficulty.diamondChallenger);
+      final challengerAi = PvpBotAi(
+        difficulty: BotDifficulty.diamondChallenger,
+      );
       final botPos = Vector2(0, 0);
       final targetPos = Vector2(100, 0);
       final targetVel = Vector2(0, 50); // Moving vertically up
@@ -332,24 +330,27 @@ void main() {
       expect(aimVector.x, greaterThan(0));
     });
 
-    test('Bronze AI aims directly at target position without predictive leading', () {
-      final bronzeAi = PvpBotAi(difficulty: BotDifficulty.bronzeSilver);
-      final botPos = Vector2(0, 0);
-      final targetPos = Vector2(100, 0);
-      final targetVel = Vector2(0, 100);
+    test(
+      'Bronze AI aims directly at target position without predictive leading',
+      () {
+        final bronzeAi = PvpBotAi(difficulty: BotDifficulty.bronzeSilver);
+        final botPos = Vector2(0, 0);
+        final targetPos = Vector2(100, 0);
+        final targetVel = Vector2(0, 100);
 
-      // Bronze does not lead: predicted position remains targetPos (100, 0)
-      final directAim = bronzeAi.calculateAimDirection(
-        botPosition: botPos,
-        targetPosition: targetPos,
-        targetVelocity: targetVel,
-        projectileSpeed: 100.0,
-        random: Random(42), // Deterministic RNG
-      );
+        // Bronze does not lead: predicted position remains targetPos (100, 0)
+        final directAim = bronzeAi.calculateAimDirection(
+          botPosition: botPos,
+          targetPosition: targetPos,
+          targetVelocity: targetVel,
+          projectileSpeed: 100.0,
+          random: Random(42), // Deterministic RNG
+        );
 
-      // Base vector is (1, 0) with wobble
-      expect(directAim.x, greaterThan(0.5));
-    });
+        // Base vector is (1, 0) with wobble
+        expect(directAim.x, greaterThan(0.5));
+      },
+    );
 
     test('Bot strictly obeys Ki costs and skill cooldowns', () {
       final ai = PvpBotAi(difficulty: BotDifficulty.goldPlatinum);
@@ -399,21 +400,24 @@ void main() {
       expect(QuickChatPhrase.noob.text, equals('Gà quá!'));
     });
 
-    test('QuickChat bubble triggers 3.0s lifespan and auto-clears on player', () {
-      final player = PlayerComponent(position: Vector2(200, 320));
-      expect(player.speechBubbleText, isNull);
+    test(
+      'QuickChat bubble triggers 3.0s lifespan and auto-clears on player',
+      () {
+        final player = PlayerComponent(position: Vector2(200, 320));
+        expect(player.speechBubbleText, isNull);
 
-      player.say(QuickChatPhrase.attack.text);
-      expect(player.speechBubbleText, equals('Tấn công!'));
-      expect(player.speechBubbleTimer, equals(3.0));
+        player.say(QuickChatPhrase.attack.text);
+        expect(player.speechBubbleText, equals('Tấn công!'));
+        expect(player.speechBubbleTimer, equals(3.0));
 
-      player.update(1.5);
-      expect(player.speechBubbleText, equals('Tấn công!'));
-      expect(player.speechBubbleTimer, closeTo(1.5, 0.001));
+        player.update(1.5);
+        expect(player.speechBubbleText, equals('Tấn công!'));
+        expect(player.speechBubbleTimer, closeTo(1.5, 0.001));
 
-      player.update(1.6);
-      expect(player.speechBubbleText, isNull);
-    });
+        player.update(1.6);
+        expect(player.speechBubbleText, isNull);
+      },
+    );
 
     test('QuickChat bubble triggers 3.0s lifespan and auto-clears on bot', () {
       final opponent = PvpOpponentInfo.generateBot(1200);
@@ -459,14 +463,18 @@ void main() {
       expect(PvpArenaGame.botSpawnPos, equals(Vector2(760, 320)));
 
       // Center is exactly at X=480
-      final centerX = (PvpArenaGame.playerSpawnPos.x + PvpArenaGame.botSpawnPos.x) / 2;
+      final centerX =
+          (PvpArenaGame.playerSpawnPos.x + PvpArenaGame.botSpawnPos.x) / 2;
       expect(centerX, equals(480.0));
     });
   });
 
   group('Group 7: Realtime Online Replication & Multi-Hero Support', () {
     test('PvpBotPlayerComponent smoothly interpolates towards targetPosition when enableAi is false', () {
-      final player = PlayerComponent(position: Vector2(200, 320), heroId: 'ranger');
+      final player = PlayerComponent(
+        position: Vector2(200, 320),
+        heroId: 'ranger',
+      );
       final bot = PvpBotPlayerComponent(
         position: Vector2(760, 320),
         opponentInfo: PvpOpponentInfo.generateBot(1000, playerHeroId: 'tanker'),
@@ -498,43 +506,75 @@ void main() {
 
   group('Group 6: Online PvP sync handshake', () {
     PvpOpponentInfo human() => PvpOpponentInfo(
-          name: 'Tab 2',
-          rankPoints: 1000,
-          rankTier: 'Đồng',
-          heroId: 'george',
-          isBot: false,
+      name: 'Tab 2',
+      rankPoints: 1000,
+      rankTier: 'Đồng',
+      heroId: 'george',
+      isBot: false,
+    );
+
+    test(
+      'Online match waits for opponent and only starts after startOnlineMatch',
+      () {
+        final game = PvpArenaGame(
+          opponentInfo: human(),
+          playerCurrentRp: 1000,
+          isOnline: true,
+        );
+        expect(game.matchState, PvpMatchState.waiting);
+        game.update(10);
+        expect(game.matchState, PvpMatchState.waiting);
+        game.setPlayerMoveDirection(Vector2(1, 0));
+        expect(game.player.moveDirection.isZero(), isTrue);
+
+        game.startOnlineMatch();
+        expect(game.matchState, PvpMatchState.roundIntro);
+        game.update(3.1);
+        expect(game.matchState, PvpMatchState.fighting);
+      },
+    );
+
+    test(
+      'Opponent snapshot moves remote player and stale-round HP is ignored',
+      () {
+        final game = PvpArenaGame(
+          opponentInfo: human(),
+          playerCurrentRp: 1000,
+          isOnline: true,
+        );
+        game.startOnlineMatch();
+        game.currentRound = 2;
+        game.bot.currentHp = 100;
+
+        game.applyOpponentSnapshot({
+          'x': 500.0,
+          'y': 300.0,
+          'hp': 5.0,
+          'round': 1,
+        });
+        expect(game.bot.targetPosition, Vector2(500, 300));
+        expect(
+          game.bot.currentHp,
+          100,
+          reason: 'HP của hiệp cũ không được ghi đè hiệp mới',
         );
 
-    test('Online match waits for opponent and only starts after startOnlineMatch', () {
-      final game = PvpArenaGame(opponentInfo: human(), playerCurrentRp: 1000, isOnline: true);
-      expect(game.matchState, PvpMatchState.waiting);
-      game.update(10);
-      expect(game.matchState, PvpMatchState.waiting);
-      game.setPlayerMoveDirection(Vector2(1, 0));
-      expect(game.player.moveDirection.isZero(), isTrue);
-
-      game.startOnlineMatch();
-      expect(game.matchState, PvpMatchState.roundIntro);
-      game.update(3.1);
-      expect(game.matchState, PvpMatchState.fighting);
-    });
-
-    test('Opponent snapshot moves remote player and stale-round HP is ignored', () {
-      final game = PvpArenaGame(opponentInfo: human(), playerCurrentRp: 1000, isOnline: true);
-      game.startOnlineMatch();
-      game.currentRound = 2;
-      game.bot.currentHp = 100;
-
-      game.applyOpponentSnapshot({'x': 500.0, 'y': 300.0, 'hp': 5.0, 'round': 1});
-      expect(game.bot.targetPosition, Vector2(500, 300));
-      expect(game.bot.currentHp, 100, reason: 'HP của hiệp cũ không được ghi đè hiệp mới');
-
-      game.applyOpponentSnapshot({'x': 520.0, 'y': 300.0, 'hp': 60.0, 'round': 2});
-      expect(game.bot.currentHp, 60);
-    });
+        game.applyOpponentSnapshot({
+          'x': 520.0,
+          'y': 300.0,
+          'hp': 60.0,
+          'round': 2,
+        });
+        expect(game.bot.currentHp, 60);
+      },
+    );
 
     test('Opponent forfeit concludes match as a win', () {
-      final game = PvpArenaGame(opponentInfo: human(), playerCurrentRp: 1000, isOnline: true);
+      final game = PvpArenaGame(
+        opponentInfo: human(),
+        playerCurrentRp: 1000,
+        isOnline: true,
+      );
       PvpMatchResult? result;
       game.onMatchFinished = (r) => result = r;
       game.startOnlineMatch();
@@ -543,29 +583,37 @@ void main() {
       expect(result?.isWinner, isTrue);
     });
 
-    test('Dead Reckoning applies velocity and extrapolates movement in real-time', () {
-      final game = PvpArenaGame(opponentInfo: human(), playerCurrentRp: 1000, isOnline: true);
-      game.startOnlineMatch();
+    test(
+      'Dead Reckoning applies velocity and extrapolates movement in real-time',
+      () {
+        final game = PvpArenaGame(
+          opponentInfo: human(),
+          playerCurrentRp: 1000,
+          isOnline: true,
+        );
+        game.startOnlineMatch();
+        game.matchState = PvpMatchState.fighting;
 
-      // Giả lập nhận snapshot có vx = 160.0 (đối thủ đang chạy sang phải)
-      game.applyOpponentSnapshot({
-        'x': 500.0,
-        'y': 320.0,
-        'vx': 160.0,
-        'vy': 0.0,
-        'round': 1,
-      });
+        // Giả lập nhận snapshot có vx = 160.0 (đối thủ đang chạy sang phải)
+        game.applyOpponentSnapshot({
+          'x': 500.0,
+          'y': 320.0,
+          'vx': 160.0,
+          'vy': 0.0,
+          'round': 1,
+        });
 
-      expect(game.bot.targetVelocity, Vector2(160, 0));
-      game.bot.position = Vector2(500, 320);
+        expect(game.bot.targetVelocity, Vector2(160, 0));
+        game.bot.position = Vector2(500, 320);
 
-      // Cập nhật 1 frame (1/60s = 0.016s)
-      game.bot.update(0.016);
+        // Cập nhật 1 frame (1/60s = 0.016s)
+        game.bot.update(0.016);
 
-      // Nhân vật đối thủ phải tự động di chuyển về phía trước theo vận tốc thời gian thực (500 + 160 * 0.016 = 502.56)
-      expect(game.bot.position.x, greaterThan(501.0));
-      expect(game.bot.isFacingRight, isTrue);
-    });
+        // Nhân vật đối thủ phải tự động di chuyển về phía trước theo vận tốc thời gian thực (500 + 160 * 0.016 = 502.56)
+        expect(game.bot.position.x, greaterThan(501.0));
+        expect(game.bot.isFacingRight, isTrue);
+      },
+    );
   });
 
   group('Group 8: 2v2 & 4v4 Team Matchmaking & Kaelen Thunderblade', () {
@@ -624,7 +672,10 @@ void main() {
     });
 
     test('Kaelen Thunderblade executes 3-hit combo, Thunder Flash dash, Vortex, and Judgment', () {
-      final kaelen = PlayerComponent(position: Vector2(200, 320), heroId: 'kaelen');
+      final kaelen = PlayerComponent(
+        position: Vector2(200, 320),
+        heroId: 'kaelen',
+      );
       expect(kaelen.heroId, equals('kaelen'));
 
       // 3-hit normal attack combo
