@@ -20,14 +20,52 @@
         ".write": "auth != null"
       }
     },
+    "invitations": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "invitation_responses": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friend_requests": {
+      "$toCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friend_request_responses": {
+      "$fromCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "friendships": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
     "leaderboard": {
       ".read": true,
       ".write": "auth != null"
     },
     "players": {
       "$uid": {
-        ".read": "auth != null",
-        ".write": "auth != null && auth.uid == $uid"
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "account": {
+          "email": { ".validate": "newData.isString()" },
+          "displayName": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 32" }
+        },
+        "profile": {
+          "gold": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "playerName": { ".validate": "newData.isString() && newData.val().length <= 32" }
+        }
       }
     }
   }

@@ -5,6 +5,7 @@ class LeaderboardEntry {
   final String uid;
   final String name;
   final int rankPoints;
+  final int? _rankStars;
   final String rankTier;
   final String winRate;
   final int rankNumber;
@@ -16,13 +17,34 @@ class LeaderboardEntry {
     required this.uid,
     required this.name,
     required this.rankPoints,
+    int? rankStars,
     required this.rankTier,
     required this.winRate,
     required this.rankNumber,
     required this.lastUpdated,
     this.isLocalPlayer = false,
     this.heroId = 'george',
-  });
+    // ignore: prefer_initializing_formals
+  }) : _rankStars = rankStars;
+
+  /// Tổng số sao tích lũy
+  int get rankStars =>
+      _rankStars ?? PvpRankSystem.totalStarsFromRp(rankPoints);
+
+  /// Số sao hiển thị trong bậc hiện tại (0..2 cho Đồng->Kim Cương, 0+ cho Huyền Thoại/Thách Đấu)
+  int get starsInTier => PvpRankSystem.getStarsInTier(rankStars);
+
+  /// Số sao tối đa của bậc (3 cho Đồng->Kim Cương, null cho Huyền Thoại/Thách Đấu)
+  int? get maxStarsInTier => PvpRankSystem.getMaxStarsForTier(rankStars);
+
+  /// Nhãn hiển thị số sao của game thủ trên BXH
+  String get starDisplayText {
+    final maxS = maxStarsInTier;
+    if (maxS != null) {
+      return '$starsInTier/$maxS ⭐';
+    }
+    return '$starsInTier ⭐';
+  }
 
   /// Alias tương thích ngược
   String get userId => uid;
@@ -33,6 +55,7 @@ class LeaderboardEntry {
     'uid': uid,
     'name': name,
     'rankPoints': rankPoints,
+    'rankStars': rankStars,
     'rankTier': rankTier,
     'winRate': winRate,
     'rankNumber': rankNumber,
@@ -49,10 +72,14 @@ class LeaderboardEntry {
       parsedDate = DateTime.now();
     }
 
+    final rp = (json['rankPoints'] as num?)?.toInt() ?? 1000;
+    final stars = (json['rankStars'] as num?)?.toInt();
+
     return LeaderboardEntry(
       uid: json['uid'] as String? ?? (json['userId'] as String? ?? 'unknown'),
       name: json['name'] as String? ?? (json['playerName'] as String? ?? 'Vô Danh'),
-      rankPoints: (json['rankPoints'] as num?)?.toInt() ?? 1000,
+      rankPoints: rp,
+      rankStars: stars,
       rankTier: json['rankTier'] as String? ?? 'Đồng',
       winRate: json['winRate'] as String? ?? '50%',
       rankNumber: (json['rankNumber'] as num?)?.toInt() ?? ((json['rank'] as num?)?.toInt() ?? 1),
@@ -66,6 +93,7 @@ class LeaderboardEntry {
     String? uid,
     String? name,
     int? rankPoints,
+    int? rankStars,
     String? rankTier,
     String? winRate,
     int? rankNumber,
@@ -73,10 +101,17 @@ class LeaderboardEntry {
     bool? isLocalPlayer,
     String? heroId,
   }) {
+    final resolvedRp = rankPoints ?? this.rankPoints;
+    final resolvedStars = rankStars ??
+        (rankPoints != null
+            ? PvpRankSystem.totalStarsFromRp(rankPoints)
+            : _rankStars);
+
     return LeaderboardEntry(
       uid: uid ?? this.uid,
       name: name ?? this.name,
-      rankPoints: rankPoints ?? this.rankPoints,
+      rankPoints: resolvedRp,
+      rankStars: resolvedStars,
       rankTier: rankTier ?? this.rankTier,
       winRate: winRate ?? this.winRate,
       rankNumber: rankNumber ?? this.rankNumber,

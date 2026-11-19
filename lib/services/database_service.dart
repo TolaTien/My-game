@@ -40,6 +40,10 @@ abstract class DatabaseService {
   /// Cập nhật điểm và vị trí của người chơi trên bảng xếp hạng
   Future<void> updateLeaderboard(PlayerProfile profile);
 
+  /// Đánh giá vị trí xếp hạng trên Server và xác định tư cách Thách Đấu (Top 10 nhiều sao nhất server)
+  Future<({int serverRank, bool isChallengerTop10, int top10CutoffStars})>
+      evaluatePlayerServerRank(PlayerProfile profile);
+
   /// Đăng ký vào hàng đợi tìm trận PvP
   Future<void> joinMatchmakingQueue(PvpQueueTicket ticket);
 
@@ -91,216 +95,14 @@ class MockDatabaseService implements DatabaseService {
   @override
   bool get isOnline => false;
 
-  /// Danh sách 20 game thủ hạt giống mẫu chuẩn Việt Nam
+  /// Danh sách bảng xếp hạng ban đầu (không dùng dữ liệu giả lập)
   static List<LeaderboardEntry> createDefaultLeaderboard() {
-    final now = DateTime.now();
-    return [
-      LeaderboardEntry(
-        uid: 'seed_1',
-        name: 'BáĐạo99',
-        rankPoints: 2850,
-        rankTier: 'Thách Đấu',
-        winRate: '72%',
-        rankNumber: 1,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_2',
-        name: 'ChiếnThần_SG',
-        rankPoints: 2680,
-        rankTier: 'Thách Đấu',
-        winRate: '69%',
-        rankNumber: 2,
-        lastUpdated: now,
-        heroId: 'tanker',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_3',
-        name: 'ĐộcCôCầuBại',
-        rankPoints: 2540,
-        rankTier: 'Thách Đấu',
-        winRate: '66%',
-        rankNumber: 3,
-        lastUpdated: now,
-        heroId: 'ninja',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_4',
-        name: 'RồngLửaVN',
-        rankPoints: 2420,
-        rankTier: 'Thách Đấu',
-        winRate: '64%',
-        rankNumber: 4,
-        lastUpdated: now,
-        heroId: 'ranger',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_5',
-        name: 'TrùmSolo1v1',
-        rankPoints: 2310,
-        rankTier: 'Thách Đấu',
-        winRate: '62%',
-        rankNumber: 5,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_6',
-        name: 'SátThủBóngĐêm',
-        rankPoints: 2230,
-        rankTier: 'Thách Đấu',
-        winRate: '61%',
-        rankNumber: 6,
-        lastUpdated: now,
-        heroId: 'ninja',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_7',
-        name: 'LôiThầnHàThành',
-        rankPoints: 2150,
-        rankTier: 'Thách Đấu',
-        winRate: '59%',
-        rankNumber: 7,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_8',
-        name: 'KiếmThánh_VN',
-        rankPoints: 2080,
-        rankTier: 'Thách Đấu',
-        winRate: '58%',
-        rankNumber: 8,
-        lastUpdated: now,
-        heroId: 'ranger',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_9',
-        name: 'VôĐịchThiênHạ',
-        rankPoints: 1990,
-        rankTier: 'Kim Cương',
-        winRate: '57%',
-        rankNumber: 9,
-        lastUpdated: now,
-        heroId: 'tanker',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_10',
-        name: 'BóngMaHưKhông',
-        rankPoints: 1940,
-        rankTier: 'Kim Cương',
-        winRate: '56%',
-        rankNumber: 10,
-        lastUpdated: now,
-        heroId: 'ninja',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_11',
-        name: 'ThầnĐiêuĐạiHiệp',
-        rankPoints: 1880,
-        rankTier: 'Kim Cương',
-        winRate: '55%',
-        rankNumber: 11,
-        lastUpdated: now,
-        heroId: 'ranger',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_12',
-        name: 'BấtBại_9x',
-        rankPoints: 1820,
-        rankTier: 'Kim Cương',
-        winRate: '54%',
-        rankNumber: 12,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_13',
-        name: 'HắcBạchCôngTử',
-        rankPoints: 1760,
-        rankTier: 'Bạch Kim',
-        winRate: '53%',
-        rankNumber: 13,
-        lastUpdated: now,
-        heroId: 'tanker',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_14',
-        name: 'TiểuLongNữ',
-        rankPoints: 1710,
-        rankTier: 'Bạch Kim',
-        winRate: '52%',
-        rankNumber: 14,
-        lastUpdated: now,
-        heroId: 'ranger',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_15',
-        name: 'CuồngPhong_HN',
-        rankPoints: 1640,
-        rankTier: 'Bạch Kim',
-        winRate: '51%',
-        rankNumber: 15,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_16',
-        name: 'BãoLửa2026',
-        rankPoints: 1580,
-        rankTier: 'Vàng',
-        winRate: '50%',
-        rankNumber: 16,
-        lastUpdated: now,
-        heroId: 'ranger',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_17',
-        name: 'HiệpSĩBóngĐêm',
-        rankPoints: 1520,
-        rankTier: 'Vàng',
-        winRate: '49%',
-        rankNumber: 17,
-        lastUpdated: now,
-        heroId: 'tanker',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_18',
-        name: 'NinjaSiêuCấp',
-        rankPoints: 1440,
-        rankTier: 'Vàng',
-        winRate: '48%',
-        rankNumber: 18,
-        lastUpdated: now,
-        heroId: 'ninja',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_19',
-        name: 'ThầnSấm_VN',
-        rankPoints: 1380,
-        rankTier: 'Bạc',
-        winRate: '47%',
-        rankNumber: 19,
-        lastUpdated: now,
-        heroId: 'george',
-      ),
-      LeaderboardEntry(
-        uid: 'seed_20',
-        name: 'ĐạiHiệpBấtTử',
-        rankPoints: 1290,
-        rankTier: 'Bạc',
-        winRate: '46%',
-        rankNumber: 20,
-        lastUpdated: now,
-        heroId: 'tanker',
-      ),
-    ];
+    return const [];
   }
 
   @override
   Future<void> initialize() async {
-    if (_initialized && _leaderboard.isNotEmpty) return;
+    if (_initialized) return;
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -309,16 +111,15 @@ class MockDatabaseService implements DatabaseService {
         final decoded = jsonDecode(raw) as List<dynamic>;
         _leaderboard = decoded
             .map((item) => LeaderboardEntry.fromJson(item as Map<String, dynamic>))
+            .where((e) => !e.uid.startsWith('seed_'))
             .toList();
-      } else {
-        _leaderboard = createDefaultLeaderboard();
         await _persistLeaderboard();
+      } else {
+        _leaderboard = [];
       }
     } catch (e) {
       debugPrint('MockDatabaseService init warning: $e. Using in-memory fallback.');
-      if (_leaderboard.isEmpty) {
-        _leaderboard = createDefaultLeaderboard();
-      }
+      _leaderboard = _leaderboard.where((e) => !e.uid.startsWith('seed_')).toList();
     }
 
     _initialized = true;
@@ -364,7 +165,7 @@ class MockDatabaseService implements DatabaseService {
 
   @override
   Stream<List<LeaderboardEntry>> streamTopLeaderboard({int limit = 20}) async* {
-    if (!_initialized || _leaderboard.isEmpty) {
+    if (!_initialized) {
       await initialize();
     }
     yield _getTopEntries(limit);
@@ -382,7 +183,7 @@ class MockDatabaseService implements DatabaseService {
 
   @override
   Future<void> updateLeaderboard(PlayerProfile profile) async {
-    if (!_initialized || _leaderboard.isEmpty) {
+    if (!_initialized) {
       await initialize();
     }
 
@@ -396,6 +197,7 @@ class MockDatabaseService implements DatabaseService {
       uid: 'local_player',
       name: profile.playerName,
       rankPoints: profile.rankPoints,
+      rankStars: profile.rankStars,
       rankTier: profile.rankTier,
       winRate: '60%',
       rankNumber: 1,
@@ -406,21 +208,67 @@ class MockDatabaseService implements DatabaseService {
 
     _leaderboard.add(localEntry);
 
-    // Sắp xếp giảm dần theo điểm Elo RP, nếu bằng nhau thì xét theo thời gian
+    // Sắp xếp giảm dần theo điểm RP / tổng số Sao, nếu bằng nhau thì xét theo thời gian
     _leaderboard.sort((a, b) {
-      final cmp = b.rankPoints.compareTo(a.rankPoints);
-      if (cmp != 0) return cmp;
+      final rpCmp = b.rankPoints.compareTo(a.rankPoints);
+      if (rpCmp != 0) return rpCmp;
       return b.lastUpdated.compareTo(a.lastUpdated);
     });
 
-    // Tính lại thứ hạng rankNumber từ 1..N
+    // Tính lại thứ hạng rankNumber từ 1..N và phân định Thách Đấu (Top 10 nhiều sao nhất server) vs Huyền Thoại
     _leaderboard = [
       for (int i = 0; i < _leaderboard.length; i++)
-        _leaderboard[i].copyWith(rankNumber: i + 1),
+        () {
+          final entry = _leaderboard[i];
+          final rankNum = i + 1;
+          final isTop10 = rankNum <= PvpRankSystem.challengerTopLimit &&
+              entry.rankStars >= PvpRankSystem.legendaryStartTotalStars;
+          final resolvedTier = PvpRankSystem.getTierFromStars(
+            entry.rankStars,
+            isTop10Challenger: isTop10,
+          );
+          return entry.copyWith(
+            rankNumber: rankNum,
+            rankTier: resolvedTier,
+          );
+        }(),
     ];
 
     await _persistLeaderboard();
     _leaderboardStreamController.add(List.unmodifiable(_leaderboard));
+  }
+
+  @override
+  Future<({int serverRank, bool isChallengerTop10, int top10CutoffStars})>
+      evaluatePlayerServerRank(PlayerProfile profile) async {
+    await updateLeaderboard(profile);
+
+    final localIdx = _leaderboard.indexWhere(
+      (e) =>
+          e.isLocalPlayer ||
+          e.uid == 'local_player' ||
+          e.name == profile.playerName,
+    );
+    final serverRank =
+        localIdx >= 0 ? _leaderboard[localIdx].rankNumber : _leaderboard.length;
+    final isChallengerTop10 =
+        serverRank <= PvpRankSystem.challengerTopLimit &&
+            profile.rankStars >= PvpRankSystem.legendaryStartTotalStars;
+
+    int top10CutoffStars = PvpRankSystem.legendaryStartTotalStars + 1;
+    if (_leaderboard.length >= PvpRankSystem.challengerTopLimit) {
+      final tenthEntry = _leaderboard[PvpRankSystem.challengerTopLimit - 1];
+      top10CutoffStars = max(
+        PvpRankSystem.legendaryStartTotalStars,
+        tenthEntry.rankStars,
+      );
+    }
+
+    return (
+      serverRank: serverRank,
+      isChallengerTop10: isChallengerTop10,
+      top10CutoffStars: top10CutoffStars,
+    );
   }
 
   StreamController<PvpMatchSession?> _getOrCreateSessionController(String sessionId) {
@@ -513,7 +361,7 @@ class MockDatabaseService implements DatabaseService {
 
   @override
   Future<List<Map<String, dynamic>>> fetchLeaderboard() async {
-    if (!_initialized || _leaderboard.isEmpty) {
+    if (!_initialized) {
       await initialize();
     }
     return _leaderboard.take(20).map((e) => {

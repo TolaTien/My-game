@@ -15,16 +15,12 @@ class FirebaseBootstrap {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       final auth = FirebaseAuth.instanceFor(app: app);
-      // SESSION persistence is tab-scoped, allowing two Chrome tabs to act as
-      // two separate anonymous players during the local PvP demo.
+      // SESSION persistence là theo từng tab: mỗi tab Chrome có thể đăng nhập
+      // một tài khoản khác nhau (tiện test PvP), và F5 vẫn giữ phiên đăng nhập.
+      // Người chơi đăng nhập bằng Email/Mật khẩu tại AuthScreen.
       if (kIsWeb) {
         await auth.setPersistence(Persistence.SESSION);
-        // "Nhân đôi tab" (Duplicate tab) sao chép cả sessionStorage => 2 tab
-        // dùng chung 1 UID và không thể ghép với nhau. Luôn tạo phiên ẩn danh
-        // mới cho mỗi lần tải trang để mỗi tab là một người chơi riêng biệt.
-        if (auth.currentUser != null) await auth.signOut();
       }
-      if (auth.currentUser == null) await auth.signInAnonymously();
       isReady = true;
     } catch (error) {
       lastError = error;
