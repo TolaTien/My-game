@@ -6,12 +6,7 @@ echo ========================================================
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
-subst Z: /D >nul 2>&1
-subst Z: "%PROJECT_DIR%"
-cd /d Z:\
+cd /d "%PROJECT_DIR%"
 
 call flutter run -d chrome
-
-cd /d "%PROJECT_DIR%"
-subst Z: /D >nul 2>&1
 pause
