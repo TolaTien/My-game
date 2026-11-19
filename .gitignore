@@ -52,3 +52,7 @@ app.*.map.json
 PROJECT.md
 TEST_INFRA.md
 AGENTS
+
+*.md
+.rules/
+!README.md
