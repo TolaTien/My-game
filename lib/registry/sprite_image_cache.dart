@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Bộ nhớ đệm (Cache) nạp trực tiếp `ui.Image` đã tách nền bảo toàn viền đen từ `assets/images/`
@@ -16,19 +18,19 @@ class SpriteImageCache {
   final Set<String> _loadingKeys = {};
 
   static const Map<String, String> heroPortraitPaths = {
-    'nova_blade': 'assets/images/heroes/nova_blade_portrait.png',
-    'shadow_01': 'assets/images/heroes/shadow_01_portrait.png',
-    'ember_02': 'assets/images/heroes/ember_02_portrait.png',
-    'valeria': 'assets/images/heroes/valeria_portrait.png',
-    'garrick': 'assets/images/heroes/garrick_portrait.png',
-    'kaelen': 'assets/images/heroes/kaelen_portrait.png',
+    'nova_blade': 'assets/images/heroes/nova_blade/nova_blade_portrait.png',
+    'shadow_01': 'assets/images/heroes/shadow/shadow_01_portrait.png',
+    'ember_02': 'assets/images/heroes/ember/ember_02_portrait.png',
+    'valeria': 'assets/images/heroes/valenria/valeria_portrait.png',
+    'garrick': 'assets/images/heroes/garrick/garrick_portrait.png',
+    'kaelen': 'assets/images/heroes/kaelen/kaelen_portrait.png',
   };
 
   static const Map<String, String> heroAttackPaths = {
-    'nova_blade': 'assets/images/heroes/nova_blade_attack.png',
-    'valeria': 'assets/images/heroes/valeria_attack.png',
-    'garrick': 'assets/images/heroes/garrick_attack.png',
-    'kaelen': 'assets/images/heroes/kaelen_attack.png',
+    'nova_blade': 'assets/images/heroes/nova_blade/nova_blade_attack.png',
+    'valeria': 'assets/images/heroes/valenria/valeria_attack.png',
+    'garrick': 'assets/images/heroes/garrick/garrick_attack.png',
+    'kaelen': 'assets/images/heroes/kaelen/kaelen_attack.png',
   };
 
   static const Map<String, String> companionSpritePaths = {
@@ -44,9 +46,9 @@ class SpriteImageCache {
     'nova_blade_1': 'assets/images/skills/nova_energy_slash.png',
     'nova_blade_2': 'assets/images/skills/nova_shadow_dash.png',
     'nova_blade_3': 'assets/images/skills/nova_quantum_burst.png',
-    'valeria_1': 'assets/images/skills/valeria_skill1.png',
-    'valeria_2': 'assets/images/skills/valeria_skill2.png',
-    'valeria_3': 'assets/images/skills/valeria_skill3.png',
+    'valeria_1': 'assets/images/skills/valeria_skills.png',
+    'valeria_2': 'assets/images/skills/valeria_skills.png',
+    'valeria_3': 'assets/images/skills/valeria_skills.png',
     'kaelen_1': 'assets/images/skills/kaelen_thunder_flash.png',
     'kaelen_2': 'assets/images/skills/kaelen_storm_vortex.png',
     'kaelen_3': 'assets/images/skills/kaelen_heaven_judgment.png',
@@ -135,8 +137,14 @@ class SpriteImageCache {
     try {
       final data = await rootBundle.load(assetPath);
       final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-      final frame = await codec.getNextFrame();
-      onLoaded(frame.image);
-    } catch (_) {}
+      try {
+        final frame = await codec.getNextFrame();
+        onLoaded(frame.image);
+      } finally {
+        codec.dispose();
+      }
+    } catch (error) {
+      debugPrint('SpriteImageCache: failed to load $assetPath: $error');
+    }
   }
 }

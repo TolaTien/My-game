@@ -140,6 +140,8 @@ class SkillAssetConfig {
   final String iconAsset;
   final String sfxAsset;
 
+  double get configuredKiCost => kiCost;
+
   const SkillAssetConfig({
     required this.id,
     required this.heroId,
@@ -368,6 +370,21 @@ class GameAssetRegistry {
       ..sort((a, b) => a.slot.compareTo(b.slot));
   }
 
+  SkillAssetConfig? getSkillForHeroSlot(String heroId, int slot) {
+    final hero = _heroes[heroId];
+    if (hero == null || slot < 1 || slot > hero.skillIds.length) return null;
+
+    final skillId = hero.skillIds[slot - 1];
+    final skill = _skills[skillId];
+    if (skill != null && skill.heroId == heroId && skill.slot == slot) {
+      return skill;
+    }
+
+    // Some legacy heroes do not yet have complete skill JSON entries. Keep their
+    // existing runtime values rather than borrowing a different hero's config.
+    return null;
+  }
+
   CompanionAssetConfig? getCompanion(String? companionId) {
     if (companionId == null) return null;
     return _companions[companionId];
@@ -512,9 +529,9 @@ class GameAssetRegistry {
           'kaelen_heaven_judgment',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/kaelen_idle.png',
-          runSheet: 'assets/images/heroes/kaelen_run.png',
-          attackSheet: 'assets/images/heroes/kaelen_attack.png',
+          idleSheet: 'assets/images/heroes/kaelen/kaelen_portrait.png',
+          runSheet: 'assets/images/heroes/kaelen/kaelen_sheet.png',
+          attackSheet: 'assets/images/heroes/kaelen/kaelen_attack.png',
         ),
       ),
       const HeroAssetConfig(
@@ -604,9 +621,9 @@ class GameAssetRegistry {
           'valeria_absolute_zero',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/valeria_idle.png',
-          runSheet: 'assets/images/heroes/valeria_run.png',
-          attackSheet: 'assets/images/heroes/valeria_attack.png',
+          idleSheet: 'assets/images/heroes/valenria/valeria_portrait.png',
+          runSheet: 'assets/images/heroes/valenria/valeria_sheet.png',
+          attackSheet: 'assets/images/heroes/valenria/valeria_attack.png',
         ),
       ),
       const HeroAssetConfig(
@@ -628,9 +645,9 @@ class GameAssetRegistry {
           'garrick_orbital_barrage',
         ],
         sprites: HeroSpriteConfig(
-          idleSheet: 'assets/images/heroes/garrick_idle.png',
-          runSheet: 'assets/images/heroes/garrick_run.png',
-          attackSheet: 'assets/images/heroes/garrick_attack.png',
+          idleSheet: 'assets/images/heroes/garrick/garrick_portrait.png',
+          runSheet: 'assets/images/heroes/garrick/garrick_sheet.png',
+          attackSheet: 'assets/images/heroes/garrick/garrick_attack.png',
         ),
       ),
     ];
