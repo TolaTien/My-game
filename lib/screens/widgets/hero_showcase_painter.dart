@@ -6,11 +6,15 @@ import '../../registry/sprite_image_cache.dart';
 class HeroShowcaseWidget extends StatefulWidget {
   final String heroId;
   final Color themeColor;
+  final double width;
+  final double height;
 
   const HeroShowcaseWidget({
     super.key,
     required this.heroId,
     required this.themeColor,
+    this.width = 260,
+    this.height = 270,
   });
 
   @override
@@ -26,7 +30,7 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
   }
 
@@ -42,13 +46,14 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
       animation: _animController,
       builder: (context, _) {
         return SizedBox(
-          width: 260,
-          height: 270,
+          width: widget.width,
+          height: widget.height,
           child: CustomPaint(
             painter: _HeroCanvasPainter(
               heroId: widget.heroId,
               themeColor: widget.themeColor,
               time: _animController.value * 2 * pi,
+              animProgress: _animController.value,
             ),
           ),
         );
@@ -61,11 +66,13 @@ class _HeroCanvasPainter extends CustomPainter {
   final String heroId;
   final Color themeColor;
   final double time;
+  final double animProgress;
 
   _HeroCanvasPainter({
     required this.heroId,
     required this.themeColor,
     required this.time,
+    required this.animProgress,
   });
 
   @override
@@ -104,47 +111,239 @@ class _HeroCanvasPainter extends CustomPainter {
     final breathOffset = sin(time * 2.2) * 4.0;
     final heroCenterY = cy + 6 + breathOffset;
 
-    // Ưu tiên hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 (giống 100% trong Shop)
-    // kết hợp hiệu ứng chuyển động nhún thở (Squash & Stretch) và nghiêng nhịp nhàng 60 FPS
-    final spriteImg = SpriteImageCache.instance.getHeroImage(heroId);
-    if (spriteImg != null) {
-      _drawAnimatedAssetHero(canvas, spriteImg, cx, heroCenterY);
-      return;
+    // 4.1 SHADOW (shadow_01 / shadow): Chạy đầy đủ 16 frames IDLE trong sảnh
+    if (heroId == 'shadow_01' || heroId == 'shadow') {
+      final frameIndex = (animProgress * 16).floor().clamp(0, 15);
+      final shadowImg = SpriteImageCache.instance
+          .getHeroSequenceFrame('shadow_01', 'idle', frameIndex);
+      if (shadowImg != null) {
+        _drawShadowIdleAnimation(canvas, shadowImg, cx, daisCenter.dy, size);
+        return;
+      }
+    }
+
+    // 4.2 NOVA (nova_blade / nova): Chạy animation IDLE trong sảnh (5 frames nhìn thẳng)
+    if (heroId == 'nova_blade' || heroId == 'nova') {
+      final novaSheet = SpriteImageCache.instance.getHeroIdleImage(heroId) ??
+          SpriteImageCache.instance.getHeroIdleImage('nova_blade');
+      if (novaSheet != null) {
+        _drawNovaIdleAnimation(canvas, novaSheet, cx, daisCenter.dy, size, animProgress);
+        return;
+      }
+    }
+
+    // 4.4 EMBER (ember_02 / ember): Chạy animation IDLE trong sảnh (5 frames nhìn thẳng)
+    if (heroId == 'ember_02' || heroId == 'ember') {
+      final emberSheet = SpriteImageCache.instance.getHeroIdleImage(heroId) ??
+          SpriteImageCache.instance.getHeroIdleImage('ember_02') ??
+          SpriteImageCache.instance.getHeroIdleImage('ember');
+      if (emberSheet != null && emberSheet.width >= 1000) {
+        _drawEmberIdleAnimation(canvas, emberSheet, cx, daisCenter.dy, size, animProgress);
+        return;
+      }
+    }
+
+    // 4 tướng hệ thống cũ (george, ranger, tanker, ninja) luôn dùng hoạt ảnh đa lớp thay vì 1 avatar tĩnh trong Shop
+    if (!SpriteImageCache.isProceduralHero(heroId)) {
+      final spriteImg = SpriteImageCache.instance.getHeroImage(heroId);
+      if (spriteImg != null) {
+        _drawAnimatedAssetHero(canvas, spriteImg, cx, heroCenterY);
+        return;
+      }
+    }
+
+    final proceduralScale = (size.height / 270.0).clamp(0.38, 1.0);
+    final proceduralCenterY =
+        proceduralScale < 0.999 ? (daisCenter.dy - 99.0 + breathOffset) : heroCenterY;
+    if (proceduralScale < 0.999) {
+      canvas.save();
+      canvas.translate(cx, daisCenter.dy);
+      canvas.scale(proceduralScale, proceduralScale);
+      canvas.translate(-cx, -daisCenter.dy);
     }
 
     switch (heroId) {
-      case 'kaelen':
-        _drawHeroKaelen(canvas, cx, heroCenterY);
-        break;
       case 'nova_blade':
-        _drawHeroNovaBlade(canvas, cx, heroCenterY);
+        _drawHeroNovaBlade(canvas, cx, proceduralCenterY);
         break;
       case 'valeria':
-        _drawHeroValeriaElementalist(canvas, cx, heroCenterY);
+        _drawHeroValeriaElementalist(canvas, cx, proceduralCenterY);
         break;
       case 'ember_02':
-        _drawHeroEmberWitch(canvas, cx, heroCenterY);
+        _drawHeroEmberWitch(canvas, cx, proceduralCenterY);
         break;
       case 'ranger':
-        _drawHeroRanger(canvas, cx, heroCenterY);
+        _drawHeroRanger(canvas, cx, proceduralCenterY);
         break;
       case 'garrick':
-        _drawHeroGarrickGuardian(canvas, cx, heroCenterY);
+        _drawHeroGarrickGuardian(canvas, cx, proceduralCenterY);
         break;
       case 'tanker':
-        _drawHeroTanker(canvas, cx, heroCenterY);
+        _drawHeroTanker(canvas, cx, proceduralCenterY);
         break;
       case 'shadow_01':
-        _drawHeroShadow01(canvas, cx, heroCenterY);
+        _drawHeroShadow01(canvas, cx, proceduralCenterY);
         break;
       case 'ninja':
-        _drawHeroNinja(canvas, cx, heroCenterY);
+        _drawHeroNinja(canvas, cx, proceduralCenterY);
         break;
       case 'george':
       default:
-        _drawHeroGeorge(canvas, cx, heroCenterY);
+        _drawHeroGeorge(canvas, cx, proceduralCenterY);
         break;
     }
+
+    if (proceduralScale < 0.999) {
+      canvas.restore();
+    }
+  }
+
+  /// Hiển thị Shadow lặp 16 frame IDLE từ assets/images/heroes/shadow/idle/
+  void _drawShadowIdleAnimation(
+    Canvas canvas,
+    ui.Image img,
+    double cx,
+    double daisY,
+    Size size,
+  ) {
+    // Hào quang tím hư không phía sau lưng Shadow
+    final auraPaint = Paint()
+      ..color = const Color(0xFF9C27B0)
+          .withValues(alpha: 0.32 + 0.12 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    final feetY = 256.0 * (dstSize / img.height);
+    final centerX = (img.width / 2.0) * (dstSize / img.width);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final srcRect =
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      img,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
+  }
+
+  /// Hiển thị Nova Blade chạy 5 frames IDLE mặt trước (Row 0) từ assets/images/heroes/nova/nova.png
+  void _drawNovaIdleAnimation(
+    Canvas canvas,
+    ui.Image sheet,
+    double cx,
+    double daisY,
+    Size size,
+    double animProgress,
+  ) {
+    // Phòng thủ an toàn: Nếu ảnh chưa phải spritesheet 5x5 (ví dụ ảnh chân dung < 1000px), hiển thị trọn vẹn ảnh
+    if (sheet.width < 1000 || sheet.height < 1000) {
+      _drawAnimatedAssetHero(canvas, sheet, cx, daisY - 90);
+      return;
+    }
+
+    const double cellW = 256.0;
+    const double cellH = 256.0;
+
+    // Chạy tuần tự đầy đủ 5 frames IDLE mặt trước (Hàng 0: 5 ô cột 0 -> 4)
+    final int col = (animProgress * 5).floor() % 5;
+    const int row = 0;
+
+    final srcRect = Rect.fromLTWH(
+      col * cellW,
+      row * cellH,
+      cellW,
+      cellH,
+    );
+
+    // Hào quang năng lượng phía sau lưng Nova
+    final auraPaint = Paint()
+      ..color = const Color(0xFF00E5FF)
+          .withValues(alpha: 0.30 + 0.12 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    // Tỉ lệ scale sao cho chân Nova đặt chuẩn xác trên bệ đá sảnh chờ
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    // Trong cell 256x256 của nova.png, chân nằm ở y ≈ 229, tâm x ≈ 117.5
+    final feetY = 229.0 * (dstSize / cellW);
+    final centerX = 117.5 * (dstSize / cellW);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      sheet,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
+  }
+
+  /// Hiển thị Ember (EMBER-02) chạy 5 frames IDLE mặt trước (Row 0) với hào quang hỏa diễm
+  void _drawEmberIdleAnimation(
+    Canvas canvas,
+    ui.Image sheet,
+    double cx,
+    double daisY,
+    Size size,
+    double animProgress,
+  ) {
+    if (sheet.width < 1000 || sheet.height < 1000) {
+      _drawAnimatedAssetHero(canvas, sheet, cx, daisY - 90);
+      return;
+    }
+
+    const double cellW = 256.0;
+    const double cellH = 256.0;
+
+    // Chạy tuần tự 5 frames IDLE mặt trước (Hàng 0: 5 ô cột 0 -> 4)
+    final int col = (animProgress * 5).floor() % 5;
+    const int row = 0;
+
+    final srcRect = Rect.fromLTWH(
+      col * cellW,
+      row * cellH,
+      cellW,
+      cellH,
+    );
+
+    // Hào quang hỏa diễm rực lửa phía sau lưng Ember
+    final auraPaint = Paint()
+      ..color = const Color(0xFFFF5722)
+          .withValues(alpha: 0.35 + 0.15 * sin(time * 3))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
+
+    final scale = (size.height / 270.0).clamp(0.65, 1.05);
+    final dstSize = 196.0 * scale;
+
+    // Trong cell 256x256 của Ember-idle.png, chân nằm ở y ≈ 236, tâm x ≈ 128
+    final feetY = 236.0 * (dstSize / cellW);
+    final centerX = 128.0 * (dstSize / cellW);
+
+    final dstLeft = cx - centerX;
+    final dstTop = (daisY - 4.0) - feetY;
+
+    final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstSize, dstSize);
+
+    canvas.drawImageRect(
+      sheet,
+      srcRect,
+      dstRect,
+      Paint()..filterQuality = FilterQuality.none,
+    );
   }
 
   /// Hiển thị trực tiếp Sprite nhân vật thật từ Asset 1-4 với chuyển động 60 FPS mượt mà
@@ -1063,7 +1262,13 @@ class _HeroCanvasPainter extends CustomPainter {
 
     // --- BÚA CHIẾN SẤM SÉT VĨ ĐẠI (THE GREAT THUNDER WARHAMMER) ---
     final hammerX = cx + 44;
-    final hammerY = cy - 8;
+    final hammerY = cy - 8 + sin(time * 2.4) * 3.0;
+    final hammerSway = sin(time * 2.2) * 0.06;
+
+    canvas.save();
+    canvas.translate(hammerX - 4, hammerY + 6);
+    canvas.rotate(hammerSway);
+    canvas.translate(-(hammerX - 4), -(hammerY + 6));
 
     // Cán búa bọc da nâu
     final shaftPaint = Paint()..color = const Color(0xFF4E342E)..strokeWidth = 6.5..strokeCap = StrokeCap.round;
@@ -1110,6 +1315,7 @@ class _HeroCanvasPainter extends CustomPainter {
 
     // Găng tay sắt giữ cán búa
     canvas.drawCircle(Offset(hammerX - 4, hammerY + 6), 9.5, Paint()..color = const Color(0xFF607D8B));
+    canvas.restore();
 
     // --- MŨ GIÁP HOÀNG GIA & ĐÔI MẮT PHÁT SÁNG (ROYAL HELM & RADIANT EYES) ---
     final helmRect = Rect.fromCenter(center: Offset(cx, cy - 42), width: 44, height: 38);
@@ -1184,7 +1390,13 @@ class _HeroCanvasPainter extends CustomPainter {
 
     // CÂY CUNG DÀI ÁNH SÁNG HUYỀN THOẠI (ELVEN RECURVE BOW)
     final bowX = cx + 38;
-    final bowY = cy;
+    final bowY = cy + sin(time * 2.4) * 3.0;
+    final bowSway = sin(time * 2.0) * 0.05;
+    canvas.save();
+    canvas.translate(bowX - 6, bowY);
+    canvas.rotate(bowSway);
+    canvas.translate(-(bowX - 6), -bowY);
+
     final bowPath = Path()
       ..moveTo(bowX - 10, bowY - 60)
       ..quadraticBezierTo(bowX + 22, bowY, bowX - 10, bowY + 60);
@@ -1195,11 +1407,13 @@ class _HeroCanvasPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(bowPath, bowPaint);
 
-    // Dây cung phát quang màu xanh ngọc
+    // Dây cung phát quang màu xanh ngọc nhấp nháy nhịp thở
+    final stringAlpha = (0.7 + 0.3 * sin(time * 3.2)).clamp(0.0, 1.0);
     final stringPaint = Paint()
-      ..color = const Color(0xFF69F0AE)
+      ..color = const Color(0xFF69F0AE).withValues(alpha: stringAlpha)
       ..strokeWidth = 1.8;
     canvas.drawLine(Offset(bowX - 10, bowY - 60), Offset(bowX - 10, bowY + 60), stringPaint);
+    canvas.restore();
 
     // Mũ trùm đầu thợ săn (Ranger Hood)
     final hoodPath = Path()
@@ -1239,8 +1453,9 @@ class _HeroCanvasPainter extends CustomPainter {
     );
 
     // TẤM KHIÊN THÀNH LŨY KHỔNG LỒ (THE TOWER SHIELD)
+    final shieldBob = sin(time * 2.2) * 2.5;
     final shieldX = cx - 28;
-    final shieldY = cy + 2;
+    final shieldY = cy + 2 + shieldBob;
     final shieldRect = Rect.fromCenter(center: Offset(shieldX, shieldY), width: 48, height: 78);
     final shieldShader = LinearGradient(
       colors: const [Color(0xFF0277BD), Color(0xFF01579B)],
@@ -1255,8 +1470,9 @@ class _HeroCanvasPainter extends CustomPainter {
     );
 
     // Huy hiệu khiên phòng hộ phát sáng xanh dương
+    final shieldGlowAlpha = (0.55 + 0.35 * sin(time * 3.0)).clamp(0.0, 1.0);
     final shieldGlow = Paint()
-      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.8)
+      ..color = const Color(0xFF00E5FF).withValues(alpha: shieldGlowAlpha)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(Offset(shieldX, shieldY), 12, shieldGlow);
     canvas.drawCircle(Offset(shieldX, shieldY), 7, Paint()..color = Colors.white);
@@ -1309,10 +1525,11 @@ class _HeroCanvasPainter extends CustomPainter {
     );
 
     // SONG ĐAO BÓNG ĐÊM TẨM ĐỘC (DUAL SHADOW DAGGERS)
+    final daggerSwing = sin(time * 3.2) * 0.10;
     // Dao trái
-    _drawDagger(canvas, Offset(cx - 34, cy + 10), -0.3);
+    _drawDagger(canvas, Offset(cx - 34, cy + 10), -0.3 + daggerSwing);
     // Dao phải
-    _drawDagger(canvas, Offset(cx + 34, cy + 10), 0.3);
+    _drawDagger(canvas, Offset(cx + 34, cy + 10), 0.3 - daggerSwing);
 
     // Mặt nạ che mặt Shinobi
     final maskRect = Rect.fromCenter(center: Offset(cx, cy - 40), width: 34, height: 32);
@@ -1356,138 +1573,6 @@ class _HeroCanvasPainter extends CustomPainter {
     canvas.restore();
   }
 
-  // =========================================================================
-  // 5. TƯỚNG MỚI: KAELEN - KIẾM KHÁCH LÔI QUANG (THUNDERBLADE)
-  // =========================================================================
-  void _drawHeroKaelen(Canvas canvas, double cx, double cy) {
-    // Hào quang Lôi Quang Hoàng Kim xoay quanh
-    final auraPaint = Paint()
-      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.25 + 0.12 * sin(time * 4))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
-    canvas.drawCircle(Offset(cx, cy + 8), 52, auraPaint);
-
-    // 1. Áo choàng lụa viền Vàng Hoàng Kim tung bay (CapeLayer)
-    final capeWave = sin(time * 3.2) * 8;
-    final capePath = Path()
-      ..moveTo(cx - 22, cy - 16)
-      ..lineTo(cx + 22, cy - 16)
-      ..quadraticBezierTo(cx + 38 + capeWave, cy + 28, cx + 32 + capeWave, cy + 70)
-      ..lineTo(cx, cy + 62)
-      ..lineTo(cx - 32 + capeWave * 0.6, cy + 70)
-      ..quadraticBezierTo(cx - 36, cy + 28, cx - 22, cy - 16)
-      ..close();
-    final capeShader = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-    ).createShader(Rect.fromLTWH(cx - 40, cy - 20, 80, 95));
-    canvas.drawPath(capePath, Paint()..shader = capeShader);
-    canvas.drawPath(
-      capePath,
-      Paint()
-        ..color = const Color(0xFFFFD700)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2,
-    );
-
-    // 2. Đôi chân chiến binh Lôi Quang nối liền hông (FootLeft & FootRight)
-    final greaveDark = Paint()..color = const Color(0xFF334155);
-    final goldPaint = Paint()..color = const Color(0xFFFFD700);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(cx - 21, cy + 20, 16, 48), const Radius.circular(5)),
-      greaveDark,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 5, cy + 20, 16, 48), const Radius.circular(5)),
-      greaveDark,
-    );
-    canvas.drawRect(Rect.fromLTWH(cx - 21, cy + 38, 16, 6), goldPaint);
-    canvas.drawRect(Rect.fromLTWH(cx + 5, cy + 38, 16, 6), goldPaint);
-
-    // 3. Thắt lưng Hoàng Kim & Giáp nhẹ Obsidian (BodyLayer)
-    final bodyRect = Rect.fromLTWH(cx - 24, cy - 22, 48, 46);
-    final bodyShader = const LinearGradient(
-      colors: [Color(0xFF334155), Color(0xFF1E293B)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ).createShader(bodyRect);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)),
-      Paint()..shader = bodyShader,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bodyRect, const Radius.circular(8)),
-      Paint()
-        ..color = const Color(0xFFFFD700)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0,
-    );
-    canvas.drawRect(Rect.fromLTWH(cx - 24, cy + 14, 48, 6), goldPaint);
-
-    // Lõi tinh thể Lôi Quang trước ngực
-    final coreGlow = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-    canvas.drawCircle(Offset(cx, cy - 2), 8, coreGlow);
-    canvas.drawCircle(Offset(cx, cy - 2), 4.5, Paint()..color = Colors.white);
-
-    // Giáp vai Hoàng Kim, Cánh tay & Bàn tay nắm chặt Song Kiếm
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(cx - 38, cy - 22, 16, 28), const Radius.circular(6)),
-      goldPaint,
-    );
-    canvas.drawCircle(
-      Offset(cx - 34, cy + 6),
-      7,
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 22, cy - 22, 16, 28), const Radius.circular(6)),
-      goldPaint,
-    );
-    canvas.drawCircle(
-      Offset(cx + 34, cy + 6),
-      7,
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-
-    // 4. Song Kiếm Lôi Quang Hoàng Kim (LeftArmSword & RightArmSword)
-    _drawThunderSword(canvas, Offset(cx - 36, cy + 6), -0.42 + sin(time * 2) * 0.06, isCyan: false);
-    _drawThunderSword(canvas, Offset(cx + 36, cy + 6), 0.42 - sin(time * 2) * 0.06, isCyan: true);
-
-    // 5. Cổ, Khuôn mặt da sáng & Tóc Bạc dựng + Băng trán Hoàng Kim
-    canvas.drawRect(
-      Rect.fromLTWH(cx - 8, cy - 30, 16, 12),
-      Paint()..color = const Color(0xFFFBBF24),
-    );
-    final headRect = Rect.fromCenter(center: Offset(cx, cy - 42), width: 38, height: 34);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(headRect, const Radius.circular(9)),
-      Paint()..color = const Color(0xFFFDE68A),
-    );
-    // Mái tóc bạc dựng Anime
-    final hairPath = Path()
-      ..moveTo(cx - 22, cy - 48)
-      ..lineTo(cx - 28, cy - 68)
-      ..lineTo(cx - 10, cy - 58)
-      ..lineTo(cx, cy - 76)
-      ..lineTo(cx + 12, cy - 58)
-      ..lineTo(cx + 28, cy - 68)
-      ..lineTo(cx + 22, cy - 48)
-      ..close();
-    canvas.drawPath(hairPath, Paint()..color = const Color(0xFFE2E8F0));
-
-    // Băng trán Hoàng Kim (#FFD700)
-    canvas.drawRect(Rect.fromLTWH(cx - 20, cy - 50, 40, 6), goldPaint);
-
-    // Đôi mắt phát sáng xanh điện quang (#00E5FF)
-    final eyePaint = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawRect(Rect.fromLTWH(cx - 11, cy - 40, 8, 4), eyePaint);
-    canvas.drawRect(Rect.fromLTWH(cx + 3, cy - 40, 8, 4), eyePaint);
-  }
-
   void _drawThunderSword(Canvas canvas, Offset pos, double angle, {required bool isCyan}) {
     canvas.save();
     canvas.translate(pos.dx, pos.dy);
@@ -1526,6 +1611,7 @@ class _HeroCanvasPainter extends CustomPainter {
   bool shouldRepaint(covariant _HeroCanvasPainter oldDelegate) {
     return oldDelegate.heroId != heroId ||
         oldDelegate.themeColor != themeColor ||
-        oldDelegate.time != time;
+        oldDelegate.time != time ||
+        oldDelegate.animProgress != animProgress;
   }
 }
