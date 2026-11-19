@@ -19,6 +19,7 @@ class GamePlatformHelper {
 class GameKeyboardController {
   final Set<LogicalKeyboardKey> _pressedKeys = {};
   Vector2 _currentDirection = Vector2.zero();
+  bool _enabled = true;
 
   final Function(Vector2 direction) onMoveDirectionChanged;
   final VoidCallback onBasicAttack;
@@ -38,6 +39,13 @@ class GameKeyboardController {
 
   Vector2 get currentDirection => _currentDirection;
   bool get hasKeyboardMovement => !_currentDirection.isZero();
+  bool get isEnabled => _enabled;
+
+  void setEnabled(bool enabled) {
+    if (_enabled == enabled) return;
+    _enabled = enabled;
+    if (!enabled) resetMovement();
+  }
 
   /// Đăng ký lắng nghe sự kiện phần cứng
   void attach() {
@@ -60,6 +68,8 @@ class GameKeyboardController {
   }
 
   bool _handleKeyEvent(KeyEvent event) {
+    if (!_enabled) return false;
+
     if (event is KeyDownEvent) {
       _pressedKeys.add(event.logicalKey);
 

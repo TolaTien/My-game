@@ -18,6 +18,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   late final GoldRushGame _game;
   late final GameKeyboardController _keyboardController;
   final FocusNode _focusNode = FocusNode(debugLabel: 'gameplay_focus');
+  bool _isPauseDialogOpen = false;
 
   @override
   void initState() {
@@ -103,6 +104,60 @@ class _GamePlayScreenState extends State<GamePlayScreen>
     });
   }
 
+  Future<void> showPauseMenu() async {
+    if (!mounted || _isPauseDialogOpen) return;
+    _isPauseDialogOpen = true;
+    var shouldLeaveGame = false;
+    _game.pauseEngine();
+    _keyboardController.setEnabled(false);
+
+    try {
+      final shouldLeave = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => _PauseMenuDialog(
+          onResume: () => Navigator.of(dialogContext).pop(false),
+          onLeave: () async {
+            final confirmed = await showDialog<bool>(
+              context: dialogContext,
+              builder: (confirmContext) => AlertDialog(
+                title: const Text('Rời trận?'),
+                content: const Text('Tiến trình tầng hiện tại sẽ không được tiếp tục.'),
+                actions: [
+                  TextButton(
+                    key: const Key('pause_leave_cancel_button'),
+                    onPressed: () => Navigator.of(confirmContext).pop(false),
+                    child: const Text('Ở lại'),
+                  ),
+                  FilledButton(
+                    key: const Key('pause_leave_confirm_button'),
+                    onPressed: () => Navigator.of(confirmContext).pop(true),
+                    child: const Text('Rời trận'),
+                  ),
+                ],
+              ),
+            );
+            if (dialogContext.mounted) {
+              // Cancel returns to live gameplay; only positive confirmation exits.
+              Navigator.of(dialogContext).pop(confirmed == true);
+            }
+          },
+        ),
+      );
+
+      if (!mounted) return;
+      shouldLeaveGame = shouldLeave == true;
+    } finally {
+      _isPauseDialogOpen = false;
+      if (mounted && !shouldLeaveGame) {
+        _keyboardController.setEnabled(true);
+        _game.resumeEngine();
+        _focusNode.requestFocus();
+      }
+    }
+    if (mounted && shouldLeaveGame) Navigator.of(context).pop();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
@@ -133,9 +188,61 @@ class _GamePlayScreenState extends State<GamePlayScreen>
             'HUD': (context, game) => GameHudOverlay(
                   game: game,
                   keyboardController: _keyboardController,
+                  onPause: showPauseMenu,
                 ),
           },
           initialActiveOverlays: const ['HUD'],
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseMenuDialog extends StatelessWidget {
+  final VoidCallback onResume;
+  final VoidCallback onLeave;
+
+  const _PauseMenuDialog({required this.onResume, required this.onLeave});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: const Color(0xFF151A26),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.pause_circle_filled, color: Colors.amberAccent, size: 48),
+                const SizedBox(height: 8),
+                const Text('TẠM DỪNG', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('pause_resume_button'),
+                    onPressed: onResume,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('TIẾP TỤC'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const Key('pause_leave_button'),
+                    onPressed: onLeave,
+                    icon: const Icon(Icons.exit_to_app),
+                    label: const Text('RỜI TRẬN'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

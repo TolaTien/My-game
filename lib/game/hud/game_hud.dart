@@ -13,11 +13,13 @@ import 'virtual_joystick.dart';
 class GameHudOverlay extends StatefulWidget {
   final GoldRushGame game;
   final GameKeyboardController? keyboardController;
+  final Future<void> Function()? onPause;
 
   const GameHudOverlay({
     super.key,
     required this.game,
     this.keyboardController,
+    this.onPause,
   });
 
   @override
@@ -246,11 +248,12 @@ class _GameHudOverlayState extends State<GameHudOverlay> {
                 ],
                 const SizedBox(width: 8),
                 IconButton(
+                  key: const Key('pve_pause_button'),
                   icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 36),
-                  onPressed: () {
-                    // Mở menu pause hoặc thoát
-                    Navigator.of(context).pop();
-                  },
+                  tooltip: 'Tạm dừng',
+                  onPressed: widget.onPause == null
+                      ? null
+                      : () => widget.onPause!.call(),
                 ),
               ],
             ),
