@@ -7,18 +7,26 @@ import '../core/game_keyboard_controller.dart';
 import '../game/components/player.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
+import '../models/friend_party_models.dart';
 import '../models/pvp_match.dart';
+import '../registry/asset_registry.dart';
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
 import '../services/firebase_bootstrap.dart';
 import '../services/firebase_pvp_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
+import 'settings_dialog.dart';
+import 'widgets/rank_badge.dart';
 
 class PvpArenaScreen extends StatefulWidget {
   final PvpGameMode initialMode;
+  final PartyRoomState? partyRoom;
 
   const PvpArenaScreen({
     super.key,
     this.initialMode = PvpGameMode.solo1v1,
+    this.partyRoom,
   });
 
   @override
@@ -27,10 +35,25 @@ class PvpArenaScreen extends StatefulWidget {
 
 class _PvpArenaScreenState extends State<PvpArenaScreen>
     with TickerProviderStateMixin {
+  static const double _onlineMatchmakingTimeoutSeconds = 20.0;
+  static const double _offlineBotFallbackDelaySeconds = 1.8;
+
   late PvpGameMode _selectedMode;
   bool _isMatchmaking = true;
   double _elapsedSeconds = 0.0;
+  double _currentSearchTimeoutSeconds = _onlineMatchmakingTimeoutSeconds;
+  bool _hasTriggeredFallback = false;
   Timer? _matchmakingTimer;
+  Future<void> _pendingCleanup = Future.value();
+
+  void _enqueueCleanup(Future<void> Function() task) {
+    _pendingCleanup = _pendingCleanup
+        .catchError((_) {})
+        .then((_) => task())
+        .catchError((Object e) {
+      debugPrint('PvP cleanup error: $e');
+    });
+  }
 
   late AnimationController _radarController;
   PvpOpponentInfo? _opponent;
@@ -52,6 +75,20 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   final FocusNode _focusNode = FocusNode(debugLabel: 'pvp_focus');
   bool _showTouchControls = true;
   bool _isRebuildScheduled = false;
+  bool _hasHandledMatchFinish = false;
+
+  // Party Co-op Matchmaking & Sync
+  final List<StreamSubscription> _partySyncSubs = [];
+  Timer? _partySyncTimer;
+  bool _isPartyStateWritePending = false;
+  bool _hasPoppedFromPartyCancel = false;
+
+  bool get _isInParty => widget.partyRoom != null;
+  bool get _isPartyGuest {
+    final party = widget.partyRoom;
+    if (party == null) return false;
+    return !party.isLeader(FriendPartyService.instance.effectivePlayerCode);
+  }
 
   void _safeSetState([VoidCallback? fn]) {
     if (!mounted) return;
@@ -75,21 +112,54 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   @override
   void initState() {
     super.initState();
-    _selectedMode = widget.initialMode;
+    _selectedMode = widget.partyRoom?.mode ?? widget.initialMode;
 
     _radarController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
 
+    if (_isInParty) {
+      FriendPartyService.instance.partyNotifier.addListener(_onPartyRoomUpdated);
+    }
+
     _startMatchmakingCountdown();
+
+    if (_isInParty && widget.partyRoom?.matchStatus == 'in_match') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentParty =
+            FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+        _startPartyMatchLocally(currentParty);
+      });
+    }
+  }
+
+  void _onPartyRoomUpdated() {
+    if (!mounted || !_isInParty) return;
+    final party = FriendPartyService.instance.partyNotifier.value;
+    if (_isPartyGuest && _isMatchmaking) {
+      if (party == null || party.matchStatus == 'idle') {
+        if (!_hasPoppedFromPartyCancel) {
+          _hasPoppedFromPartyCancel = true;
+          _matchmakingTimer?.cancel();
+          Navigator.of(context).pop();
+        }
+        return;
+      }
+      if (party.matchStatus == 'in_match') {
+        _startPartyMatchLocally(party);
+      }
+    }
   }
 
   void _selectMatchmakingMode(PvpGameMode mode) {
+    if (_isInParty) return;
     if (_selectedMode == mode) return;
     _prepareNextSearch();
-    if (_onlineService != null) {
-      unawaited(_onlineService!.leaveQueue());
+    final oldService = _onlineService;
+    if (oldService != null) {
+      _enqueueCleanup(() => oldService.leaveQueue());
     }
     _safeSetState(() {
       _selectedMode = mode;
@@ -104,6 +174,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _readyTimeoutTimer?.cancel();
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
+    _partySyncTimer?.cancel();
+    for (final sub in _partySyncSubs) {
+      sub.cancel();
+    }
+    _partySyncSubs.clear();
+    if (_isInParty) {
+      FriendPartyService.instance.partyNotifier.removeListener(_onPartyRoomUpdated);
+      if (!_isPartyGuest) {
+        unawaited(FriendPartyService.instance.resetPartyMatchStatus());
+      }
+    }
     if (_onlineService != null && _roomId != null) {
       unawaited(_onlineService!.leaveRoom(_roomId!));
     } else if (_onlineService != null) {
@@ -118,33 +199,100 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   void _startMatchmakingCountdown() {
     final attempt = ++_searchAttempt;
     _elapsedSeconds = 0.0;
-    _matchmakingStatus = FirebaseBootstrap.isReady
-        ? 'Đang tìm người chơi online...'
-        : 'Firebase chưa cấu hình • sẽ chuyển sang đấu bot';
+    _hasTriggeredFallback = false;
+
+    if (_isInParty) {
+      final party =
+          FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+      if (_isPartyGuest) {
+        _currentSearchTimeoutSeconds = 30.0;
+        _matchmakingStatus =
+            'Đang chờ Chủ Phòng (${party.leaderName}) ghép trận...';
+        _matchmakingTimer?.cancel();
+        _matchmakingTimer =
+            Timer.periodic(const Duration(milliseconds: 100), (_) {
+          if (!mounted) return;
+          _safeSetState(() => _elapsedSeconds += 0.1);
+        });
+        return;
+      }
+
+      // Chủ phòng tổ đội: tìm trận nhanh rồi kéo cả tổ đội vào đấu trường
+      _currentSearchTimeoutSeconds = _offlineBotFallbackDelaySeconds;
+      _matchmakingStatus =
+          'Đang ghép trận cùng Tổ Đội (${party.currentMemberCount}/${party.maxSlots})...';
+      _matchmakingTimer?.cancel();
+      _matchmakingTimer =
+          Timer.periodic(const Duration(milliseconds: 100), (_) {
+        if (!mounted) return;
+        _safeSetState(() => _elapsedSeconds += 0.1);
+        if (!_hasTriggeredFallback &&
+            _elapsedSeconds >= _currentSearchTimeoutSeconds) {
+          _matchmakingTimer?.cancel();
+          if (attempt == _searchAttempt) {
+            _hasTriggeredFallback = true;
+            unawaited(_leaderLaunchPartyMatch());
+          }
+        }
+      });
+      return;
+    }
+
+    final canSearchOnline =
+        FirebaseBootstrap.isReady && AuthService.instance.isSignedIn;
+    _currentSearchTimeoutSeconds = canSearchOnline
+        ? _onlineMatchmakingTimeoutSeconds
+        : _offlineBotFallbackDelaySeconds;
+
+    _matchmakingStatus = canSearchOnline
+        ? 'Đang tìm người chơi online... (tự ghép Bot sau ${_onlineMatchmakingTimeoutSeconds.toInt()}s)'
+        : 'Chưa có người chơi trực tuyến • Đang tự động ghép Bot AI...';
+
     _matchmakingTimer?.cancel();
     _matchmakingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (!mounted) return;
       _safeSetState(() {
         _elapsedSeconds += 0.1;
+        if (canSearchOnline &&
+            !_hasTriggeredFallback &&
+            _elapsedSeconds >= 5.0 &&
+            _elapsedSeconds < _currentSearchTimeoutSeconds) {
+          _matchmakingStatus =
+              'Đang mở rộng phạm vi rank tìm người chơi online...';
+        }
       });
 
-      // Cơ chế 60 giây fallback Bot đúng theo mục 4.2 tài liệu
-      if (_elapsedSeconds >= 60.0) {
+      // Tự động ghép Bot nếu hết thời gian chờ mà không tìm thấy người chơi online
+      if (!_hasTriggeredFallback && _elapsedSeconds >= _currentSearchTimeoutSeconds) {
         _matchmakingTimer?.cancel();
         if (attempt == _searchAttempt) {
           unawaited(_fallbackToBotSafely());
         }
       }
     });
-    if (FirebaseBootstrap.isReady) unawaited(_findOnlineMatch(attempt));
+    if (canSearchOnline) unawaited(_findOnlineMatch(attempt));
+  }
+
+  Future<void> _leaderLaunchPartyMatch() async {
+    if (!mounted || !_isInParty || _isPartyGuest) return;
+    await FriendPartyService.instance.markPartyMatchInProgress();
+    if (!mounted) return;
+    final currentParty =
+        FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom!;
+    _startPartyMatchLocally(currentParty);
   }
 
   /// Rút khỏi hàng chờ online trước khi đấu bot. Nếu đúng lúc đó đã bị ghép
   /// với người thật thì vào phòng người thật thay vì bỏ rơi đối thủ.
   Future<void> _fallbackToBotSafely() async {
+    if (_hasTriggeredFallback) return;
+    _hasTriggeredFallback = true;
     final service = _onlineService;
-    if (service != null && _roomId == null && FirebaseBootstrap.isReady) {
-      _safeSetState(() => _matchmakingStatus = 'Đang rút khỏi hàng chờ...');
+    if (service != null &&
+        _roomId == null &&
+        FirebaseBootstrap.isReady &&
+        AuthService.instance.isSignedIn) {
+      _safeSetState(() => _matchmakingStatus = 'Không có người chơi • Đang ghép Bot AI...');
       try {
         final roomId = await service.cancelSearch();
         if (!mounted) return;
@@ -162,6 +310,8 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
 
   Future<void> _findOnlineMatch(int attempt) async {
     try {
+      await _pendingCleanup;
+      if (!mounted || attempt != _searchAttempt) return;
       final service = FirebasePvpService();
       _onlineService = service;
       final roomId = await service.findMatch(
@@ -173,13 +323,19 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
         return;
       }
       if (roomId == null) {
-        _safeSetState(() => _matchmakingStatus = 'Chưa tìm thấy đối thủ. Có thể chọn đấu bot.');
+        _safeSetState(() => _matchmakingStatus = 'Không có người chơi online • Đang ghép Bot AI...');
+        _matchmakingTimer?.cancel();
+        if (!_hasTriggeredFallback) unawaited(_fallbackToBotSafely());
         return;
       }
       await _joinOnlineRoom(roomId, service);
     } catch (error) {
       if (!mounted || attempt != _searchAttempt) return;
-      _safeSetState(() => _matchmakingStatus = 'Lỗi kết nối Firebase: $error');
+      _safeSetState(() => _matchmakingStatus = 'Không thể ghép online • Đang ghép Bot AI...');
+      _matchmakingTimer?.cancel();
+      if (!_hasTriggeredFallback && _roomId == null) {
+        unawaited(_fallbackToBotSafely());
+      }
     }
   }
 
@@ -211,10 +367,27 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _roomId = roomId;
     _matchmakingTimer?.cancel();
     if (!mounted) return;
+
+    // Đồng bộ cùng 1 bản đồ cho cả 2 người chơi trong phòng
+    final metaRaw = room['meta'];
+    final metaMap = metaRaw is Map
+        ? metaRaw.map((key, value) => MapEntry(key.toString(), value))
+        : <String, dynamic>{};
+    final roomMapId = (room['mapId'] as String?) ?? (metaMap['mapId'] as String?);
+    final syncedMapConfig = (roomMapId != null && roomMapId.isNotEmpty)
+        ? (GameAssetRegistry.instance.getMap(roomMapId) ??
+            GameAssetRegistry.instance.getMapFromSeed(roomId))
+        : GameAssetRegistry.instance.getMapFromSeed(roomId);
+
     _safeSetState(() {
       _opponent = opponent;
       _isMatchmaking = false;
-      _initGame(opponent, isOnline: true, isPlayerOne: isPlayerOne);
+      _initGame(
+        opponent,
+        isOnline: true,
+        isPlayerOne: isPlayerOne,
+        selectedMapConfig: syncedMapConfig,
+      );
     });
     // Bind TRƯỚC khi báo sẵn sàng để không lỡ sự kiện "ready" của đối thủ.
     _bindOnlineRoom(service, roomId, otherUid);
@@ -278,11 +451,164 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     });
   }
 
+  void _startPartyMatchLocally(PartyRoomState party) {
+    if (!_isMatchmaking) return;
+    _matchmakingTimer?.cancel();
+    _searchAttempt++;
+
+    final profile = PlayerStorage.currentProfile;
+    final myCode =
+        FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+    final leaderCode = party.leaderCode.trim().toUpperCase();
+    final isGuest = leaderCode != myCode;
+
+    final orderedBlueCodes = <String>[
+      leaderCode,
+      ...party.members.map((m) => m.code.trim().toUpperCase()),
+    ];
+    final rawSlotIdx = orderedBlueCodes.indexOf(myCode);
+    final localBlueSlotIndex =
+        (rawSlotIdx >= 0 ? rawSlotIdx : 0).clamp(0, _selectedMode.teamSize - 1);
+
+    final partyAllies =
+        FriendPartyService.instance.getPartyAlliesForMode(_selectedMode);
+    final humanAllyCodes = <int, String>{};
+    var allyPtr = 0;
+    if (isGuest && allyPtr < partyAllies.length) {
+      humanAllyCodes[allyPtr++] = leaderCode;
+    }
+    for (final m in party.members) {
+      final mCode = m.code.trim().toUpperCase();
+      if (mCode != myCode && allyPtr < partyAllies.length) {
+        humanAllyCodes[allyPtr++] = mCode;
+      }
+    }
+
+    final seed =
+        party.matchSeed != 0 ? party.matchSeed : party.partyCode.hashCode;
+    final roster = PvpOpponentInfo.generateTeamRoster(
+      playerRp: profile.rankPoints,
+      mode: _selectedMode,
+      playerHeroId: 'george',
+      onlineAllies: partyAllies,
+      seed: seed,
+    );
+    final opponent = roster.primaryOpponent;
+
+    final roomId = party.activeMatchRoomId ??
+        'party_${party.partyCode.toUpperCase()}_$seed';
+    final syncedMapConfig =
+        (party.activeMapId != null && party.activeMapId!.isNotEmpty)
+            ? (GameAssetRegistry.instance.getMap(party.activeMapId!) ??
+                GameAssetRegistry.instance.getMapFromSeed(roomId))
+            : GameAssetRegistry.instance.getMapFromSeed(roomId);
+
+    _safeSetState(() {
+      _opponent = opponent;
+      _isMatchmaking = false;
+      _initGame(
+        opponent,
+        roster: roster,
+        selectedMapConfig: syncedMapConfig,
+        localBlueSlotIndex: localBlueSlotIndex,
+        humanAllyCodes: humanAllyCodes,
+        isPartyGuest: isGuest,
+        partyRoomId: roomId,
+      );
+    });
+    _bindPartyMatchSync(roomId, myCode, humanAllyCodes, isGuest);
+  }
+
+  void _bindPartyMatchSync(
+    String roomId,
+    String myCode,
+    Map<int, String> humanAllyCodes,
+    bool isGuest,
+  ) {
+    _partySyncTimer?.cancel();
+    for (final sub in _partySyncSubs) {
+      sub.cancel();
+    }
+    _partySyncSubs.clear();
+    _isPartyStateWritePending = false;
+
+    for (final teammateCode in humanAllyCodes.values) {
+      _partySyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyPlayerState(roomId, teammateCode)
+            .listen((snapshot) {
+          _arenaGame?.applyPartyAllySnapshot(teammateCode, snapshot);
+        }),
+      );
+    }
+
+    _partySyncSubs.add(
+      FriendPartyService.instance.watchPartyActions(roomId).listen((action) {
+        final actor =
+            (action['actorCode'] as String? ?? '').trim().toUpperCase();
+        if (actor.isEmpty || actor == myCode) return;
+        _arenaGame?.applyPartyAllyAction(
+          actor,
+          action['action'] as String? ?? '',
+          text: action['text'] as String?,
+        );
+      }),
+    );
+
+    if (isGuest) {
+      _partySyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyHostState(roomId)
+            .listen((hostState) {
+          _arenaGame?.applyPartyHostState(hostState);
+        }),
+      );
+    }
+
+    _partySyncTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      _pushPartySyncTick(roomId, myCode, isGuest);
+    });
+  }
+
+  void _pushPartySyncTick(
+    String roomId,
+    String myCode,
+    bool isGuest, {
+    bool force = false,
+  }) {
+    final game = _arenaGame;
+    if (game == null || !mounted) return;
+    if (_isPartyStateWritePending && !force) return;
+    _isPartyStateWritePending = true;
+    final futures = <Future<void>>[
+      FriendPartyService.instance
+          .writePartyPlayerState(roomId, myCode, game.localSnapshot),
+      if (!isGuest)
+        FriendPartyService.instance
+            .writePartyHostState(roomId, game.partyHostSnapshot),
+    ];
+    Future.wait(futures).whenComplete(() {
+      _isPartyStateWritePending = false;
+    });
+  }
+
   void _pushLocalStateImmediately({bool force = false}) {
     final game = _arenaGame;
+    if (game == null || !mounted) return;
+    if (_isInParty) {
+      final party =
+          FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom;
+      final partyRoomId = party?.activeMatchRoomId;
+      if (partyRoomId != null) {
+        final myCode =
+            FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+        _pushPartySyncTick(partyRoomId, myCode, _isPartyGuest, force: force);
+      }
+      return;
+    }
     final service = _onlineService;
     final roomId = _roomId;
-    if (game == null || service == null || roomId == null || !mounted) return;
+    if (service == null || roomId == null) return;
     if (_isStateWritePending && !force) return;
     _isStateWritePending = true;
     service.writePlayerState(roomId, game.localSnapshot).then((_) {
@@ -336,8 +662,10 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _readyTimeoutTimer?.cancel();
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
-    if (_onlineService != null && _roomId != null) {
-      unawaited(_onlineService!.leaveRoom(_roomId!));
+    final oldService = _onlineService;
+    final oldRoomId = _roomId;
+    if (oldService != null && oldRoomId != null) {
+      _enqueueCleanup(() => oldService.leaveRoom(oldRoomId));
     }
     _roomId = null;
   }
@@ -347,15 +675,27 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     bool isOnline = false,
     bool isPlayerOne = true,
     PvpTeamRoster? roster,
+    MapAssetConfig? selectedMapConfig,
+    int localBlueSlotIndex = 0,
+    Map<int, String> humanAllyCodes = const {},
+    bool isPartyGuest = false,
+    String? partyRoomId,
   }) {
+    _hasHandledMatchFinish = false;
     final profile = PlayerStorage.currentProfile;
     _arenaGame = PvpArenaGame(
       opponentInfo: opponent,
       playerCurrentRp: profile.rankPoints,
+      playerCurrentStars: profile.rankStars,
+      isCurrentChallengerTop10: profile.isChallengerTop10,
       isOnline: isOnline,
       isPlayerOne: isPlayerOne,
       gameMode: _selectedMode,
       roster: roster,
+      selectedMapConfig: selectedMapConfig,
+      localBlueSlotIndex: localBlueSlotIndex,
+      humanAllyCodes: humanAllyCodes,
+      isPartyGuest: isPartyGuest,
     );
 
     _keyboardController?.detach();
@@ -379,6 +719,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       },
     );
     _keyboardController!.attach();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
 
     _arenaGame!.onStateChanged = () {
       final state = _arenaGame?.matchState;
@@ -403,38 +746,87 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
           unawaited(service.sendAction(roomId, action, text: text));
         }
       };
+    } else if (partyRoomId != null) {
+      final myCode =
+          FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+      _arenaGame!.onLocalAction = (action, {text}) {
+        _pushLocalStateImmediately(force: true);
+        unawaited(
+          FriendPartyService.instance.sendPartyAction(
+            partyRoomId,
+            myCode,
+            action,
+            text: text,
+          ),
+        );
+      };
     }
   }
 
-  void _handleMatchFinished(PvpMatchResult result) {
+  Future<void> _handleMatchFinished(PvpMatchResult result) async {
+    if (_hasHandledMatchFinish) return;
+    _hasHandledMatchFinish = true;
+
     final current = PlayerStorage.currentProfile;
-    final updated = current.copyWith(
+    final tentativeProfile = current.copyWith(
       rankPoints: result.newRankPoints,
+      rankStars: result.newTotalStars,
       gold: current.gold + result.goldReward,
     );
-    PlayerStorage.saveProfile(updated);
+
+    // Đánh giá vị trí trên BXH Server để xác định Top 10 Thách Đấu (nhiều sao nhất server)
+    final serverEval = await DatabaseService.instance.evaluatePlayerServerRank(
+      tentativeProfile,
+    );
+
+    final resolvedTier = PvpRankSystem.getTierFromStars(
+      result.newTotalStars,
+      isTop10Challenger: serverEval.isChallengerTop10,
+    );
+
+    final enrichedResult = result.copyWithChallengerStatus(
+      isChallengerTop10: serverEval.isChallengerTop10,
+      resolvedNewTier: resolvedTier,
+      serverRank: serverEval.serverRank,
+      top10CutoffStars: serverEval.top10CutoffStars,
+    );
+
+    final finalProfile = tentativeProfile.copyWith(
+      isChallengerTop10: serverEval.isChallengerTop10,
+      serverRank: serverEval.serverRank,
+    );
+
+    await PlayerStorage.saveProfile(finalProfile);
+    await DatabaseService.instance.updateLeaderboard(finalProfile);
+
     unawaited(
       PlayerStorage.addHeroExpAfterMatch(
-        isVictory: result.isWinner,
+        isVictory: enrichedResult.isWinner,
         isPvp: true,
-        floorOrRounds: result.playerRoundsWon + result.opponentRoundsWon,
-        coinsOrKills: result.goldReward,
+        floorOrRounds:
+            enrichedResult.playerRoundsWon + enrichedResult.opponentRoundsWon,
+        coinsOrKills: enrichedResult.goldReward,
       ),
     );
 
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => _PvpResultModal(
-          result: result,
+          result: enrichedResult,
           onReturnToLobby: () {
             Navigator.of(context).pop(); // Đóng modal
             Navigator.of(context).pop(); // Thoát về Lobby
           },
           onPlayAgain: () {
             Navigator.of(context).pop();
+            if (_isInParty) {
+              Navigator.of(context).pop();
+              return;
+            }
             _prepareNextSearch();
             _safeSetState(() {
               _isMatchmaking = true;
@@ -480,12 +872,16 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
               child: _buildTopArenaBar(),
             ),
 
-            // 3. BANNER INTRO / ROUND END OVERLAY
+            // 3. BANNER INTRO / CHIẾN! / ROUND END OVERLAY (Không chặn thao tác chạm)
             if (_arenaGame!.matchState == PvpMatchState.waiting)
               Center(child: _buildWaitingOpponentBanner()),
             if (_arenaGame!.matchState == PvpMatchState.roundIntro ||
-                _arenaGame!.matchState == PvpMatchState.roundEnd)
-              Center(child: _buildRoundStatusBanner()),
+                _arenaGame!.matchState == PvpMatchState.roundEnd ||
+                (_arenaGame!.matchState == PvpMatchState.fighting &&
+                    _arenaGame!.fightStartBannerTimer > 0))
+              IgnorePointer(
+                child: Center(child: _buildRoundStatusBanner()),
+              ),
 
             // 4. VIRTUAL JOYSTICK (BÊN TRÁI)
             if (_showTouchControls || GamePlatformHelper.isMobile)
@@ -590,7 +986,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   // --- GIAI ĐOẠN 1: RADAR MATCHMAKING (HỖ TRỢ 1V1 / 2V2 / 4V4) ---
   Widget _buildMatchmakingView() {
     final profile = PlayerStorage.currentProfile;
-    final progress = (_elapsedSeconds / 60.0).clamp(0.0, 1.0);
+    final progress = (_elapsedSeconds / _currentSearchTimeoutSeconds).clamp(0.0, 1.0);
     final teamSize = _selectedMode.teamSize;
 
     return Scaffold(
@@ -622,7 +1018,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         child: InkWell(
                           key: Key('pvp_mode_tab_${mode.shortLabel.toLowerCase()}'),
                           borderRadius: BorderRadius.circular(10),
-                          onTap: () => _selectMatchmakingMode(mode),
+                          onTap: _isInParty ? null : () => _selectMatchmakingMode(mode),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(
@@ -747,9 +1143,19 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${_selectedMode.subtitle} • Phạm vi ±150 RP (Bậc: ${profile.rankTier})',
+                  '${_selectedMode.subtitle} • Rank Chung (1v1/2v2/4v4): ${profile.rankDisplayLabel}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Thắng +1 ⭐ • Thua -1 ⭐ • Đồng → Kim Cương: 3 ⭐/bậc • Huyền Thoại: 0 ⭐+ • Thách Đấu: Top 10 Server',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFFFD54F),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (_matchmakingStatus != null) ...[
                   const SizedBox(height: 4),
@@ -869,9 +1275,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 ),
                 const SizedBox(height: 12),
 
-                // Đồng hồ đếm ngược 60s
+                // Đồng hồ đếm ngược ghép trận
                 Text(
-                  '${_elapsedSeconds.toStringAsFixed(1)}s / 60.0s',
+                  '${_elapsedSeconds.toStringAsFixed(1)}s / ${_currentSearchTimeoutSeconds.toStringAsFixed(1)}s',
                   style: const TextStyle(
                     color: Colors.amberAccent,
                     fontSize: 22,
@@ -901,27 +1307,44 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         foregroundColor: Colors.white70,
                         side: const BorderSide(color: Colors.white30),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         _searchAttempt++;
-                        if (_onlineService != null) unawaited(_onlineService!.leaveQueue());
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('HỦY TÌM'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber.shade700,
-                        foregroundColor: Colors.black,
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () {
                         _matchmakingTimer?.cancel();
-                        unawaited(_fallbackToBotSafely());
+                        if (_isInParty) {
+                          if (_isPartyGuest) {
+                            FriendPartyService.instance.leaveParty();
+                          } else {
+                            await FriendPartyService.instance
+                                .resetPartyMatchStatus();
+                          }
+                        } else if (_onlineService != null) {
+                          unawaited(_onlineService!.leaveQueue());
+                        }
+                        if (mounted) Navigator.of(context).pop();
                       },
-                      icon: const Icon(Icons.flash_on),
-                      label: const Text('GHÉP NGAY (AI BOT)'),
+                      child: Text(_isPartyGuest ? 'RỜI PHÒNG' : 'HỦY TÌM'),
                     ),
+                    if (!_isPartyGuest) ...[
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade700,
+                          foregroundColor: Colors.black,
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          _matchmakingTimer?.cancel();
+                          if (_isInParty) {
+                            _hasTriggeredFallback = true;
+                            unawaited(_leaderLaunchPartyMatch());
+                          } else {
+                            unawaited(_fallbackToBotSafely());
+                          }
+                        },
+                        icon: const Icon(Icons.flash_on),
+                        label: const Text('GHÉP NGAY (AI BOT)'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -1028,48 +1451,59 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
           ),
         ),
 
-        // Ở GIỮA: CHẾ ĐỘ, ĐỒNG HỒ 90S & ROUND
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0D111A).withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
-                style: const TextStyle(
-                  color: Colors.amberAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+        // Ở GIỮA: CHẾ ĐỘ, ĐỒNG HỒ 90S & NÚT CÀI ĐẶT
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              margin: const EdgeInsets.only(left: 8, right: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D111A).withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
               ),
-              Text(
-                '${max(0, game.roundTimeRemaining.toInt())}s',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (_roomId != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    'LIVE TX:$_syncTxCount RX:$_syncRxCount',
-                    style: TextStyle(
-                      color: _syncRxCount > 0 ? Colors.greenAccent : Colors.orangeAccent,
-                      fontSize: 8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-            ],
-          ),
+                  Text(
+                    '${max(0, game.roundTimeRemaining.toInt())}s',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (_roomId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'LIVE TX:$_syncTxCount RX:$_syncRxCount',
+                        style: TextStyle(
+                          color: _syncRxCount > 0 ? Colors.greenAccent : Colors.orangeAccent,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 26),
+              tooltip: 'Cài đặt âm lượng & trò chơi',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => SettingsDialog.show(context),
+            ),
+          ],
         ),
 
         // BÊN PHẢI: ĐỘI ĐỎ (ĐỐI THỦ BOT + ĐỒNG BỌN)
@@ -1237,30 +1671,101 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   Widget _buildRoundStatusBanner() {
     final game = _arenaGame!;
     final isIntro = game.matchState == PvpMatchState.roundIntro;
-    final text = isIntro
-        ? 'HIỆP ${game.currentRound} — CHIẾN!'
-        : (game.player.currentHp > game.bot.currentHp ? 'THẮNG HIỆP!' : 'THUA HIỆP!');
+    final isFightStart = game.matchState == PvpMatchState.fighting;
+    final countdown = game.stateTimer.ceil().clamp(1, 3);
 
-    final color = isIntro
-        ? Colors.amberAccent
-        : (game.player.currentHp > game.bot.currentHp ? Colors.greenAccent : Colors.redAccent);
+    final String text;
+    final Color color;
+    if (isIntro) {
+      text = 'HIỆP ${game.currentRound} • CHUẨN BỊ ($countdown)';
+      color = const Color(0xFF00E5FF);
+    } else if (isFightStart) {
+      text = 'HIỆP ${game.currentRound} — CHIẾN!';
+      color = Colors.amberAccent;
+    } else {
+      text = game.lastRoundPlayerWon ? 'THẮNG HIỆP!' : 'THUA HIỆP!';
+      color = game.lastRoundPlayerWon ? Colors.greenAccent : Colors.redAccent;
+    }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color, width: 2),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 26,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 2,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+            ),
+          ),
         ),
-      ),
+        if (isIntro) ...[
+          const SizedBox(height: 8),
+          Builder(
+            builder: (context) {
+              final theme = game.currentMapConfig.theme;
+              final isIce = theme == 'ice_arena' || theme == 'frost_island';
+              final isForest = theme == 'forest' ||
+                  theme == 'nature' ||
+                  game.currentMapConfig.id == 'map_rung_cay';
+              final badgeColor = isIce
+                  ? const Color(0xFF00E5FF)
+                  : isForest
+                      ? const Color(0xFF00E676)
+                      : const Color(0xFFFFD700);
+              final badgeIcon = isIce
+                  ? Icons.ac_unit_rounded
+                  : isForest
+                      ? Icons.park_rounded
+                      : Icons.account_balance_rounded;
+              final textColor = isIce
+                  ? const Color(0xFFE0F7FA)
+                  : isForest
+                      ? const Color(0xFFE8F5E9)
+                      : const Color(0xFFFFF8E1);
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2838).withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: badgeColor, width: 1.2),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, color: badgeColor, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'CHIẾN TRƯỜNG: ${game.currentMapConfig.name.toUpperCase()}',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -1571,7 +2076,7 @@ class _CooldownArcPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// --- MODAL KẾT QUẢ TRẬN ĐẤU ---
+// --- MODAL KẾT QUẢ TRẬN ĐẤU & TÍNH RANK THEO SAO (DÙNG CHUNG 1V1 • 2V2 • 4V4) ---
 class _PvpResultModal extends StatelessWidget {
   final PvpMatchResult result;
   final VoidCallback onReturnToLobby;
@@ -1583,111 +2088,454 @@ class _PvpResultModal extends StatelessWidget {
     required this.onPlayAgain,
   });
 
+  static Color _tierColor(String tier) {
+    switch (tier) {
+      case 'Thách Đấu':
+        return const Color(0xFFFF1744);
+      case 'Huyền Thoại':
+        return const Color(0xFFE040FB);
+      case 'Kim Cương':
+        return const Color(0xFF00E5FF);
+      case 'Bạch Kim':
+        return const Color(0xFF00E676);
+      case 'Vàng':
+        return const Color(0xFFFFD700);
+      case 'Bạc':
+        return const Color(0xFFCFD8DC);
+      default:
+        return const Color(0xFFCD7F32);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = result.isWinner ? 'CHIẾN THẮNG!' : 'THẤT BẠI!';
-    final titleColor = result.isWinner ? const Color(0xFFFFD700) : const Color(0xFFFF1744);
-    final deltaStr = result.rpDelta >= 0 ? '+${result.rpDelta}' : '${result.rpDelta}';
+    final titleColor =
+        result.isWinner ? const Color(0xFFFFD700) : const Color(0xFFFF1744);
+    final newTierColor = _tierColor(result.newRankTier);
+    final oldTierColor = _tierColor(result.oldRankTier);
+    final starDeltaText = result.starDelta > 0
+        ? '+${result.starDelta} ⭐'
+        : (result.starDelta < 0 ? '${result.starDelta} ⭐' : '0 ⭐ (Bảo hộ Đồng)');
+    final starDeltaColor = result.starDelta > 0
+        ? const Color(0xFF00E676)
+        : (result.starDelta < 0
+            ? const Color(0xFFFF5252)
+            : Colors.amberAccent);
+
+    final nextTierName = PvpRankSystem.getNextTierName(
+      result.newTotalStars,
+      isTop10Challenger: result.isChallengerTop10,
+    );
+
+    final cutoffLegendaryStars = max(
+      1,
+      (result.top10CutoffStars ?? (PvpRankSystem.legendaryStartTotalStars + 1)) -
+          PvpRankSystem.legendaryStartTotalStars,
+    );
 
     return Dialog(
       backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Container(
-        width: 380,
-        padding: const EdgeInsets.all(24),
+        width: 430,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
         decoration: BoxDecoration(
-          color: const Color(0xFF141926),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1A2235), Color(0xFF101522)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: titleColor, width: 2.5),
           boxShadow: [
-            BoxShadow(color: titleColor.withValues(alpha: 0.35), blurRadius: 30),
+            BoxShadow(
+              color: titleColor.withValues(alpha: 0.35),
+              blurRadius: 30,
+            ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: TextStyle(color: titleColor, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 3),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
-              style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // Điểm Rank
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Tiêu đề Chiến Thắng / Thất Bại + Chế độ Đấu
+              Text(
+                title,
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.5,
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      const Text('ĐIỂM RANK', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(
+                  '${result.gameMode.title} • TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 2. KHUNG TIẾN TRÌNH RANK & NGÔI SAO (DÙNG CHUNG 1V1 • 2V2 • 4V4)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0C101A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: newTierColor.withValues(alpha: 0.75),
+                    width: 1.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: newTierColor.withValues(alpha: 0.18),
+                      blurRadius: 14,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // Nhãn Rank Chung 3 Chế Độ + Biến động Sao (+1 ⭐ / -1 ⭐)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'RANK CHUNG (1V1 • 2V2 • 4V4)',
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: starDeltaColor.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: starDeltaColor),
+                          ),
+                          child: Text(
+                            starDeltaText,
+                            style: TextStyle(
+                              color: starDeltaColor,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Huy hiệu Bậc Rank (Nếu đổi bậc thì hiện Rank Cũ -> Rank Mới)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (result.oldRankTier != result.newRankTier) ...[
+                          RankBadge(
+                            rankTier: result.oldRankTier,
+                            size: 26,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            result.oldRankTier.toUpperCase(),
+                            style: TextStyle(
+                              color: oldTierColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(
+                              Icons.double_arrow_rounded,
+                              color: Colors.amberAccent,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                        RankBadge(
+                          rankTier: result.newRankTier,
+                          size: 46,
+                          showGlow: true,
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              result.newRankTier.toUpperCase(),
+                              style: TextStyle(
+                                color: newTierColor,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            if (result.serverRank != null)
+                              Text(
+                                'Hạng Server hiện tại: #${result.serverRank}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // HIỂN THỊ SAO TRỰC QUAN:
+                    // - Từ Đồng đến Kim Cương: 3 Ngôi Sao (★ ★ ☆ - đủ 3 sao lên rank tiếp theo)
+                    // - Từ Huyền Thoại đến Thách Đấu: Cộng sao tích lũy từ 0s -> Top 10 Server
+                    if (!result.isLegendaryOrAbove) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          PvpRankSystem.starsPerStandardTier,
+                          (idx) {
+                            final filled = idx < result.newStarsInTier;
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              child: Icon(
+                                filled
+                                    ? Icons.star_rounded
+                                    : Icons.star_border_rounded,
+                                size: 34,
+                                color: filled
+                                    ? const Color(0xFFFFD700)
+                                    : Colors.white24,
+                                shadows: filled
+                                    ? const [
+                                        Shadow(
+                                          color: Color(0xFFFFA000),
+                                          blurRadius: 12,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
-                        '$deltaStr RP',
-                        style: TextStyle(
-                          color: result.rpDelta >= 0 ? Colors.greenAccent : Colors.redAccent,
-                          fontSize: 18,
+                        '${result.newStarsInTier} / ${PvpRankSystem.starsPerStandardTier} SAO • Còn ${PvpRankSystem.starsPerStandardTier - result.newStarsInTier} sao để lên $nextTierName',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFFFD54F),
+                          fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      const Text('THƯỞNG VÀNG', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                    ] else ...[
+                      // Bậc Huyền Thoại (0s+) -> Thách Đấu (Top 10 nhiều sao nhất server)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              newTierColor.withValues(alpha: 0.25),
+                              Colors.amber.withValues(alpha: 0.15),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFFD700),
+                            width: 1.4,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFFFD700),
+                              size: 30,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0xFFFF8F00),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${result.newStarsInTier} SAO',
+                              style: const TextStyle(
+                                color: Color(0xFFFFD700),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
-                        '+${result.goldReward}',
-                        style: const TextStyle(color: Colors.amberAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                        result.isChallengerTop10
+                            ? '🏆 THÁCH ĐẤU ĐỈNH CAO — TOP #${result.serverRank ?? 1} NHIỀU SAO NHẤT SERVER!'
+                            : 'Huyền Thoại cộng sao từ 0⭐ • Đạt Top 10 Server (≥ $cutoffLegendaryStars⭐) để lên THÁCH ĐẤU',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: result.isChallengerTop10
+                              ? const Color(0xFFFF5252)
+                              : const Color(0xFFE040FB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
+                  ],
+                ),
+              ),
+
+              // Banner Thăng Hạng / Giáng Hạng
+              if (result.isPromotion) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amberAccent, width: 1.4),
+                  ),
+                  child: Text(
+                    result.newRankTier == 'Thách Đấu'
+                        ? '🔥 CHÚC MỪNG! BẠN ĐÃ LỌT TOP 10 SERVER — THĂNG HẠNG THÁCH ĐẤU!'
+                        : '🎉 ĐỦ 3 SAO! CHÚC MỪNG BẠN ĐÃ THĂNG HẠNG: ${result.newRankTier.toUpperCase()}!',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ),
+              ] else if (result.isDemotion) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.redAccent),
+                  ),
+                  child: Text(
+                    '⚠️ BẠN ĐÃ LÙI BẬC RANK VỀ: ${result.newRankTier.toUpperCase()} (${result.newStarsInTier} ⭐)',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFFF8A80),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 12),
+
+              // 3. Thưởng Vàng & Tổng Sao Tích Lũy
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text(
+                          'SAO TÍCH LŨY',
+                          style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        ),
+                        Text(
+                          '${result.newTotalStars} ⭐ (${result.newRankPoints} RP)',
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text(
+                          'THƯỞNG VÀNG',
+                          style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        ),
+                        Text(
+                          '+${result.goldReward}',
+                          style: const TextStyle(
+                            color: Colors.amberAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Nút Điều Hướng
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                    ),
+                    onPressed: onReturnToLobby,
+                    child: const Text('VỀ SẢNH'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: titleColor,
+                      foregroundColor: Colors.black,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: onPlayAgain,
+                    child: const Text('TÌM TRẬN TIẾP'),
                   ),
                 ],
               ),
-            ),
-            if (result.isPromotion) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amberAccent),
-                ),
-                child: Text(
-                  '🎉 CHÚC MỪNG BẠN ĐÃ THĂNG HẠNG: ${result.newRankTier.toUpperCase()}!',
-                  style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
             ],
-            const SizedBox(height: 24),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
-                  onPressed: onReturnToLobby,
-                  child: const Text('VỀ SẢNH'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: titleColor,
-                    foregroundColor: Colors.black,
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: onPlayAgain,
-                  child: const Text('TÌM TRẬN TIẾP'),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -106,7 +106,6 @@ class ChatAiAssistantService {
         'tướng',
         'hero',
         'george',
-        'kaelen',
         'lyra',
         'braum',
         'ninja',
@@ -117,7 +116,6 @@ class ChatAiAssistantService {
       answer:
           '🗡️ **Hệ thống Nhân Vật & Bộ 3 Kỹ Năng**:\n'
           '• **George (Đấu Sĩ Búa)**: Búa Cuồng Phong (Xoay 360°), Nện Đất Chấn Động (Choáng AoE), Cơn Cuồng Nộ (+Tốc chạy & Sát thương).\n'
-          '• **Kaelen (Lôi Kiếm Sư)**: Lôi Ảnh Trảm (Lướt chớp 180px), Lôi Điện Hộ Thể (4 kiếm xoay quanh người), Thiên Phạt Lôi Ngục (Nhảy lên giáng sét diện rộng).\n'
           '• **Lyra (Xạ Thủ)**: Bắn tên tầm xa, Mưa Tên Tinh Tú, lộn nhào né đòn.\n'
           '• **Braum (Hiệp Sĩ Khiên)**: Máu cực trâu (+20 HP/cấp), Khiên Chấn Động, Pháo Đài Thép.\n'
           '• **Hayate (Ninja)**: Tốc độ cao nhất, Phi Tiêu Lướt Ảnh, Bom Khói, Ám Sát.',
