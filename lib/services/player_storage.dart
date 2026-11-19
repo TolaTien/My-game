@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../core/stat_growth_formula.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
+import 'friend_party_service.dart';
 
 class PlayerStorage {
   static const String _storageKey = 'gold_rush_player_profile';
@@ -17,14 +22,90 @@ class PlayerStorage {
 
   static PlayerProfile get currentProfile => profileNotifier.value;
 
+  static Future<bool> unlockSkin(String skinId, int diamondPrice) async {
+    if (currentProfile.unlockedSkinIds.contains(skinId)) return true;
+    if (diamondPrice < 0 || currentProfile.diamonds < diamondPrice) {
+      return false;
+    }
+    final updated = currentProfile.copyWith(
+      diamonds: currentProfile.diamonds - diamondPrice,
+      unlockedSkinIds: [...currentProfile.unlockedSkinIds, skinId],
+      selectedSkinId: skinId,
+    );
+    await saveProfile(updated);
+    return true;
+  }
+
+  static Future<void> selectSkin(String? skinId) async {
+    if (skinId != null && !currentProfile.unlockedSkinIds.contains(skinId)) {
+      return;
+    }
+    await saveProfile(
+      currentProfile.copyWith(
+        selectedSkinId: skinId,
+        clearSkin: skinId == null,
+      ),
+    );
+  }
+
+  /// UID tài khoản Firebase đang đăng nhập (null = chơi offline / khách)
+  static String? _activeUid;
+  static String? get activeUid => _activeUid;
+
+  /// Hook đồng bộ hồ sơ lên cloud (do AuthService gắn vào khi đăng nhập)
+  static void Function(PlayerProfile profile)? _cloudSync;
+
+  /// Mỗi tài khoản có một bản cache cục bộ riêng để không lẫn dữ liệu khi đổi tài khoản
+  static String get _activeKey =>
+      _activeUid == null ? _storageKey : '${_storageKey}_$_activeUid';
+
+  /// Gắn tài khoản đang đăng nhập (gọi bởi AuthService)
+  static void attachUser(String uid, void Function(PlayerProfile) cloudSync) {
+    _activeUid = uid;
+    _cloudSync = cloudSync;
+  }
+
+  /// Gỡ tài khoản khi đăng xuất
+  static void detachUser() {
+    _activeUid = null;
+    _cloudSync = null;
+    profileNotifier.value = PlayerProfile.defaultProfile();
+  }
+
   /// Đọc hồ sơ người chơi từ SharedPreferences
   static Future<PlayerProfile> loadProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_storageKey);
+      final jsonString = prefs.getString(_activeKey);
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> map = jsonDecode(jsonString);
-        final profile = PlayerProfile.fromJson(map);
+        var profile = PlayerProfile.fromJson(map);
+
+        // Nâng cấp khỏi mã ID tĩnh cũ GR8899 nếu chưa có mã riêng
+        if (profile.playerCode == 'GR8899' || profile.playerCode.isEmpty) {
+          final rand = 1000 + Random().nextInt(8999);
+          final newCode = 'GR$rand';
+          final newName = profile.playerName == 'Chiến Binh #88'
+              ? 'Chiến Binh #$rand'
+              : profile.playerName;
+          profile = profile.copyWith(playerCode: newCode, playerName: newName);
+          unawaited(saveProfile(profile));
+        }
+
+        if (profile.selectedHeroId == 'aria' ||
+            profile.unlockedHeroIds.contains('aria')) {
+          final cleanUnlocked = profile.unlockedHeroIds
+              .where((id) => id != 'aria')
+              .toList();
+          final cleanSelected = profile.selectedHeroId == 'aria'
+              ? 'george'
+              : profile.selectedHeroId;
+          profile = profile.copyWith(
+            selectedHeroId: cleanSelected,
+            unlockedHeroIds: cleanUnlocked,
+          );
+          unawaited(saveProfile(profile));
+        }
         profileNotifier.value = profile;
         return profile;
       }
@@ -34,16 +115,37 @@ class PlayerStorage {
 
     final defaultProf = PlayerProfile.defaultProfile();
     profileNotifier.value = defaultProf;
+    unawaited(saveProfile(defaultProf));
     return defaultProf;
   }
 
+  /// Cập nhật Tên và Mã ID người chơi
+  static Future<void> updateNameAndCode(String newName, String newCode) async {
+    final cleanName = newName.trim();
+    final cleanCode = newCode.trim().toUpperCase();
+    if (cleanName.isEmpty || cleanCode.isEmpty) return;
+
+    final updated = currentProfile.copyWith(
+      playerName: cleanName,
+      playerCode: cleanCode,
+    );
+    await saveProfile(updated);
+    // Đồng bộ ngay lập tức lên directory
+    unawaited(FriendPartyService.instance.syncOwnProfileToDirectory(updated));
+  }
+
   /// Lưu hồ sơ người chơi vào SharedPreferences và cập nhật notifier
-  static Future<void> saveProfile(PlayerProfile profile) async {
+  /// và đồng bộ lên Firebase (players/{uid}/profile) nếu đã đăng nhập.
+  static Future<void> saveProfile(
+    PlayerProfile profile, {
+    bool syncCloud = true,
+  }) async {
     profileNotifier.value = profile;
+    if (syncCloud) _cloudSync?.call(profile);
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = jsonEncode(profile.toJson());
-      await prefs.setString(_storageKey, jsonString);
+      await prefs.setString(_activeKey, jsonString);
     } catch (e) {
       debugPrint('Lỗi lưu player profile: $e');
     }
@@ -51,18 +153,14 @@ class PlayerStorage {
 
   /// Cộng Vàng vào tài khoản
   static Future<void> addGold(int amount) async {
-    final updated = currentProfile.copyWith(
-      gold: currentProfile.gold + amount,
-    );
+    final updated = currentProfile.copyWith(gold: currentProfile.gold + amount);
     await saveProfile(updated);
   }
 
   /// Cộng Xu vào tài khoản (1 Xu = 1000 Vàng)
   static Future<void> addXu(int amount) async {
     if (amount <= 0) return;
-    final updated = currentProfile.copyWith(
-      xu: currentProfile.xu + amount,
-    );
+    final updated = currentProfile.copyWith(xu: currentProfile.xu + amount);
     await saveProfile(updated);
   }
 
@@ -92,9 +190,7 @@ class PlayerStorage {
   /// Trừ Vàng khỏi tài khoản (nếu đủ số dư)
   static Future<bool> spendGold(int amount) async {
     if (currentProfile.gold < amount) return false;
-    final updated = currentProfile.copyWith(
-      gold: currentProfile.gold - amount,
-    );
+    final updated = currentProfile.copyWith(gold: currentProfile.gold - amount);
     await saveProfile(updated);
     return true;
   }
@@ -122,7 +218,8 @@ class PlayerStorage {
     final targetHeroId = heroId ?? currentProfile.selectedHeroId;
     final curLv = currentProfile.getHeroLevel(targetHeroId);
     final curExp = currentProfile.getHeroExp(targetHeroId);
-    final expEarned = customExp ??
+    final expEarned =
+        customExp ??
         StatGrowthFormula.calculateMatchExpReward(
           isVictory: isVictory,
           isPvp: isPvp,
@@ -158,7 +255,8 @@ class PlayerStorage {
     final costGold = 300 + (curLv * 50);
     if (currentProfile.gold < costGold) return null;
 
-    final neededExp = StatGrowthFormula.expRequiredForNextLevel(curLv) -
+    final neededExp =
+        StatGrowthFormula.expRequiredForNextLevel(curLv) -
         currentProfile.getHeroExp(heroId);
     final result = StatGrowthFormula.applyExpGain(
       heroId: heroId,
@@ -191,10 +289,13 @@ class PlayerStorage {
     await saveProfile(updated);
   }
 
-  /// Cập nhật kết quả sau trận đấu PvP
+  /// Cập nhật kết quả sau trận đấu PvP (áp dụng chung mức Rank & Sao cho cả 1v1, 2v2, 4v4)
   static Future<void> applyPvpResult(PvpMatchResult result) async {
     final updated = currentProfile.copyWith(
       rankPoints: result.newRankPoints,
+      rankStars: result.newTotalStars,
+      isChallengerTop10: result.isChallengerTop10,
+      serverRank: result.serverRank,
       gold: currentProfile.gold + result.goldReward,
     );
     await saveProfile(updated);
@@ -228,6 +329,7 @@ class PlayerStorage {
     if (!currentProfile.unlockedHeroIds.contains(heroId)) return;
     final updated = currentProfile.copyWith(selectedHeroId: heroId);
     await saveProfile(updated);
+    unawaited(FriendPartyService.instance.updateMyPartyHero(heroId));
   }
 
   /// Mở khóa Trợ thủ AI
@@ -235,8 +337,8 @@ class PlayerStorage {
     if (currentProfile.unlockedCompanionIds.contains(companionId)) return true;
     if (currentProfile.gold < price) return false;
 
-    final newCompanions =
-        List<String>.from(currentProfile.unlockedCompanionIds)..add(companionId);
+    final newCompanions = List<String>.from(currentProfile.unlockedCompanionIds)
+      ..add(companionId);
     final updated = currentProfile.copyWith(
       gold: currentProfile.gold - price,
       unlockedCompanionIds: newCompanions,
@@ -251,30 +353,6 @@ class PlayerStorage {
     final updated = currentProfile.copyWith(
       selectedCompanionId: companionId,
       clearCompanion: companionId == null,
-    );
-    await saveProfile(updated);
-  }
-
-  /// Mở khóa Skin bằng Kim cương
-  static Future<bool> unlockSkin(String skinId, int diamondPrice) async {
-    if (currentProfile.unlockedSkinIds.contains(skinId)) return true;
-    if (currentProfile.diamonds < diamondPrice) return false;
-
-    final newSkins = List<String>.from(currentProfile.unlockedSkinIds)..add(skinId);
-    final updated = currentProfile.copyWith(
-      diamonds: currentProfile.diamonds - diamondPrice,
-      unlockedSkinIds: newSkins,
-      selectedSkinId: skinId,
-    );
-    await saveProfile(updated);
-    return true;
-  }
-
-  /// Chọn Skin trang phục
-  static Future<void> selectSkin(String? skinId) async {
-    final updated = currentProfile.copyWith(
-      selectedSkinId: skinId,
-      clearSkin: skinId == null,
     );
     await saveProfile(updated);
   }
