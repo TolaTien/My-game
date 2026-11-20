@@ -122,6 +122,7 @@ class AStarPathfinder {
     int width = 36,
     int height = 24,
     String mapId = 'sunken_golden_sanctum',
+    List<List<int>> obstacles = const [],
   }) {
     final grid = List.generate(
       width,
@@ -157,7 +158,16 @@ class AStarPathfinder {
       }
     }
 
-    if (mapId == 'map_dao_bang_gia') {
+    if (obstacles.isNotEmpty) {
+      // Ưu tiên nạp chướng ngại vật linh hoạt từ config dữ liệu map
+      for (final obs in obstacles) {
+        if (obs.length >= 4) {
+          blockArea(obs[0], obs[0] + obs[2] - 1, obs[1], obs[1] + obs[3] - 1);
+        } else if (obs.length >= 2) {
+          block2x2(obs[0], obs[1]);
+        }
+      }
+    } else if (mapId == 'map_dao_bang_gia') {
       // 4 tháp khối băng tinh thể khớp hoàn hảo tranh nền Đảo Băng Tuyết
       block2x2(6, 6);
       block2x2(29, 6);

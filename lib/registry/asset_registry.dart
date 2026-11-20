@@ -240,6 +240,9 @@ class MapAssetConfig {
   final String imageAsset;
   final String theme;
   final String description;
+  final List<List<int>>? _obstacles;
+
+  List<List<int>> get obstacles => _obstacles ?? const [];
 
   const MapAssetConfig({
     required this.id,
@@ -258,7 +261,9 @@ class MapAssetConfig {
     this.imageAsset = '',
     this.theme = 'golden_sanctum',
     this.description = '',
-  });
+    // ignore: prefer_initializing_formals
+    List<List<int>>? obstacles,
+  }) : _obstacles = obstacles; // ignore: prefer_initializing_formals
 
   factory MapAssetConfig.fromJson(Map<String, dynamic> json) {
     List<int> parseCoord(dynamic raw, List<int> fallback) {
@@ -273,6 +278,18 @@ class MapAssetConfig {
         return raw
             .map((e) => parseCoord(e, const [5, 5]))
             .toList(growable: false);
+      }
+      return const [];
+    }
+
+    List<List<int>> parseObstacles(dynamic raw) {
+      if (raw is List) {
+        return raw.map((e) {
+          if (e is List) {
+            return e.map((n) => (n as num).toInt()).toList(growable: false);
+          }
+          return <int>[];
+        }).where((l) => l.length >= 2).toList(growable: false);
       }
       return const [];
     }
@@ -294,8 +311,29 @@ class MapAssetConfig {
       imageAsset: json['imageAsset'] as String? ?? '',
       theme: json['theme'] as String? ?? (json['id'] as String? ?? 'golden_sanctum'),
       description: json['description'] as String? ?? '',
+      obstacles: parseObstacles(json['obstacles']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'stage': stage,
+        'name': name,
+        'mode': mode,
+        'cols': cols,
+        'rows': rows,
+        'tileSize': tileSize,
+        'playerSpawn': playerSpawn,
+        'bossSpawn': bossSpawn,
+        'monsterPortals': monsterPortals,
+        'buffNodes': buffNodes,
+        if (obstacles.isNotEmpty) 'obstacles': obstacles,
+        'tilesetImage': tilesetImage,
+        'tiledMapFile': tiledMapFile,
+        'imageAsset': imageAsset,
+        'theme': theme,
+        'description': description,
+      };
 }
 
 class EnemyAssetConfig {
@@ -399,13 +437,6 @@ class GameAssetRegistry {
   MapAssetConfig? getMap(String id) => _maps[id];
 
   List<MapAssetConfig> get availableMatchMaps {
-    final list = _maps.values.where((m) =>
-      m.id == 'sunken_golden_sanctum' ||
-      m.id == 'map_bang' ||
-      m.id == 'map_dao_bang_gia' ||
-      m.id == 'map_rung_cay'
-    ).toList();
-    if (list.isNotEmpty) return list;
     if (_maps.isNotEmpty) return _maps.values.toList();
     return const [defaultSanctumMap];
   }

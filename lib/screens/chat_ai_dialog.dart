@@ -12,11 +12,13 @@ class ChatAiDialog extends StatefulWidget {
 class _ChatAiDialogState extends State<ChatAiDialog> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _isLoading = false;
+
   final List<ChatAiMessage> _messages = [
     ChatAiMessage(
       sender: 'ai',
       text:
-          'Xin chào Chiến Binh! Tôi là **Trợ Lý AI Big-War** 🤖.\nBạn muốn hỏi về **Level Nhân vật 1–100**, **Đổi 1 Xu = 1000 Vàng**, **Kết bạn lập đội PvP 2v2/4v4**, hay **Cách thêm Assets tùy chỉnh**?',
+          'Xin chào Chiến Binh! Tôi là **Trợ Lý AI Big-War** 🤖.\nBạn muốn hỏi về **Level Nhân vật 1–100**, **Đổi 1 Xu = 1000 Vàng**, **Kết bạn lập đội PvP 2v2/4v4**, hay bất kỳ mẹo chiến đấu nào?',
       timestamp: DateTime.now(),
     ),
   ];
@@ -28,31 +30,7 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     super.dispose();
   }
 
-  void _sendPrompt(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
-
-    AudioService.instance.playSfx(SfxSound.uiClick);
-    final reply = ChatAiAssistantService.instance.generateReply(trimmed);
-
-    setState(() {
-      _messages.add(
-        ChatAiMessage(
-          sender: 'user',
-          text: trimmed,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _messages.add(
-        ChatAiMessage(
-          sender: 'ai',
-          text: reply,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _controller.clear();
-    });
-
+  void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -64,8 +42,75 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     });
   }
 
+  Future<void> _sendPrompt(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || _isLoading) return;
+
+    AudioService.instance.playSfx(SfxSound.uiClick);
+
+    // Fast-path: lọc từ khóa FAQ & chặn câu hỏi ngoài lề ngay tại client (<1ms, 0 token)
+    final instantReply = ChatAiAssistantService.instance.resolveLocalReply(trimmed);
+    if (instantReply != null) {
+      setState(() {
+        _messages.add(
+          ChatAiMessage(
+            sender: 'user',
+            text: trimmed,
+            timestamp: DateTime.now(),
+          ),
+        );
+        _messages.add(
+          ChatAiMessage(
+            sender: 'ai',
+            text: instantReply,
+            timestamp: DateTime.now(),
+          ),
+        );
+        _controller.clear();
+      });
+      _scrollToBottom();
+      return;
+    }
+
+    final historySnapshot = List<ChatAiMessage>.from(_messages);
+
+    setState(() {
+      _messages.add(
+        ChatAiMessage(
+          sender: 'user',
+          text: trimmed,
+          timestamp: DateTime.now(),
+        ),
+      );
+      _controller.clear();
+      _isLoading = true;
+    });
+    _scrollToBottom();
+
+    final reply = await ChatAiAssistantService.instance.generateReplyAsync(
+      trimmed,
+      history: historySnapshot,
+      bypassKeywordFilter: true,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatAiMessage(
+          sender: 'ai',
+          text: reply,
+          timestamp: DateTime.now(),
+        ),
+      );
+      _isLoading = false;
+    });
+    _scrollToBottom();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isApiReady = ChatAiAssistantService.instance.isApiConfigured;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -110,38 +155,74 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'TRỢ LÝ AI BIG-WAR (FAQ & HƯỚNG DẪN)',
-                          style: TextStyle(
-                            color: Colors.cyanAccent,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1,
-                          ),
+                        Row(
+                          children: [
+                            const Text(
+                              'TRỢ LÝ AI BIG-WAR',
+                              style: TextStyle(
+                                color: Colors.cyanAccent,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isApiReady
+                                    ? Colors.greenAccent.withValues(alpha: 0.15)
+                                    : Colors.amberAccent.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isApiReady
+                                      ? Colors.greenAccent.withValues(alpha: 0.6)
+                                      : Colors.amberAccent.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Text(
+                                isApiReady ? 'AI SERVER' : 'CHẾ ĐỘ DEMO',
+                                style: TextStyle(
+                                  color: isApiReady
+                                      ? Colors.greenAccent
+                                      : Colors.amberAccent,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          'Hỏi đáp nhanh về cơ chế game, Level 1-100, PvP Team & tùy chỉnh Assets',
+                        const Text(
+                          'Hỏi đáp thông minh về cơ chế game, Level 1-100, PvP Team & mẹo chiến đấu',
                           style: TextStyle(color: Colors.white60, fontSize: 11),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Đóng hộp thoại Trợ lý AI',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
             ),
 
-            // Quick FAQ Chips
+            // Quick FAQ Chips (vùng chạm >= 48dp đạt chuẩn trợ năng)
             SizedBox(
-              height: 34,
+              height: 48,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
@@ -150,6 +231,7 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                 itemBuilder: (context, idx) {
                   final topic = ChatAiAssistantService.faqTopics[idx];
                   return ActionChip(
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
                     backgroundColor: const Color(0xFF1E293B),
                     side: BorderSide(
                       color: Colors.amberAccent.withValues(alpha: 0.45),
@@ -162,7 +244,8 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    onPressed: () => _sendPrompt(topic.prompt),
+                    onPressed:
+                        _isLoading ? null : () => _sendPrompt(topic.prompt),
                   );
                 },
               ),
@@ -182,8 +265,50 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                 ),
                 child: ListView.builder(
                   controller: _scrollController,
-                  itemCount: _messages.length,
+                  itemCount: _messages.length + (_isLoading ? 1 : 0),
                   itemBuilder: (context, idx) {
+                    if (_isLoading && idx == _messages.length) {
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.cyanAccent.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.cyanAccent,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Trợ lý AI đang suy nghĩ...',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
                     final msg = _messages[idx];
                     final isUser = msg.sender == 'user';
                     return Align(
@@ -229,14 +354,15 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 38,
+                      height: 48,
                       child: TextField(
                         controller: _controller,
+                        enabled: !_isLoading,
                         style: const TextStyle(color: Colors.white, fontSize: 13),
                         onSubmitted: _sendPrompt,
                         decoration: InputDecoration(
                           hintText:
-                              'Nhập câu hỏi (VD: level 100, đổi xu, mời bạn bè 2v2, thêm asset)...',
+                              'Nhập câu hỏi về game Big-War...',
                           hintStyle: const TextStyle(
                             color: Colors.white38,
                             fontSize: 12,
@@ -245,7 +371,7 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                           fillColor: Colors.white.withValues(alpha: 0.07),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 14,
-                            vertical: 8,
+                            vertical: 12,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -258,18 +384,32 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                   const SizedBox(width: 10),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(88, 48),
                       backgroundColor: Colors.cyanAccent,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 10,
+                        vertical: 12,
                       ),
                     ),
-                    onPressed: () => _sendPrompt(_controller.text),
-                    icon: const Icon(Icons.send_rounded, size: 16),
-                    label: const Text(
-                      'GỬI',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                    onPressed:
+                        _isLoading ? null : () => _sendPrompt(_controller.text),
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black54,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, size: 16),
+                    label: Text(
+                      _isLoading ? 'ĐANG GỬI' : 'GỬI',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],

@@ -9,13 +9,49 @@
       "cols": 36,
       "rows": 24,
       "tileSize": 32,
-      "playerSpawn": [12, 9],
-      "bossSpawn": [28, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [9, 12], [27, 12]],
+      "playerSpawn": [
+        12,
+        9
+      ],
+      "bossSpawn": [
+        28,
+        12
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          4,
+          19
+        ],
+        [
+          31,
+          19
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          4
+        ],
+        [
+          9,
+          12
+        ],
+        [
+          27,
+          12
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/sunken_golden_sanctum.png",
       "theme": "golden_sanctum",
       "description": "Thần điện cổ đại ngập tràn kho báu và linh khí hoàng kim."
     },
@@ -27,13 +63,49 @@
       "cols": 40,
       "rows": 28,
       "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
+      "playerSpawn": [
+        20,
+        24
+      ],
+      "bossSpawn": [
+        20,
+        14
+      ],
+      "monsterPortals": [
+        [
+          5,
+          5
+        ],
+        [
+          34,
+          5
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          34,
+          22
+        ]
+      ],
+      "buffNodes": [
+        [
+          20,
+          4
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          30,
+          14
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/volcanic_frost_ruins.png",
       "theme": "volcanic",
       "description": "Vùng phế tích núi lửa đan xen hàn băng cổ xưa."
     },
@@ -45,13 +117,49 @@
       "cols": 40,
       "rows": 28,
       "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
+      "playerSpawn": [
+        20,
+        24
+      ],
+      "bossSpawn": [
+        20,
+        14
+      ],
+      "monsterPortals": [
+        [
+          5,
+          5
+        ],
+        [
+          34,
+          5
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          34,
+          22
+        ]
+      ],
+      "buffNodes": [
+        [
+          20,
+          4
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          30,
+          14
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/neon_city.png",
       "theme": "neon",
       "description": "Đô thị tương lai ánh sáng neon rực rỡ."
     },
@@ -63,13 +171,49 @@
       "cols": 40,
       "rows": 28,
       "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
+      "playerSpawn": [
+        20,
+        24
+      ],
+      "bossSpawn": [
+        20,
+        14
+      ],
+      "monsterPortals": [
+        [
+          5,
+          5
+        ],
+        [
+          34,
+          5
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          34,
+          22
+        ]
+      ],
+      "buffNodes": [
+        [
+          20,
+          4
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          30,
+          14
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/cyber_factory.png",
       "theme": "cyber",
       "description": "Nhà máy cơ khí và robot công nghệ cao."
     },
@@ -81,13 +225,49 @@
       "cols": 40,
       "rows": 28,
       "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
+      "playerSpawn": [
+        20,
+        24
+      ],
+      "bossSpawn": [
+        20,
+        14
+      ],
+      "monsterPortals": [
+        [
+          5,
+          5
+        ],
+        [
+          34,
+          5
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          34,
+          22
+        ]
+      ],
+      "buffNodes": [
+        [
+          20,
+          4
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          30,
+          14
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/space_station.png",
       "theme": "space",
       "description": "Trạm không gian ngoài quỹ đạo Trái Đất."
     },
@@ -99,13 +279,49 @@
       "cols": 40,
       "rows": 28,
       "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
+      "playerSpawn": [
+        20,
+        24
+      ],
+      "bossSpawn": [
+        20,
+        14
+      ],
+      "monsterPortals": [
+        [
+          5,
+          5
+        ],
+        [
+          34,
+          5
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          34,
+          22
+        ]
+      ],
+      "buffNodes": [
+        [
+          20,
+          4
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          30,
+          14
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
-      "imageAsset": "",
+      "imageAsset": "assets/images/maps/alien_ruins.png",
       "theme": "alien",
       "description": "Di tích sinh vật ngoài hành tinh cổ xưa."
     },
@@ -117,10 +333,46 @@
       "cols": 36,
       "rows": 24,
       "tileSize": 32,
-      "playerSpawn": [12, 9],
-      "bossSpawn": [28, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [9, 12], [27, 12]],
+      "playerSpawn": [
+        12,
+        9
+      ],
+      "bossSpawn": [
+        28,
+        12
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          4,
+          19
+        ],
+        [
+          31,
+          19
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          4
+        ],
+        [
+          9,
+          12
+        ],
+        [
+          27,
+          12
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-bang.png",
@@ -135,10 +387,46 @@
       "cols": 36,
       "rows": 24,
       "tileSize": 32,
-      "playerSpawn": [13, 11],
-      "bossSpawn": [24, 11],
-      "monsterPortals": [[6, 4], [29, 4], [7, 18], [28, 18]],
-      "buffNodes": [[18, 5], [12, 12], [24, 12]],
+      "playerSpawn": [
+        13,
+        11
+      ],
+      "bossSpawn": [
+        24,
+        11
+      ],
+      "monsterPortals": [
+        [
+          6,
+          4
+        ],
+        [
+          29,
+          4
+        ],
+        [
+          7,
+          18
+        ],
+        [
+          28,
+          18
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          5
+        ],
+        [
+          12,
+          12
+        ],
+        [
+          24,
+          12
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-dao-bang-gia.png",
@@ -153,15 +441,303 @@
       "cols": 36,
       "rows": 24,
       "tileSize": 32,
-      "playerSpawn": [12, 10],
-      "bossSpawn": [24, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [8, 12], [24, 18]],
+      "playerSpawn": [
+        12,
+        10
+      ],
+      "bossSpawn": [
+        24,
+        12
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          4,
+          19
+        ],
+        [
+          31,
+          19
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          4
+        ],
+        [
+          8,
+          12
+        ],
+        [
+          24,
+          18
+        ]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-rung-cay.png",
       "theme": "forest",
       "description": "Khu rừng rậm nguyên sinh với thảm thực vật kỳ ảo và những tán cây cổ thụ ngút ngàn."
+    },
+    {
+      "id": "dien_tho_co_long",
+      "stage": 10,
+      "name": "Điện Thờ Cổ Long",
+      "mode": "all",
+      "cols": 36,
+      "rows": 24,
+      "tileSize": 32,
+      "playerSpawn": [
+        16,
+        18
+      ],
+      "bossSpawn": [
+        24,
+        7
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          4,
+          19
+        ],
+        [
+          31,
+          19
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          12
+        ],
+        [
+          20,
+          4
+        ],
+        [
+          20,
+          19
+        ]
+      ],
+      "obstacles": [
+        [
+          8,
+          6,
+          2,
+          2
+        ],
+        [
+          26,
+          6,
+          2,
+          2
+        ],
+        [
+          8,
+          16,
+          2,
+          2
+        ],
+        [
+          26,
+          16,
+          2,
+          2
+        ],
+        [
+          14,
+          11,
+          2,
+          2
+        ],
+        [
+          20,
+          11,
+          2,
+          2
+        ]
+      ],
+      "tilesetImage": "",
+      "tiledMapFile": "",
+      "imageAsset": "assets/images/maps/dien_tho_co_long.png",
+      "theme": "golden_sanctum",
+      "description": "Điện Thờ Cổ Long — Bản đồ đấu trường chiến thuật mở với bố cục tối ưu cho thuật toán tìm đường A* và chiến đấu đối kháng."
+    },
+    {
+      "id": "hoa_nguc_dung_nham",
+      "stage": 11,
+      "name": "Hỏa Ngục Dung Nham",
+      "mode": "all",
+      "cols": 36,
+      "rows": 24,
+      "tileSize": 32,
+      "playerSpawn": [
+        3,
+        17
+      ],
+      "bossSpawn": [
+        29,
+        10
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          31,
+          19
+        ],
+        [
+          18,
+          4
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          12
+        ],
+        [
+          16,
+          4
+        ],
+        [
+          16,
+          19
+        ]
+      ],
+      "obstacles": [
+        [
+          8,
+          6,
+          2,
+          2
+        ],
+        [
+          26,
+          6,
+          2,
+          2
+        ],
+        [
+          8,
+          16,
+          2,
+          2
+        ],
+        [
+          26,
+          16,
+          2,
+          2
+        ]
+      ],
+      "tilesetImage": "",
+      "tiledMapFile": "",
+      "imageAsset": "assets/images/maps/hoa_nguc_dung_nham.png",
+      "theme": "volcanic",
+      "description": "Hỏa Ngục Dung Nham — Bản đồ đấu trường chiến thuật mở với bố cục tối ưu cho thuật toán tìm đường A* và chiến đấu đối kháng."
+    },
+    {
+      "id": "ham_nguc_hoa_long",
+      "stage": 12,
+      "name": "Hầm Ngục Hỏa Long",
+      "mode": "all",
+      "cols": 36,
+      "rows": 24,
+      "tileSize": 32,
+      "playerSpawn": [
+        4,
+        20
+      ],
+      "bossSpawn": [
+        31,
+        5
+      ],
+      "monsterPortals": [
+        [
+          4,
+          4
+        ],
+        [
+          31,
+          4
+        ],
+        [
+          31,
+          19
+        ],
+        [
+          18,
+          4
+        ]
+      ],
+      "buffNodes": [
+        [
+          18,
+          12
+        ],
+        [
+          18,
+          4
+        ],
+        [
+          18,
+          19
+        ]
+      ],
+      "obstacles": [
+        [
+          8,
+          6,
+          2,
+          2
+        ],
+        [
+          26,
+          6,
+          2,
+          2
+        ],
+        [
+          8,
+          16,
+          2,
+          2
+        ],
+        [
+          26,
+          16,
+          2,
+          2
+        ]
+      ],
+      "tilesetImage": "",
+      "tiledMapFile": "",
+      "imageAsset": "assets/images/maps/ham_nguc_hoa_long.png",
+      "theme": "volcanic",
+      "description": "Hầm Ngục Hỏa Long — Bản đồ đấu trường chiến thuật mở với bố cục tối ưu cho thuật toán tìm đường A* và chiến đấu đối kháng."
     }
   ]
 }

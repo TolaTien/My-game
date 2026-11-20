@@ -898,7 +898,9 @@ class _AuthScreenState extends State<AuthScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                _isRegister ? Icons.login_rounded : Icons.person_add_alt_1_rounded,
+                _isRegister
+                    ? Icons.login_rounded
+                    : Icons.person_add_alt_1_rounded,
                 size: 14,
                 color: _goldBright,
               ),

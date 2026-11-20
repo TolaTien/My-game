@@ -8,7 +8,11 @@ if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
 cd /d "%PROJECT_DIR%"
 
-call flutter build apk --release --no-tree-shake-icons
+if exist ".env" (
+    call flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env
+) else (
+    call flutter build apk --release --no-tree-shake-icons
+)
 
 echo.
 echo [HOAN TAT] File APK da duoc xuat tai:

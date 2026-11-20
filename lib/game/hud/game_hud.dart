@@ -398,14 +398,6 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                     SettingsDialog.show(context);
                   },
                 ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 36),
-                  onPressed: () {
-                    // Mở menu pause hoặc thoát
-                    Navigator.of(context).pop();
-                  },
-                ),
               ],
             ),
           ),

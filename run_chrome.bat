@@ -8,5 +8,9 @@ if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
 cd /d "%PROJECT_DIR%"
 
-call flutter run -d chrome
+if exist ".env" (
+    call flutter run -d chrome --dart-define-from-file=.env
+) else (
+    call flutter run -d chrome
+)
 pause
