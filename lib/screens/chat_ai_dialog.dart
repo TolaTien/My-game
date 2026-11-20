@@ -16,7 +16,7 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     ChatAiMessage(
       sender: 'ai',
       text:
-          'Xin chào Chiến Binh! Tôi là **Trợ Lý AI Gold Rush** 🤖.\nBạn muốn hỏi về **Level Nhân vật 1–100**, **Đổi 1 Xu = 1000 Vàng**, **Kết bạn lập đội PvP 2v2/4v4**, hay **Cách thêm Assets tùy chỉnh**?',
+          'Xin chào Chiến Binh! Tôi là **Trợ Lý AI Big-War** 🤖.\nBạn muốn hỏi về **Level Nhân vật 1–100**, **Đổi 1 Xu = 1000 Vàng**, **Kết bạn lập đội PvP 2v2/4v4**, hay **Cách thêm Assets tùy chỉnh**?',
       timestamp: DateTime.now(),
     ),
   ];
@@ -115,7 +115,7 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'TRỢ LÝ AI GOLD RUSH (FAQ & HƯỚNG DẪN)',
+                          'TRỢ LÝ AI BIG-WAR (FAQ & HƯỚNG DẪN)',
                           style: TextStyle(
                             color: Colors.cyanAccent,
                             fontSize: 15,

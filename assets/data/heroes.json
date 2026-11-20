@@ -36,7 +36,7 @@
       "name": "Nova Blade (NOVA-07) — Chiến Binh Neon",
       "role": "Đấu Sĩ / Cơ Động",
       "classType": "warrior",
-      "priceGold": 100,
+      "priceGold": 1000,
       "unlockedByDefault": false,
       "baseStats": {
         "hp": 120,
