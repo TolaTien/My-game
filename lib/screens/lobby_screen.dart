@@ -8,6 +8,7 @@ import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
 import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
@@ -83,9 +84,11 @@ class _LobbyScreenState extends State<LobbyScreen>
     )..repeat();
 
     // Tải dữ liệu người chơi, khôi phục bạn bè & bật trạng thái Online Realtime
-    PlayerStorage.loadProfile().then((prof) {
-      FriendPartyService.instance.initializeForCurrentUser(prof);
-    });
+    if (AuthService.instance.isSignedIn) {
+      PlayerStorage.loadProfile().then((prof) {
+        FriendPartyService.instance.initializeForCurrentUser(prof);
+      });
+    }
 
     // Lắng nghe lời mời tổ đội & phản hồi từ bạn bè
     FriendPartyService.instance.incomingInviteNotifier.addListener(

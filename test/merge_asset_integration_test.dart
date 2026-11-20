@@ -150,8 +150,21 @@ void main() {
       cache.getHeroSequenceFrame('shadow', 'attack', 16),
       same(shadow.attack.frames.first.image),
     );
-    for (var slot = 1; slot <= 3; slot++) {
-      expect(cache.getSkillAnimation('nova', slot), isNotNull);
+    for (final hero in [
+      'nova',
+      'valeria',
+      'garrick',
+      'kaelen',
+      'shadow',
+      'ember',
+    ]) {
+      for (var slot = 1; slot <= 3; slot++) {
+        expect(
+          cache.getSkillAnimation(hero, slot),
+          isNotNull,
+          reason: '$hero:$slot',
+        );
+      }
     }
   });
 }

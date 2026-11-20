@@ -69,7 +69,7 @@ class ChatAiAssistantService {
       ],
       answer:
           '🪙 **Hệ thống Kinh Tế (1 Xu = 1000 Vàng)**:\n'
-          '• Tỷ giá cố định trong Gold Rush là **1 Xu = 1.000 Vàng**.\n'
+          '• Tỷ giá cố định trong Big-War là **1 Xu = 1.000 Vàng**.\n'
           '• Bạn có thể chuyển đổi 2 chiều giữa **Xu ↔ Vàng** ngay trong **Cửa Hàng (Tab Quy Đổi Xu/Vàng)** hoặc trên thanh tiền tệ ở Sảnh Chờ.\n'
           '• Vàng dùng để mở khóa Nhân vật, Trợ thủ AI và Huấn luyện cấp độ 1–100.',
     ),
@@ -199,7 +199,7 @@ class ChatAiAssistantService {
           '• Bạn cũng có thể dùng Kim Cương để quay thêm và săn giải **Jackpot 2.000 Vàng**!';
     }
 
-    return '🤖 **Trợ Lý AI Gold Rush**:\n'
+    return '🤖 **Trợ Lý AI Big-War**:\n'
         'Mình có thể giải đáp cho bạn về:\n'
         '1️⃣ **Cấp độ Nhân vật (1 → 100)** & cộng chỉ số sau mỗi trận\n'
         '2️⃣ **Quy đổi Kinh tế** (`1 Xu = 1000 Vàng`)\n'

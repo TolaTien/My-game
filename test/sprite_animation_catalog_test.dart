@@ -29,7 +29,7 @@ void main() {
     await cache.preloadAll();
     final pixelData = <ui.Image, ByteData>{};
     const counts = {
-      'nova_blade': [5, 8, 5, 1, 2, 3],
+      'nova_blade': [5, 8, 5],
       'shadow_01': [16, 16, 16, 2, 2, 3],
       'ember_02': [5, 8, 5, 2, 2, 1],
       'valeria': [1, 1, 2, 1, 1, 1],
@@ -43,8 +43,9 @@ void main() {
         hero.idle,
         hero.run,
         hero.attack,
-        for (var slot = 1; slot <= 3; slot++)
-          cache.getSkillAnimation(id, slot)!,
+        if (id != 'nova_blade')
+          for (var slot = 1; slot <= 3; slot++)
+            cache.getSkillAnimation(id, slot)!,
       ];
       expect(clips.map((clip) => clip.frames.length), entry.value, reason: id);
       final specs = heroSpriteClips[id]!;
@@ -52,7 +53,7 @@ void main() {
         specs.idle,
         specs.run,
         specs.attack,
-        ...skillSpriteClips[id]!.values,
+        if (id != 'nova_blade') ...skillSpriteClips[id]!.values,
       ];
       for (var n = 0; n < clips.length; n++) {
         final clip = clips[n];

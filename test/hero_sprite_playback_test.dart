@@ -221,7 +221,12 @@ void main() {
           }
           await tester.pump();
           final clip = SpriteImageCache.instance.getSkillAnimation(hero, slot);
-          expect(clip, isNotNull);
+          expect(
+            clip,
+            isNotNull,
+            reason: '$hero:$slot must use its preserved skill art',
+          );
+          if (clip == null) continue;
           expect(
             game.world.children.any(
               (child) =>
