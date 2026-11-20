@@ -322,14 +322,34 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnPickups() {
-    final pickupSpawns = [
-      (Vector2(160, 360), PickupType.healthPotion),
-      (Vector2(550, 180), PickupType.expGem),
-      (Vector2(750, 400), PickupType.expGem),
-      (Vector2(350, 420), PickupType.goldCoin),
-      (Vector2(900, 200), PickupType.goldCoin),
-      (Vector2(600, 550), PickupType.goldCoin),
-    ];
+    final List<(Vector2, PickupType)> pickupSpawns;
+    if (currentMapConfig.buffNodes.isNotEmpty) {
+      pickupSpawns = [];
+      for (int i = 0; i < currentMapConfig.buffNodes.length; i++) {
+        final node = currentMapConfig.buffNodes[i];
+        final pos = Vector2((node[0] + 0.5) * 32.0, (node[1] + 0.5) * 32.0);
+        final type = i == 0
+            ? PickupType.healthPotion
+            : (i % 2 == 1 ? PickupType.goldCoin : PickupType.expGem);
+        pickupSpawns.add((pos, type));
+      }
+      if (currentMapConfig.buffNodes.length >= 2) {
+        final midNode = currentMapConfig.buffNodes[1];
+        pickupSpawns.add((
+          Vector2((midNode[0] + 2.0) * 32.0, (midNode[1] + 0.5) * 32.0),
+          PickupType.goldCoin,
+        ));
+      }
+    } else {
+      pickupSpawns = [
+        (Vector2(160, 360), PickupType.healthPotion),
+        (Vector2(550, 180), PickupType.expGem),
+        (Vector2(750, 400), PickupType.expGem),
+        (Vector2(350, 420), PickupType.goldCoin),
+        (Vector2(900, 200), PickupType.goldCoin),
+        (Vector2(600, 550), PickupType.goldCoin),
+      ];
+    }
 
     for (final (pt, type) in pickupSpawns) {
       final item = PickupItem(position: pt, type: type);

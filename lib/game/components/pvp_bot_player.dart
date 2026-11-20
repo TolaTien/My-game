@@ -3,6 +3,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../models/pvp_match.dart';
+import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../ai/pvp_bot_ai.dart';
@@ -17,12 +18,12 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   final bool enableAi;
   late final PvpBotAi aiController;
 
-  double maxHp = 100.0;
-  double currentHp = 100.0;
+  double maxHp = 340.0;
+  double currentHp = 340.0;
   double maxKi = 100.0;
   double currentKi = 100.0;
-  double damage = 20.0;
-  double speed = 160.0;
+  double damage = 25.0;
+  double speed = 150.0;
 
   bool isFacingRight = false;
   int facingRow = 0;
@@ -77,6 +78,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
           size: Vector2(36, 40),
           anchor: Anchor.center,
         ) {
+    _initBotStats();
     previousPosition = position.clone();
     isFacingRight = opponentInfo.isAlly;
     add(RectangleHitbox(
@@ -90,6 +92,25 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       targetPlayer: targetPlayer,
     );
     if (enableAi) add(aiController);
+  }
+
+  void _initBotStats() {
+    try {
+      final heroCfg = GameAssetRegistry.instance.getHero(opponentInfo.heroId);
+      maxHp = heroCfg.baseStats.hp;
+      currentHp = maxHp;
+      maxKi = heroCfg.baseStats.ki;
+      currentKi = maxKi;
+      damage = heroCfg.baseStats.attack;
+      speed = heroCfg.baseStats.speed;
+    } catch (_) {
+      maxHp = 340.0;
+      currentHp = 340.0;
+      maxKi = 100.0;
+      currentKi = 100.0;
+      damage = 25.0;
+      speed = 150.0;
+    }
   }
 
   /// Trả về mục tiêu sống gần nhất (hỗ trợ cả 1v1, 2v2, 4v4 cho Đồng đội & Đối thủ)
@@ -178,8 +199,14 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       berserkTimer -= dt;
       if (berserkTimer <= 0) {
         isBerserk = false;
-        speed = 160.0;
-        damage = 20.0;
+        try {
+          final heroCfg = GameAssetRegistry.instance.getHero(opponentInfo.heroId);
+          speed = heroCfg.baseStats.speed;
+          damage = heroCfg.baseStats.attack;
+        } catch (_) {
+          speed = 150.0;
+          damage = 25.0;
+        }
       }
     }
 
@@ -406,8 +433,14 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     previousPosition = spawnPos.clone();
     currentHp = maxHp;
     currentKi = maxKi;
-    speed = 160.0;
-    damage = 20.0;
+    try {
+      final heroCfg = GameAssetRegistry.instance.getHero(opponentInfo.heroId);
+      speed = heroCfg.baseStats.speed;
+      damage = heroCfg.baseStats.attack;
+    } catch (_) {
+      speed = 150.0;
+      damage = 25.0;
+    }
     isBerserk = false;
     berserkTimer = 0.0;
     isAttacking = false;

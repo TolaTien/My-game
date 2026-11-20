@@ -2,116 +2,8 @@
   "version": "2.2.0",
   "maps": [
     {
-      "id": "sunken_golden_sanctum",
-      "stage": 1,
-      "name": "Phế Tích Thần Điện Hoàng Kim (Asset 4)",
-      "mode": "all",
-      "cols": 36,
-      "rows": 24,
-      "tileSize": 32,
-      "playerSpawn": [12, 9],
-      "bossSpawn": [28, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [9, 12], [27, 12]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "golden_sanctum",
-      "description": "Thần điện cổ đại ngập tràn kho báu và linh khí hoàng kim."
-    },
-    {
-      "id": "volcanic_frost_ruins",
-      "stage": 2,
-      "name": "Phế Tích Núi Lửa & Băng Giá (Asset 3)",
-      "mode": "all",
-      "cols": 40,
-      "rows": 28,
-      "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "volcanic",
-      "description": "Vùng phế tích núi lửa đan xen hàn băng cổ xưa."
-    },
-    {
-      "id": "neon_city",
-      "stage": 3,
-      "name": "Neon City — Sci-Fi Dungeon (Asset 1 & 2)",
-      "mode": "all",
-      "cols": 40,
-      "rows": 28,
-      "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "neon",
-      "description": "Đô thị tương lai ánh sáng neon rực rỡ."
-    },
-    {
-      "id": "cyber_factory",
-      "stage": 4,
-      "name": "Cyber Factory — Nhà Máy Cơ Khí (Asset 2)",
-      "mode": "all",
-      "cols": 40,
-      "rows": 28,
-      "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "cyber",
-      "description": "Nhà máy cơ khí và robot công nghệ cao."
-    },
-    {
-      "id": "space_station",
-      "stage": 5,
-      "name": "Space Station — Trạm Vũ Trụ (Asset 2)",
-      "mode": "all",
-      "cols": 40,
-      "rows": 28,
-      "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "space",
-      "description": "Trạm không gian ngoài quỹ đạo Trái Đất."
-    },
-    {
-      "id": "alien_ruins",
-      "stage": 6,
-      "name": "Alien Ruins — Di Tích Tinh Không (Asset 2)",
-      "mode": "all",
-      "cols": 40,
-      "rows": 28,
-      "tileSize": 32,
-      "playerSpawn": [20, 24],
-      "bossSpawn": [20, 14],
-      "monsterPortals": [[5, 5], [34, 5], [5, 22], [34, 22]],
-      "buffNodes": [[20, 4], [10, 14], [30, 14]],
-      "tilesetImage": "",
-      "tiledMapFile": "",
-      "imageAsset": "",
-      "theme": "alien",
-      "description": "Di tích sinh vật ngoài hành tinh cổ xưa."
-    },
-    {
       "id": "map_bang",
-      "stage": 7,
+      "stage": 1,
       "name": "Đấu Trường Băng Giá",
       "mode": "all",
       "cols": 36,
@@ -119,8 +11,23 @@
       "tileSize": 32,
       "playerSpawn": [12, 9],
       "bossSpawn": [28, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [9, 12], [27, 12]],
+      "monsterPortals": [
+        [4, 4],
+        [31, 4],
+        [4, 19],
+        [31, 19]
+      ],
+      "buffNodes": [
+        [18, 4],
+        [9, 12],
+        [27, 12]
+      ],
+      "obstacles": [
+        [8, 6, 2, 2],
+        [26, 6, 2, 2],
+        [8, 16, 2, 2],
+        [26, 16, 2, 2]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-bang.png",
@@ -129,7 +36,7 @@
     },
     {
       "id": "map_dao_bang_gia",
-      "stage": 8,
+      "stage": 2,
       "name": "Đảo Băng Tuyết",
       "mode": "all",
       "cols": 36,
@@ -137,8 +44,23 @@
       "tileSize": 32,
       "playerSpawn": [13, 11],
       "bossSpawn": [24, 11],
-      "monsterPortals": [[6, 4], [29, 4], [7, 18], [28, 18]],
-      "buffNodes": [[18, 5], [12, 12], [24, 12]],
+      "monsterPortals": [
+        [6, 4],
+        [29, 4],
+        [7, 18],
+        [28, 18]
+      ],
+      "buffNodes": [
+        [18, 5],
+        [12, 12],
+        [24, 12]
+      ],
+      "obstacles": [
+        [8, 6, 2, 2],
+        [26, 6, 2, 2],
+        [8, 16, 2, 2],
+        [26, 16, 2, 2]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-dao-bang-gia.png",
@@ -147,7 +69,7 @@
     },
     {
       "id": "map_rung_cay",
-      "stage": 9,
+      "stage": 3,
       "name": "Rừng Cây Cổ Thụ",
       "mode": "all",
       "cols": 36,
@@ -155,13 +77,96 @@
       "tileSize": 32,
       "playerSpawn": [12, 10],
       "bossSpawn": [24, 12],
-      "monsterPortals": [[4, 4], [31, 4], [4, 19], [31, 19]],
-      "buffNodes": [[18, 4], [8, 12], [24, 18]],
+      "monsterPortals": [
+        [4, 4],
+        [31, 4],
+        [4, 19],
+        [31, 19]
+      ],
+      "buffNodes": [
+        [18, 4],
+        [8, 12],
+        [24, 18]
+      ],
+      "obstacles": [
+        [8, 6, 2, 2],
+        [26, 6, 2, 2],
+        [8, 16, 2, 2],
+        [26, 16, 2, 2]
+      ],
       "tilesetImage": "",
       "tiledMapFile": "",
       "imageAsset": "assets/images/maps/map-rung-cay.png",
       "theme": "forest",
       "description": "Khu rừng rậm nguyên sinh với thảm thực vật kỳ ảo và những tán cây cổ thụ ngút ngàn."
+    },
+    {
+      "id": "dien_tho_co_long",
+      "stage": 4,
+      "name": "Điện Thờ Cổ Long",
+      "mode": "all",
+      "cols": 36,
+      "rows": 24,
+      "tileSize": 32,
+      "playerSpawn": [16, 18],
+      "bossSpawn": [24, 7],
+      "monsterPortals": [
+        [4, 4],
+        [31, 4],
+        [4, 19],
+        [31, 19]
+      ],
+      "buffNodes": [
+        [18, 12],
+        [20, 4],
+        [20, 19]
+      ],
+      "obstacles": [
+        [8, 6, 2, 2],
+        [26, 6, 2, 2],
+        [8, 16, 2, 2],
+        [26, 16, 2, 2],
+        [14, 11, 2, 2],
+        [20, 11, 2, 2]
+      ],
+      "tilesetImage": "",
+      "tiledMapFile": "",
+      "imageAsset": "assets/images/maps/dien_tho_co_long.png",
+      "theme": "golden_sanctum",
+      "description": "Điện Thờ Cổ Long — Đấu trường hoàng kim cổ đại với phù điêu rồng thần rực rỡ và các trụ đá hộ vệ."
+    },
+    {
+      "id": "hoa_nguc_dung_nham",
+      "stage": 5,
+      "name": "Hỏa Ngục Dung Nham",
+      "mode": "all",
+      "cols": 36,
+      "rows": 24,
+      "tileSize": 32,
+      "playerSpawn": [3, 17],
+      "bossSpawn": [29, 10],
+      "monsterPortals": [
+        [4, 4],
+        [31, 4],
+        [31, 19],
+        [18, 4]
+      ],
+      "buffNodes": [
+        [18, 12],
+        [16, 4],
+        [16, 19]
+      ],
+      "obstacles": [
+        [8, 6, 2, 2],
+        [26, 6, 2, 2],
+        [8, 16, 2, 2],
+        [26, 16, 2, 2]
+      ],
+      "tilesetImage": "",
+      "tiledMapFile": "",
+      "imageAsset": "assets/images/maps/hoa_nguc_dung_nham.png",
+      "theme": "volcanic",
+      "description": "Hỏa Ngục Dung Nham — Đấu trường núi lửa rực lửa với những dòng macma sôi trào và cự thạch hắc diện."
     }
   ]
 }

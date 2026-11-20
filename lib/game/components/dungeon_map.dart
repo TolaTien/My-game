@@ -222,6 +222,9 @@ class DungeonMapComponent extends Component {
   final double tileSize = GameConstants.tileSize;
   final MapAssetConfig mapConfig;
 
+  int get widthTiles => mapConfig.cols > 0 ? mapConfig.cols : mapWidthTiles;
+  int get heightTiles => mapConfig.rows > 0 ? mapConfig.rows : mapHeightTiles;
+
   ui.Image? _mapImage;
 
   /// Ma trận ô di chuyển (true = đi được, false = tường/cột đá)
@@ -233,9 +236,10 @@ class DungeonMapComponent extends Component {
                 GameAssetRegistry.defaultSanctumMap),
         super(priority: -10) {
     walkableGrid = AStarPathfinder.buildDungeonWalkableGrid(
-      width: mapWidthTiles,
-      height: mapHeightTiles,
+      width: mapConfig.cols > 0 ? mapConfig.cols : mapWidthTiles,
+      height: mapConfig.rows > 0 ? mapConfig.rows : mapHeightTiles,
       mapId: mapConfig.id,
+      obstacles: mapConfig.obstacles,
     );
   }
 
@@ -252,9 +256,11 @@ class DungeonMapComponent extends Component {
     }
 
     final wallTheme = mapConfig.theme;
+    final wTiles = widthTiles;
+    final hTiles = heightTiles;
 
     // Sinh tường bao quanh
-    for (int col = 0; col < mapWidthTiles; col++) {
+    for (int col = 0; col < wTiles; col++) {
       // Tường trên
       add(WallBlock(
         position: Vector2(col * tileSize, 0),
@@ -264,14 +270,14 @@ class DungeonMapComponent extends Component {
       ));
       // Tường dưới
       add(WallBlock(
-        position: Vector2(col * tileSize, (mapHeightTiles - 1) * tileSize),
+        position: Vector2(col * tileSize, (hTiles - 1) * tileSize),
         size: Vector2(tileSize, tileSize),
         theme: wallTheme,
         isBoundary: true,
       ));
     }
 
-    for (int row = 1; row < mapHeightTiles - 1; row++) {
+    for (int row = 1; row < hTiles - 1; row++) {
       // Tường trái
       add(WallBlock(
         position: Vector2(0, row * tileSize),
@@ -281,7 +287,7 @@ class DungeonMapComponent extends Component {
       ));
       // Tường phải
       add(WallBlock(
-        position: Vector2((mapWidthTiles - 1) * tileSize, row * tileSize),
+        position: Vector2((wTiles - 1) * tileSize, row * tileSize),
         size: Vector2(tileSize, tileSize),
         theme: wallTheme,
         isBoundary: true,
@@ -289,7 +295,21 @@ class DungeonMapComponent extends Component {
     }
 
     // Sinh các chướng ngại vật theo từng bản đồ (khớp chuẩn xác với ảnh nền và A* Grid)
-    if (mapConfig.id == 'map_dao_bang_gia') {
+    if (mapConfig.obstacles.isNotEmpty) {
+      for (final obs in mapConfig.obstacles) {
+        if (obs.length >= 4) {
+          _addWaterBarrierArea(
+            obs[0],
+            obs[0] + obs[2] - 1,
+            obs[1],
+            obs[1] + obs[3] - 1,
+            wallTheme,
+          );
+        } else if (obs.length >= 2) {
+          _addPillar(obs[0], obs[1], wallTheme);
+        }
+      }
+    } else if (mapConfig.id == 'map_dao_bang_gia') {
       // 4 tháp khối đá băng tinh thể tự nhiên tại 4 mỏm đảo (khớp chuẩn tranh nền)
       _addPillar(6, 6, wallTheme);
       _addPillar(29, 6, wallTheme);
@@ -359,8 +379,8 @@ class DungeonMapComponent extends Component {
   void render(ui.Canvas canvas) {
     super.render(canvas);
 
-    final totalW = mapWidthTiles * tileSize;
-    final totalH = mapHeightTiles * tileSize;
+    final totalW = widthTiles * tileSize;
+    final totalH = heightTiles * tileSize;
     final isIceTheme = mapConfig.theme == 'ice_arena' ||
         mapConfig.theme == 'frost_island' ||
         mapConfig.theme == 'ice_island' ||
@@ -410,8 +430,8 @@ class DungeonMapComponent extends Component {
                 ..strokeWidth = 1.2
                 ..style = ui.PaintingStyle.stroke);
 
-      for (int r = 0; r < mapHeightTiles; r++) {
-        for (int c = 0; c < mapWidthTiles; c++) {
+      for (int r = 0; r < heightTiles; r++) {
+        for (int c = 0; c < widthTiles; c++) {
           final paint = (r + c) % 2 == 0 ? lightPaint : darkPaint;
           final rect =
               ui.Rect.fromLTWH(c * tileSize, r * tileSize, tileSize, tileSize);

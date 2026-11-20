@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/env_config.dart';
 import 'registry/asset_registry.dart';
 import 'registry/sprite_image_cache.dart';
 import 'screens/auth_screen.dart';
@@ -23,6 +24,9 @@ void main() async {
 
   // Toàn màn hình Immersive (ẩn thanh điều hướng và status bar)
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+  // Nạp các biến bảo mật từ file .env trước khi khởi tạo Firebase và AI
+  await EnvConfig.initialize();
 
   // Nạp hệ thống Registry từ thư mục assets/data/*.json
   await GameAssetRegistry.instance.initialize();
@@ -67,7 +71,7 @@ class GoldRushApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gold Rush Mobile',
+      title: 'Big-War',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

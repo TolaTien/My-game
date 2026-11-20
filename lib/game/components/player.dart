@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import '../../core/stat_growth_formula.dart';
+import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import 'dungeon_map.dart';
@@ -101,6 +102,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           size: Vector2(36, 40),
           anchor: Anchor.center,
         ) {
+    _initHeroStats();
     if (userHeroLevel > 1) {
       applyUserHeroLevel(userHeroLevel);
     }
@@ -111,22 +113,50 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     ));
   }
 
+  void _initHeroStats() {
+    try {
+      final heroCfg = GameAssetRegistry.instance.getHero(heroId);
+      maxHp = heroCfg.baseStats.hp;
+      currentHp = maxHp;
+      maxKi = heroCfg.baseStats.ki;
+      currentKi = maxKi;
+      damage = heroCfg.baseStats.attack;
+      speed = heroCfg.baseStats.speed;
+    } catch (_) {
+      maxHp = GameConstants.playerMaxHp;
+      currentHp = maxHp;
+      maxKi = GameConstants.playerMaxKi;
+      currentKi = maxKi;
+      damage = GameConstants.playerBaseDamage;
+      speed = GameConstants.playerBaseSpeed;
+    }
+  }
+
   /// Áp dụng chỉ số cộng thêm từ cấp độ Nhân Vật của User (Level 1 -> 100)
   void applyUserHeroLevel(int targetHeroLevel) {
     userHeroLevel = targetHeroLevel.clamp(
       StatGrowthFormula.minHeroLevel,
       StatGrowthFormula.maxHeroLevel,
     );
-    if (userHeroLevel <= 1) return;
-    final scaled = StatGrowthFormula.computeStatsForLevel(
-      heroId: heroId,
-      level: userHeroLevel,
-    );
-    maxHp = GameConstants.playerMaxHp + scaled.bonusHp;
-    currentHp = maxHp;
-    maxKi = GameConstants.playerMaxKi + scaled.bonusKi;
-    currentKi = maxKi;
-    damage = GameConstants.playerBaseDamage + scaled.bonusAttack;
+    try {
+      final scaled = StatGrowthFormula.computeStatsForLevel(
+        heroId: heroId,
+        level: userHeroLevel,
+      );
+      maxHp = scaled.maxHp;
+      currentHp = maxHp;
+      maxKi = scaled.maxKi;
+      currentKi = maxKi;
+      damage = scaled.attackDamage;
+      speed = scaled.moveSpeed;
+    } catch (_) {
+      maxHp = GameConstants.playerMaxHp;
+      currentHp = maxHp;
+      maxKi = GameConstants.playerMaxKi;
+      currentKi = maxKi;
+      damage = GameConstants.playerBaseDamage;
+      speed = GameConstants.playerBaseSpeed;
+    }
   }
 
   @override
@@ -182,8 +212,17 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       berserkTimer -= dt;
       if (berserkTimer <= 0) {
         isBerserk = false;
-        speed = GameConstants.playerBaseSpeed;
-        damage = GameConstants.playerBaseDamage;
+        try {
+          final scaled = StatGrowthFormula.computeStatsForLevel(
+            heroId: heroId,
+            level: userHeroLevel,
+          );
+          speed = scaled.moveSpeed;
+          damage = scaled.attackDamage;
+        } catch (_) {
+          speed = GameConstants.playerBaseSpeed;
+          damage = GameConstants.playerBaseDamage;
+        }
         onStatsChanged?.call();
       }
     }

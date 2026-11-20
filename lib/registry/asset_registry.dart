@@ -240,6 +240,9 @@ class MapAssetConfig {
   final String imageAsset;
   final String theme;
   final String description;
+  final List<List<int>>? _obstacles;
+
+  List<List<int>> get obstacles => _obstacles ?? const [];
 
   const MapAssetConfig({
     required this.id,
@@ -258,7 +261,9 @@ class MapAssetConfig {
     this.imageAsset = '',
     this.theme = 'golden_sanctum',
     this.description = '',
-  });
+    // ignore: prefer_initializing_formals
+    List<List<int>>? obstacles,
+  }) : _obstacles = obstacles; // ignore: prefer_initializing_formals
 
   factory MapAssetConfig.fromJson(Map<String, dynamic> json) {
     List<int> parseCoord(dynamic raw, List<int> fallback) {
@@ -273,6 +278,18 @@ class MapAssetConfig {
         return raw
             .map((e) => parseCoord(e, const [5, 5]))
             .toList(growable: false);
+      }
+      return const [];
+    }
+
+    List<List<int>> parseObstacles(dynamic raw) {
+      if (raw is List) {
+        return raw.map((e) {
+          if (e is List) {
+            return e.map((n) => (n as num).toInt()).toList(growable: false);
+          }
+          return <int>[];
+        }).where((l) => l.length >= 2).toList(growable: false);
       }
       return const [];
     }
@@ -294,8 +311,29 @@ class MapAssetConfig {
       imageAsset: json['imageAsset'] as String? ?? '',
       theme: json['theme'] as String? ?? (json['id'] as String? ?? 'golden_sanctum'),
       description: json['description'] as String? ?? '',
+      obstacles: parseObstacles(json['obstacles']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'stage': stage,
+        'name': name,
+        'mode': mode,
+        'cols': cols,
+        'rows': rows,
+        'tileSize': tileSize,
+        'playerSpawn': playerSpawn,
+        'bossSpawn': bossSpawn,
+        'monsterPortals': monsterPortals,
+        'buffNodes': buffNodes,
+        if (obstacles.isNotEmpty) 'obstacles': obstacles,
+        'tilesetImage': tilesetImage,
+        'tiledMapFile': tiledMapFile,
+        'imageAsset': imageAsset,
+        'theme': theme,
+        'description': description,
+      };
 }
 
 class EnemyAssetConfig {
@@ -399,13 +437,6 @@ class GameAssetRegistry {
   MapAssetConfig? getMap(String id) => _maps[id];
 
   List<MapAssetConfig> get availableMatchMaps {
-    final list = _maps.values.where((m) =>
-      m.id == 'sunken_golden_sanctum' ||
-      m.id == 'map_bang' ||
-      m.id == 'map_dao_bang_gia' ||
-      m.id == 'map_rung_cay'
-    ).toList();
-    if (list.isNotEmpty) return list;
     if (_maps.isNotEmpty) return _maps.values.toList();
     return const [defaultSanctumMap];
   }
@@ -439,7 +470,7 @@ class GameAssetRegistry {
     for (final m in _maps.values) {
       if (m.stage == stage) return m;
     }
-    return _maps['sunken_golden_sanctum'] ?? defaultSanctumMap;
+    return _maps.values.firstOrNull ?? defaultSanctumMap;
   }
 
   /// Nạp toàn bộ file cấu hình từ `assets/data/*.json`
@@ -541,9 +572,9 @@ class GameAssetRegistry {
         classType: 'warrior',
         priceGold: 0,
         unlockedByDefault: true,
-        baseStats: HeroBaseStatsConfig(hp: 100, ki: 100, attack: 25, speed: 150),
+        baseStats: HeroBaseStatsConfig(hp: 340, ki: 100, attack: 25, speed: 150),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 14.0,
+          hpPerLevel: 24.0,
           kiPerLevel: 3.5,
           attackPerLevel: 2.2,
         ),
@@ -561,11 +592,11 @@ class GameAssetRegistry {
         classType: 'marksman',
         priceGold: 3000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 90, ki: 115, attack: 30, speed: 165),
+        baseStats: HeroBaseStatsConfig(hp: 250, ki: 115, attack: 14, speed: 165),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 10.0,
+          hpPerLevel: 15.0,
           kiPerLevel: 4.2,
-          attackPerLevel: 3.1,
+          attackPerLevel: 1.3,
         ),
         skillIds: ['ranger_multishot', 'ranger_trap_roll', 'ranger_star_rain'],
         sprites: HeroSpriteConfig(
@@ -581,11 +612,11 @@ class GameAssetRegistry {
         classType: 'tank',
         priceGold: 4000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 145, ki: 95, attack: 22, speed: 140),
+        baseStats: HeroBaseStatsConfig(hp: 440, ki: 95, attack: 18, speed: 140),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 20.0,
+          hpPerLevel: 30.0,
           kiPerLevel: 3.0,
-          attackPerLevel: 1.8,
+          attackPerLevel: 1.6,
         ),
         skillIds: [
           'tanker_shield_bash',
@@ -605,11 +636,11 @@ class GameAssetRegistry {
         classType: 'assassin',
         priceGold: 6000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 95, ki: 110, attack: 34, speed: 180),
+        baseStats: HeroBaseStatsConfig(hp: 280, ki: 110, attack: 28, speed: 180),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 10.5,
+          hpPerLevel: 18.0,
           kiPerLevel: 4.0,
-          attackPerLevel: 3.3,
+          attackPerLevel: 2.6,
         ),
         skillIds: [
           'ninja_shuriken_dash',
@@ -629,11 +660,11 @@ class GameAssetRegistry {
         classType: 'mage',
         priceGold: 7500,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 95, ki: 140, attack: 31, speed: 155),
+        baseStats: HeroBaseStatsConfig(hp: 260, ki: 150, attack: 15, speed: 160),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 11.0,
-          kiPerLevel: 5.5,
-          attackPerLevel: 2.9,
+          hpPerLevel: 16.0,
+          kiPerLevel: 6.0,
+          attackPerLevel: 1.4,
         ),
         skillIds: [
           'valeria_frost_lance',
@@ -653,17 +684,77 @@ class GameAssetRegistry {
         classType: 'marksman',
         priceGold: 8500,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 115, ki: 110, attack: 33, speed: 150),
+        baseStats: HeroBaseStatsConfig(hp: 450, ki: 105, attack: 20, speed: 145),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 13.5,
-          kiPerLevel: 3.8,
-          attackPerLevel: 3.0,
+          hpPerLevel: 32.0,
+          kiPerLevel: 3.5,
+          attackPerLevel: 1.8,
         ),
         skillIds: [
           'garrick_napalm_shot',
           'garrick_overclock_turret',
           'garrick_orbital_barrage',
         ],
+        sprites: HeroSpriteConfig(
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
+        ),
+      ),
+      const HeroAssetConfig(
+        id: 'nova_blade',
+        name: 'Nova Blade (NOVA-07) — Chiến Binh Neon',
+        role: 'Đấu Sĩ / Cơ Động',
+        classType: 'warrior',
+        priceGold: 1000,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(hp: 350, ki: 110, attack: 26, speed: 175),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 25.0,
+          kiPerLevel: 4.2,
+          attackPerLevel: 2.4,
+        ),
+        skillIds: ['nova_energy_slash', 'nova_shadow_dash', 'nova_quantum_burst'],
+        sprites: HeroSpriteConfig(
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
+        ),
+      ),
+      const HeroAssetConfig(
+        id: 'shadow_01',
+        name: 'Shadow (SHADOW-01) — Sát Thủ Hư Không',
+        role: 'Sát Thủ / Hư Không',
+        classType: 'assassin',
+        priceGold: 100,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(hp: 280, ki: 120, attack: 28, speed: 185),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 18.0,
+          kiPerLevel: 4.5,
+          attackPerLevel: 2.6,
+        ),
+        skillIds: ['shadow_plasma_shot', 'shadow_cyber_spin', 'shadow_phantom_dash'],
+        sprites: HeroSpriteConfig(
+          idleSheet: '',
+          runSheet: '',
+          attackSheet: '',
+        ),
+      ),
+      const HeroAssetConfig(
+        id: 'ember_02',
+        name: 'Ember (EMBER-02) — Phù Thủy Hỏa Cầu',
+        role: 'Pháp Sư / Hỏa Lực',
+        classType: 'mage',
+        priceGold: 100,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(hp: 260, ki: 145, attack: 15, speed: 160),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 16.0,
+          kiPerLevel: 5.8,
+          attackPerLevel: 1.4,
+        ),
+        skillIds: ['ember_fireball', 'ember_flame_pillar', 'ember_supernova'],
         sprites: HeroSpriteConfig(
           idleSheet: '',
           runSheet: '',
