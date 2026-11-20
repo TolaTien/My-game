@@ -1,7 +1,11 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+
 import '../core/stat_growth_formula.dart';
 import 'pvp_match.dart';
+
+import '../core/companion_catalog.dart';
 
 class PlayerProfile {
   final String playerName;
@@ -44,11 +48,14 @@ class PlayerProfile {
     this.heroExp = const {'george': 0},
     this.friendIds = const [],
     // ignore: prefer_initializing_formals
-  })  : _rankStars = rankStars,
-        // ignore: prefer_initializing_formals
-        _isChallengerTop10 = isChallengerTop10;
+  }) : _rankStars = rankStars,
+       // ignore: prefer_initializing_formals
+       _isChallengerTop10 = isChallengerTop10;
 
-  factory PlayerProfile.defaultProfile({String? playerCode, String? playerName}) {
+  factory PlayerProfile.defaultProfile({
+    String? playerCode,
+    String? playerName,
+  }) {
     final rand = 1000 + Random().nextInt(8999);
     final code = playerCode ?? 'GR$rand';
     final name = playerName ?? 'Chiến Binh #$rand';
@@ -62,8 +69,7 @@ class PlayerProfile {
   }
 
   /// Tổng số sao tích lũy áp dụng chung cho cả 3 chế độ 1v1, 2v2, 4v4
-  int get rankStars =>
-      _rankStars ?? PvpRankSystem.totalStarsFromRp(rankPoints);
+  int get rankStars => _rankStars ?? PvpRankSystem.totalStarsFromRp(rankPoints);
 
   /// Số sao hiện tại trong bậc Rank:
   /// - Đồng -> Kim Cương: 0, 1, 2 (trên 3 sao để lên bậc tiếp theo)
@@ -260,8 +266,7 @@ class PlayerProfile {
       serverRank: serverRank ?? this.serverRank,
       unlockedHeroIds: unlockedHeroIds ?? this.unlockedHeroIds,
       selectedHeroId: selectedHeroId ?? this.selectedHeroId,
-      unlockedCompanionIds:
-          unlockedCompanionIds ?? this.unlockedCompanionIds,
+      unlockedCompanionIds: unlockedCompanionIds ?? this.unlockedCompanionIds,
       selectedCompanionId: clearCompanion
           ? null
           : (selectedCompanionId ?? this.selectedCompanionId),
@@ -336,11 +341,18 @@ class PlayerProfile {
       rankStars: parsedStars,
       isChallengerTop10: parsedChallenger,
       serverRank: parsedServerRank,
-      unlockedHeroIds: parseStringList(json['unlockedHeroIds'], const ['george']),
+      unlockedHeroIds: parseStringList(json['unlockedHeroIds'], const [
+        'george',
+      ]),
       selectedHeroId: json['selectedHeroId'] as String? ?? 'george',
-      unlockedCompanionIds:
-          parseStringList(json['unlockedCompanionIds'], const []),
-      selectedCompanionId: json['selectedCompanionId'] as String?,
+      unlockedCompanionIds: parseStringList(
+        json['unlockedCompanionIds'],
+        const [],
+      ).where(availableCompanionIds.contains).toList(),
+      selectedCompanionId:
+          availableCompanionIds.contains(json['selectedCompanionId'])
+          ? json['selectedCompanionId'] as String?
+          : null,
       lastSpinTimestamp: (json['lastSpinTimestamp'] as num?)?.toInt() ?? 0,
       heroLevels: parseIntMap(json['heroLevels'], const {'george': 1}),
       heroExp: parseIntMap(json['heroExp'], const {'george': 0}),

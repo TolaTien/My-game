@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'companion_texture.dart';
 
 /// Bộ nhớ đệm (Cache) nạp trực tiếp `ui.Image` đã tách nền bảo toàn viền đen từ `assets/images/`
 /// để render đồng nhất 100% giữa Cửa Hàng (Shop), Sảnh Chờ (Lobby) và Trong Trận (Flame Canvas),
@@ -17,6 +18,8 @@ class SpriteImageCache {
   final Map<String, ui.Image> _heroSkillSheetImages = {};
   final Map<String, List<ui.Image>> _frameSequences = {};
   final Map<String, ui.Image> _companionImages = {};
+  final Map<String, ui.Image> _companionIdleSheets = {};
+  final Map<String, ui.Image> _companionRunSheets = {};
   final Map<String, ui.Image> _skillImages = {};
   final Map<String, ui.Image> _mapImages = {};
   final Map<String, ui.Image> _rawPathCache = {};
@@ -141,7 +144,6 @@ class SpriteImageCache {
     'aegis_x9': 'assets/images/companions/aegis_x9.png',
     'cyber_drone': 'assets/images/companions/cyber_drone.png',
     'pyro_frost_dragon': 'assets/images/companions/pyro_frost_dragon.png',
-    'gem_tumbler': 'assets/images/companions/gem_tumbler.png',
     'luna_fox': 'assets/images/companions/luna_fox.png',
     'orbit_03': 'assets/images/companions/orbit_03.png',
   };
@@ -260,6 +262,34 @@ class SpriteImageCache {
       unawaited(
         _loadIntoCache(path, (img) => _companionImages[companionId] = img),
       );
+    }
+    return null;
+  }
+
+  /// Original portraits remain separate from animation sheets.
+  ui.Image? getCompanionIdleSheet(String companionId) {
+    if (companionId != 'luna_fox' && companionId != 'pyro_frost_dragon') return null;
+    final cached = _companionIdleSheets[companionId];
+    if (cached != null) return cached;
+    final key = 'comp_idle_$companionId';
+    if (_loadingKeys.add(key)) {
+      unawaited(_loadIntoCache(
+        companionId == 'luna_fox'
+            ? 'assets/images/companions/luna_fox_idle_v2.png'
+            : 'assets/images/companions/pyro_frost_dragon_fly_v2.png',
+        (image) => _companionIdleSheets[companionId] = image,
+      ));
+    }
+    return null;
+  }
+
+  ui.Image? getCompanionRunSheet(String companionId) {
+    if (companionId != 'luna_fox') return null;
+    final cached = _companionRunSheets[companionId];
+    if (cached != null) return cached;
+    if (_loadingKeys.add('comp_run_$companionId')) {
+      unawaited(_loadIntoCache('assets/images/companions/luna_fox_run_v2.png',
+          (image) => _companionRunSheets[companionId] = image));
     }
     return null;
   }
@@ -455,8 +485,17 @@ class SpriteImageCache {
       final data = await rootBundle.load(assetPath);
       final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
       final frame = await codec.getNextFrame();
-      _rawPathCache[assetPath] = frame.image;
-      onLoaded(frame.image);
+      codec.dispose();
+      var image = frame.image;
+      if (assetPath.contains('/companions/') &&
+          !assetPath.endsWith('_idle_v2.png') && !assetPath.endsWith('_run_v2.png') &&
+          !assetPath.endsWith('_fly_v2.png')) {
+        image = await cleanCompanionTexture(frame.image,
+            fox: assetPath.endsWith('/luna_fox.png'));
+        if (!identical(image, frame.image)) frame.image.dispose();
+      }
+      _rawPathCache[assetPath] = image;
+      onLoaded(image);
     } catch (_) {
       final altPath = assetPath.contains('/Ember-')
           ? assetPath.replaceAll('/Ember-', '/ember-')

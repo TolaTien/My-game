@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/stat_growth_formula.dart';
+import '../core/companion_catalog.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
 import 'friend_party_service.dart';
@@ -307,6 +308,7 @@ class PlayerStorage {
 
   /// Mở khóa Trợ thủ AI
   static Future<bool> unlockCompanion(String companionId, int price) async {
+    if (!availableCompanionIds.contains(companionId)) return false;
     if (currentProfile.unlockedCompanionIds.contains(companionId)) return true;
     if (currentProfile.gold < price) return false;
 
@@ -323,6 +325,7 @@ class PlayerStorage {
 
   /// Trang bị / Gỡ trợ thủ AI
   static Future<void> selectCompanion(String? companionId) async {
+    if (companionId != null && !availableCompanionIds.contains(companionId)) return;
     final updated = currentProfile.copyWith(
       selectedCompanionId: companionId,
       clearCompanion: companionId == null,

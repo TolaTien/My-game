@@ -585,16 +585,6 @@ class _ShopDialogState extends State<ShopDialog>
         spriteAsset: 'assets/images/companions/pyro_frost_dragon.png',
       ),
       _CompanionItem(
-        id: 'gem_tumbler',
-        name: 'Gem-Tumbler',
-        tag: 'TINH THỂ HOÀNG KIM (ASSET 3)',
-        description: 'Phun vụn đá gây choáng; kích hoạt Hoàng Kim Chấn hút vàng từ xa & tăng 30% giáp.',
-        price: 850,
-        color: const Color(0xFFFFB300),
-        icon: Icons.hexagon_rounded,
-        spriteAsset: 'assets/images/companions/gem_tumbler.png',
-      ),
-      _CompanionItem(
         id: 'luna_fox',
         name: 'Hồ Ly Luna',
         tag: 'PET FOX (ASSET 2)',
