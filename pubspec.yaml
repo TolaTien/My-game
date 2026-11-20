@@ -30,6 +30,7 @@ flutter:
   assets:
     - assets/data/
     - assets/images/
+    - assets/images/companions/
     - assets/images/heroes/
     - assets/images/heroes/nova/
     - assets/images/heroes/ember/

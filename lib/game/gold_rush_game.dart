@@ -219,6 +219,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _cleanupFloorEntities() {
+    companion?.resetForFloor();
     for (final e in List<ZombieEnemy>.from(enemies)) {
       if (e.isMounted) e.removeFromParent();
     }
@@ -649,6 +650,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
 
   /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ (Trường Trọng Lực Hoàng Kim - Aegis-X9)
   void onCompanionSkill() {
+    if (activeProfile.selectedCompanionId == null || player.currentHp <= 0 || isGameOverTriggered || isVictoryTriggered) return;
     companion ??= CompanionComponent(
       companionId: activeProfile.selectedCompanionId ?? 'aegis_x9',
       player: player,

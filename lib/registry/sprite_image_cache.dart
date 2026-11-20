@@ -137,7 +137,14 @@ class SpriteImageCache {
 
   static const Map<String, String> heroSkillSheetPaths = {};
 
-  static const Map<String, String> companionSpritePaths = {};
+  static const Map<String, String> companionSpritePaths = {
+    'aegis_x9': 'assets/images/companions/aegis_x9.png',
+    'cyber_drone': 'assets/images/companions/cyber_drone.png',
+    'pyro_frost_dragon': 'assets/images/companions/pyro_frost_dragon.png',
+    'gem_tumbler': 'assets/images/companions/gem_tumbler.png',
+    'luna_fox': 'assets/images/companions/luna_fox.png',
+    'orbit_03': 'assets/images/companions/orbit_03.png',
+  };
 
   static const Map<String, String> skillEffectPaths = {
     'nova_blade_1': 'assets/images/skills/nova_energy_slash.png',

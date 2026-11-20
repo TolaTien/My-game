@@ -70,7 +70,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double berserkTimer = 0.0;
 
   // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
-  double damageAbsorption = 0.0;
+  double _baseDamageAbsorption = 0.0;
+  double temporaryPetDamageAbsorption = 0.0;
+  double get damageAbsorption => max(_baseDamageAbsorption, goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0);
+  set damageAbsorption(double value) => _baseDamageAbsorption = value;
   double goldenShieldTimer = 0.0;
   double get shieldHp => goldenShieldTimer > 0
       ? 50.0
@@ -162,6 +165,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       goldenShieldTimer -= dt;
       if (goldenShieldTimer <= 0) {
         goldenShieldTimer = 0.0;
+        temporaryPetDamageAbsorption = 0.0;
       }
     }
 

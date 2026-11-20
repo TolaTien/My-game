@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/player_profile.dart';
 import '../services/player_storage.dart';
 import '../core/constants.dart';
@@ -33,7 +34,9 @@ class _ShopDialogState extends State<ShopDialog>
           message,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: isSuccess ? Colors.green.shade800 : Colors.red.shade800,
+        backgroundColor: isSuccess
+            ? Colors.green.shade800
+            : Colors.red.shade800,
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
@@ -47,7 +50,10 @@ class _ShopDialogState extends State<ShopDialog>
       builder: (context, profile, _) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 14,
+          ),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 760, maxHeight: 420),
             decoration: BoxDecoration(
@@ -73,12 +79,17 @@ class _ShopDialogState extends State<ShopDialog>
               children: [
                 // 1. THANH TIÊU ĐỀ & TIỀN TỆ
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.storefront_rounded,
-                          color: Colors.amberAccent, size: 26),
+                      const Icon(
+                        Icons.storefront_rounded,
+                        color: Colors.amberAccent,
+                        size: 26,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'CỬA HÀNG VẬT PHẨM',
@@ -151,8 +162,10 @@ class _ShopDialogState extends State<ShopDialog>
                       // Nút đóng
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded,
-                            color: Colors.white70),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ],
@@ -232,7 +245,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Shadow (SHADOW-01)',
         subtitle: 'Sát Thủ Hư Không',
         role: 'SÁT THỦ / HƯ KHÔNG',
-        description: 'Plasma xuyên thấu, lướt bóng hư không, xoay bão dao găm bạo kích.',
+        description:
+            'Plasma xuyên thấu, lướt bóng hư không, xoay bão dao găm bạo kích.',
         color: const Color(0xFF9C27B0),
         icon: Icons.nights_stay_rounded,
         portraitAsset: 'assets/images/heroes/shadow_01_portrait.png',
@@ -264,7 +278,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Xạ Thủ Ranger',
         subtitle: 'Cung Thủ Tầm Xa',
         role: 'TẦM XA / CƠ ĐỘNG',
-        description: 'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
+        description:
+            'Bắn tên ánh sáng xuyên giáp, tốc độ lướt thả diều kiting.',
         color: const Color(0xFF00E676),
         icon: Icons.gps_fixed_rounded,
         portraitAsset: 'assets/images/heroes/ranger_portrait.png',
@@ -274,7 +289,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Hiệp Sĩ Tanker',
         subtitle: 'Hộ Vệ Hoàng Gia',
         role: 'PHÒNG THỦ / PHẢN ĐÒN',
-        description: 'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
+        description:
+            'Khiên hộ mệnh hấp thụ sát thương, khóa đòn tấn công quái.',
         color: const Color(0xFF00B0FF),
         icon: Icons.security_rounded,
         portraitAsset: 'assets/images/heroes/tanker_portrait.png',
@@ -284,7 +300,8 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Ninja Sát Thủ',
         subtitle: 'Bóng Đêm Hắc Ám',
         role: 'CHÍ MẠNG / ÁM SÁT',
-        description: 'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
+        description:
+            'Phi tiêu lôi điện, lướt tàng hình, sát thương bạo kích đỉnh cao.',
         color: const Color(0xFFAB47BC),
         icon: Icons.flash_on_rounded,
         portraitAsset: 'assets/images/heroes/ninja_portrait.png',
@@ -310,8 +327,8 @@ class _ShopDialogState extends State<ShopDialog>
               color: isSelected
                   ? Colors.amberAccent
                   : isUnlocked
-                      ? Colors.white24
-                      : Colors.white12,
+                  ? Colors.white24
+                  : Colors.white12,
               width: isSelected ? 2.5 : 1,
             ),
             boxShadow: isSelected
@@ -319,7 +336,7 @@ class _ShopDialogState extends State<ShopDialog>
                     BoxShadow(
                       color: Colors.amberAccent.withValues(alpha: 0.3),
                       blurRadius: 10,
-                    )
+                    ),
                   ]
                 : null,
           ),
@@ -334,9 +351,7 @@ class _ShopDialogState extends State<ShopDialog>
                 decoration: BoxDecoration(
                   color: hero.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: hero.color.withValues(alpha: 0.5),
-                  ),
+                  border: Border.all(color: hero.color.withValues(alpha: 0.5)),
                 ),
                 child: hero.portraitAsset != null
                     ? Image.asset(
@@ -474,15 +489,19 @@ class _ShopDialogState extends State<ShopDialog>
                       const price = GameConstants.heroUnlockPrice;
                       if (profile.gold < price) {
                         _showNotification(
-                            'Bạn không đủ Vàng! Cần 100 Vàng để mở khóa.',
-                            isSuccess: false);
+                          'Bạn không đủ Vàng! Cần 100 Vàng để mở khóa.',
+                          isSuccess: false,
+                        );
                         return;
                       }
                       final success = await PlayerStorage.unlockHero(
-                          hero.id, price);
+                        hero.id,
+                        price,
+                      );
                       if (success) {
                         _showNotification(
-                            'Mở khóa thành công ${hero.name} (-100 Vàng)!');
+                          'Mở khóa thành công ${hero.name} (-100 Vàng)!',
+                        );
                       }
                     },
                     icon: const Icon(Icons.monetization_on_rounded, size: 14),
@@ -510,7 +529,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'comp_attack',
         name: 'Trợ Thủ Công Kích',
         tag: 'ATTACK DRONE',
-        description: 'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
+        description:
+            'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
         price: 500,
         color: const Color(0xFFFF5252),
         icon: Icons.rocket_launch_rounded,
@@ -528,7 +548,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'comp_control',
         name: 'Trợ Thủ Khống Chế',
         tag: 'FROST DRONE',
-        description: 'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
+        description:
+            'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
         price: 700,
         color: const Color(0xFF18FFFF),
         icon: Icons.ac_unit_rounded,
@@ -536,17 +557,68 @@ class _ShopDialogState extends State<ShopDialog>
       _CompanionItem(
         id: 'aegis_x9',
         name: 'Aegis-X9 Lôi Từ',
-        tag: 'GOLDEN SPIRIT',
+        tag: 'GOLDEN SPIRIT (ASSET 4)',
         description: 'Lõi bát diện Hoàng Kim: Hút vàng 120px, bắn tia Laser & mở Trường Trọng Lực + Khiên Vàng.',
         price: 800,
         color: const Color(0xFFFFD700),
         icon: Icons.auto_awesome_rounded,
+        spriteAsset: 'assets/images/companions/aegis_x9.png',
+      ),
+      _CompanionItem(
+        id: 'cyber_drone',
+        name: 'Cyber Drone (PIXEL-01)',
+        tag: 'SUPPORT • UTILITY (ASSET 1 & 2)',
+        description: 'Drone sừng trắng mắt lam: Bắn đạn Plasma, hồi máu đồng minh & bật Khiên Cầu Năng Lượng.',
+        price: 650,
+        color: const Color(0xFF00E5FF),
+        icon: Icons.smart_toy_rounded,
+        spriteAsset: 'assets/images/companions/cyber_drone.png',
+      ),
+      _CompanionItem(
+        id: 'pyro_frost_dragon',
+        name: 'Pyro-Frost Dragon',
+        tag: 'RỒNG BĂNG HỎA 2 ĐẦU (ASSET 3)',
+        description: 'Phun lửa & tuyết xen kẽ; kích hoạt Hơi Thở Bão Tố đóng băng kẻ địch và buff khiên lửa.',
+        price: 900,
+        color: const Color(0xFFFF5252),
+        icon: Icons.whatshot_rounded,
+        spriteAsset: 'assets/images/companions/pyro_frost_dragon.png',
+      ),
+      _CompanionItem(
+        id: 'gem_tumbler',
+        name: 'Gem-Tumbler',
+        tag: 'TINH THỂ HOÀNG KIM (ASSET 3)',
+        description: 'Phun vụn đá gây choáng; kích hoạt Hoàng Kim Chấn hút vàng từ xa & tăng 30% giáp.',
+        price: 850,
+        color: const Color(0xFFFFB300),
+        icon: Icons.hexagon_rounded,
+        spriteAsset: 'assets/images/companions/gem_tumbler.png',
+      ),
+      _CompanionItem(
+        id: 'luna_fox',
+        name: 'Hồ Ly Luna',
+        tag: 'PET FOX (ASSET 2)',
+        description: 'Linh thú Hồ Ly trắng xanh: Bắn cầu linh lực băng lam làm chậm quái và hồi Ki.',
+        price: 750,
+        color: const Color(0xFF80D8FF),
+        icon: Icons.pets_rounded,
+        spriteAsset: 'assets/images/companions/luna_fox.png',
+      ),
+      _CompanionItem(
+        id: 'orbit_03',
+        name: 'ORBIT-03 Drone',
+        tag: 'MECH SPHERE (ASSET 2)',
+        description: 'Cầu cơ khí Hoàng Kim bắn tia laser năng lượng tốc độ cao liên hoàn.',
+        price: 700,
+        color: const Color(0xFFFFAB00),
+        icon: Icons.radar_rounded,
+        spriteAsset: 'assets/images/companions/orbit_03.png',
       ),
     ];
 
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: companions.length,
       itemBuilder: (context, index) {
         final comp = companions[index];
@@ -563,8 +635,8 @@ class _ShopDialogState extends State<ShopDialog>
               color: isEquipped
                   ? Colors.amberAccent
                   : isUnlocked
-                      ? Colors.cyanAccent.withValues(alpha: 0.5)
-                      : Colors.white12,
+                  ? Colors.cyanAccent.withValues(alpha: 0.5)
+                  : Colors.white12,
               width: isEquipped ? 2 : 1,
             ),
           ),
@@ -580,9 +652,18 @@ class _ShopDialogState extends State<ShopDialog>
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: comp.color.withValues(alpha: 0.4)),
                 ),
-                child: Center(
-                  child: Icon(comp.icon, color: comp.color, size: 40),
-                ),
+                child: comp.spriteAsset != null
+                    ? Image.asset(
+                        comp.spriteAsset!,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.none,
+                        errorBuilder: (_, _, _) => Center(
+                          child: Icon(comp.icon, color: comp.color, size: 40),
+                        ),
+                      )
+                    : Center(
+                        child: Icon(comp.icon, color: comp.color, size: 40),
+                      ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -632,7 +713,10 @@ class _ShopDialogState extends State<ShopDialog>
                     },
                     child: const Text(
                       'GỠ TRANG BỊ',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -654,7 +738,10 @@ class _ShopDialogState extends State<ShopDialog>
                     },
                     child: const Text(
                       'TRANG BỊ',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -672,15 +759,20 @@ class _ShopDialogState extends State<ShopDialog>
                     ),
                     onPressed: () async {
                       if (profile.gold < comp.price) {
-                        _showNotification('Không đủ Vàng để mua trợ thủ!',
-                            isSuccess: false);
+                        _showNotification(
+                          'Không đủ Vàng để mua trợ thủ!',
+                          isSuccess: false,
+                        );
                         return;
                       }
                       final success = await PlayerStorage.unlockCompanion(
-                          comp.id, comp.price);
+                        comp.id,
+                        comp.price,
+                      );
                       if (success) {
                         _showNotification(
-                            'Đã mở khóa ${comp.name} (-${comp.price} Vàng)!');
+                          'Đã mở khóa ${comp.name} (-${comp.price} Vàng)!',
+                        );
                       }
                     },
                     icon: const Icon(Icons.monetization_on_rounded, size: 14),
@@ -700,6 +792,8 @@ class _ShopDialogState extends State<ShopDialog>
       },
     );
   }
+
+  // --- TAB 3: TRANG PHỤC (SKINS - THUẦN THẨM MỸ, FAIR PLAY) ---
 }
 
 class _CurrencyBadge extends StatelessWidget {
@@ -715,8 +809,10 @@ class _CurrencyBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatted =
-        value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final formatted = value.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -773,6 +869,7 @@ class _CompanionItem {
   final int price;
   final Color color;
   final IconData icon;
+  final String? spriteAsset;
 
   const _CompanionItem({
     required this.id,
@@ -782,5 +879,6 @@ class _CompanionItem {
     required this.price,
     required this.color,
     required this.icon,
+    this.spriteAsset,
   });
 }
