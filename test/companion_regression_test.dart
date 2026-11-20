@@ -24,6 +24,46 @@ Future<int> beamAlpha(CompanionComponent pet) async {
 }
 
 void main() {
+  test(
+    'Fox runs toward its ground follow point then rests without orbiting',
+    () {
+      final player = PlayerComponent(position: Vector2(100, 100));
+      final fox = CompanionComponent(companionId: 'luna_fox', player: player);
+      fox.position.setValues(68, 112);
+      for (var i = 0; i < 120; i++) {
+        fox.update(1 / 60);
+      }
+      expect(fox.position.x, closeTo(68, .01));
+      expect(fox.position.y, closeTo(112, .01));
+      expect(fox.isFoxRunning, isFalse);
+      player.position.x += 80;
+      player.moveDirection.setValues(1, 0);
+      final previous = fox.position.clone();
+      fox.update(1 / 60);
+      expect(fox.isFoxRunning, isTrue);
+      expect(fox.position.x, greaterThan(previous.x));
+      expect(fox.position.distanceTo(previous), lessThan(10));
+      player.moveDirection.setZero();
+      for (var i = 0; i < 180; i++) {
+        fox.update(1 / 60);
+      }
+      expect(fox.isFoxRunning, isFalse);
+      expect(fox.position.distanceTo(Vector2(148, 112)), lessThanOrEqualTo(2));
+      final resting = fox.position.clone();
+      for (var i = 0; i < 120; i++) {
+        fox.update(1 / 60);
+      }
+      expect(fox.position.distanceTo(resting), 0);
+      player.position.x += 60;
+      fox.update(.016);
+      expect(fox.isFoxRunning, isTrue);
+      fox.resetForFloor();
+      expect(fox.isFoxRunning, isFalse);
+      player.currentHp = 0;
+      fox.update(.016);
+      expect(fox.isFoxRunning, isFalse);
+    },
+  );
   for (final entry in {
     'orbit_03': 0.0,
     'luna_fox': 0.0,
@@ -83,6 +123,15 @@ void main() {
   testWidgets(
     'Restored companion sprites retain lasers and automatic projectile damage',
     (tester) async {
+      // Decode/filter textures with real asynchronous image I/O before mounting.
+      await tester.runAsync(() async {
+        for (final id in ['aegis_x9', 'orbit_03']) {
+          for (var i = 0; i < 200; i++) {
+            if (SpriteImageCache.instance.getCompanionImage(id) != null) break;
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          }
+        }
+      });
       final game = GoldRushGame(
         playerProfile: const PlayerProfile(selectedCompanionId: 'aegis_x9'),
         selectedMapConfig: GameAssetRegistry.defaultSanctumMap,

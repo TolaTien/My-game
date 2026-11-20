@@ -47,21 +47,6 @@
       "useProceduralFallback": true
     },
     {
-      "id": "gem_tumbler",
-      "name": "Gem-Tumbler — Tinh Thể Hoàng Kim",
-      "role": "Geo Guardian (Asset 3)",
-      "type": "hybrid",
-      "priceGold": 850,
-      "autoAttackInterval": 1.3,
-      "autoAttackRange": 190.0,
-      "damageRatio": 0.16,
-      "activeSkillName": "Hoàng Kim Chấn",
-      "activeSkillCooldown": 14.0,
-      "activeSkillDescription": "Phun vụn đá gây choáng; phát hào quang vàng hút quặng/tiền vàng từ xa và tăng 30% giáp.",
-      "spriteSheet": "assets/images/companions/gem_tumbler.png",
-      "useProceduralFallback": true
-    },
-    {
       "id": "luna_fox",
       "name": "Luna — Hồ Ly Tinh Linh",
       "role": "Pet Fox • Linh Thú (Asset 2)",

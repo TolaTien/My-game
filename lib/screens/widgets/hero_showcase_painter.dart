@@ -1,13 +1,17 @@
 import 'dart:math';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+
 import '../../registry/sprite_image_cache.dart';
+import 'lobby_companion.dart';
 
 class HeroShowcaseWidget extends StatefulWidget {
   final String heroId;
   final Color themeColor;
   final double width;
   final double height;
+  final String? companionId;
 
   const HeroShowcaseWidget({
     super.key,
@@ -15,6 +19,7 @@ class HeroShowcaseWidget extends StatefulWidget {
     required this.themeColor,
     this.width = 260,
     this.height = 270,
+    this.companionId,
   });
 
   @override
@@ -48,13 +53,31 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
         return SizedBox(
           width: widget.width,
           height: widget.height,
-          child: CustomPaint(
-            painter: _HeroCanvasPainter(
-              heroId: widget.heroId,
-              themeColor: widget.themeColor,
-              time: _animController.value * 2 * pi,
-              animProgress: _animController.value,
-            ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _HeroCanvasPainter(
+                    heroId: widget.heroId,
+                    themeColor: widget.themeColor,
+                    time: _animController.value * 2 * pi,
+                    animProgress: _animController.value,
+                  ),
+                ),
+              ),
+              if (widget.companionId != null)
+                Positioned(
+                  right: -widget.width * .18,
+                  bottom: widget.height * (widget.companionId == 'luna_fox' ? .02 : .21),
+                  width: widget.width * .30,
+                  height: widget.height * .35,
+                  child: LobbyCompanion(
+                    key: ValueKey(widget.companionId),
+                    companionId: widget.companionId!,
+                  ),
+                ),
+            ],
           ),
         );
       },

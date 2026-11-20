@@ -4,6 +4,8 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
+import '../rendering/fox_spirit_visual.dart';
+import '../rendering/dragon_spirit_visual.dart';
 import '../gold_rush_game.dart';
 import 'player.dart';
 import 'enemy_zombie.dart';
@@ -44,7 +46,6 @@ extension CompanionTypeExtension on CompanionType {
       case 'aegis_x9':
       case 'comp_aegis':
       case 'aegis':
-      case 'gem_tumbler':
         return CompanionType.aegisX9;
       default:
         return null;
@@ -90,6 +91,11 @@ class CompanionComponent extends PositionComponent
   double orbitAngle = 0.0;
   final double orbitSpeed = 1.5; // rad/s
   double bobbingTimer = 0.0;
+  bool _foxRunning = false;
+  bool _foxFacingRight = true;
+  double _foxRunTime = 0;
+  final Vector2 _foxTravelDirection = Vector2(1, 0);
+  bool get isFoxRunning => companionId == 'luna_fox' && _foxRunning;
 
   // Bộ đếm hành động đánh thường
   double actionCooldown = 0.0;
@@ -119,6 +125,11 @@ class CompanionComponent extends PositionComponent
   Future<void> onLoad() async {
     await super.onLoad();
     position = player.position + Vector2(orbitRadius, 0);
+    if (companionId == 'luna_fox') {
+      _foxFacingRight = player.isFacingRight;
+      _foxTravelDirection.setValues(player.isFacingRight ? 1 : -1, 0);
+      position.setFrom(player.position - _foxTravelDirection * 32 + Vector2(0, 12));
+    }
 
     // Kích hoạt khiên bảo vệ 30% cho Player nếu là Shield Drone
     if (type == CompanionType.shield) {
@@ -168,6 +179,11 @@ class CompanionComponent extends PositionComponent
     lockedTarget = null;
     actionCooldown = specialSkillCooldown = overdriveTimer = 0.0;
     position = player.position + Vector2(orbitRadius, 0);
+    _foxRunning = false;
+    _foxRunTime = 0;
+    if (companionId == 'luna_fox') {
+      position.setFrom(player.position - _foxTravelDirection * 32 + Vector2(0, 12));
+    }
   }
 
   void _restoreAllSlowedEnemies() {
@@ -232,6 +248,7 @@ class CompanionComponent extends PositionComponent
     }
     if (player.currentHp <= 0) {
       lockedTarget = null;
+      _foxRunning = false;
       return;
     }
 
@@ -239,7 +256,9 @@ class CompanionComponent extends PositionComponent
     orbitAngle = (orbitAngle + orbitSpeed * dt) % (2 * pi);
     bobbingTimer += dt;
 
-    if (type == CompanionType.aegisX9) {
+    if (companionId == 'luna_fox') {
+      _followFoxOnGround(dt);
+    } else if (type == CompanionType.aegisX9) {
       // Aegis-X9: Bay lơ lửng lệch sau vai phải với nội suy lò xo (Spring Damping) chuẩn assets_guid.md
       final shoulderOffset = Vector2(player.isFacingRight ? -28.0 : 28.0, -22.0 + cos(bobbingTimer * 4.0) * 3.0);
       final targetPos = player.position + shoulderOffset;
@@ -270,6 +289,26 @@ class CompanionComponent extends PositionComponent
   }
 
   // --- ARCHETYPE 4: AEGIS-X9 TINH LINH LÔI TỪ ---
+  void _followFoxOnGround(double dt) {
+    if (dt <= 0) return;
+    if (!player.moveDirection.isZero()) {
+      _foxTravelDirection.setFrom(player.moveDirection.normalized());
+    }
+    final target = player.position - _foxTravelDirection * 32 + Vector2(0, 12);
+    final delta = target - position;
+    final distance = delta.length;
+    // Hysteresis prevents flickering between run/idle around the stop point.
+    if (distance > 9) _foxRunning = true;
+    if (distance <= 2) _foxRunning = false;
+    if (!_foxRunning) return;
+    final step = min(distance, max(100.0, player.speed * 1.25) * dt);
+    final movement = delta / distance * step;
+    position.add(movement);
+    if (movement.x.abs() > .05) _foxFacingRight = movement.x > 0;
+    _foxRunTime += dt;
+    if (step >= distance) _foxRunning = false;
+  }
+
   void _updateAegisX9(double dt) {
     if (!isMounted) return;
 
@@ -483,6 +522,29 @@ class CompanionComponent extends PositionComponent
       }
     }
 
+    if (companionId == 'pyro_frost_dragon') {
+      final sheet = SpriteImageCache.instance.getCompanionIdleSheet(companionId);
+      if (sheet != null) {
+        DragonSpiritVisual.draw(canvas, sheet, center: droneCenter, width: 52,
+            seconds: bobbingTimer, facingRight: player.isFacingRight,
+            empowered: overdriveTimer > 0);
+        return;
+      }
+    }
+    if (companionId == 'luna_fox') {
+      FoxSpiritVisual.drawAura(canvas, center: droneCenter,
+          seconds: bobbingTimer, empowered: overdriveTimer > 0);
+      final idle = SpriteImageCache.instance.getCompanionIdleSheet(companionId);
+      final run = SpriteImageCache.instance.getCompanionRunSheet(companionId);
+      final sheet = _foxRunning ? (run ?? idle) : idle;
+      if (sheet != null) {
+        FoxSpiritVisual.drawSprite(canvas, sheet,
+            center: droneCenter + Offset(0, _foxRunning && run != null ? 2 : 0),
+            width: 42, seconds: _foxRunning ? _foxRunTime : bobbingTimer,
+            facingRight: _foxFacingRight, running: _foxRunning && run != null);
+        return;
+      }
+    }
     final compSprite = SpriteImageCache.instance.getCompanionImage(companionId);
     if (compSprite != null) {
       final srcRect = Rect.fromLTWH(
