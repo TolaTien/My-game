@@ -470,7 +470,7 @@ class GameAssetRegistry {
     for (final m in _maps.values) {
       if (m.stage == stage) return m;
     }
-    return _maps['sunken_golden_sanctum'] ?? defaultSanctumMap;
+    return _maps.values.firstOrNull ?? defaultSanctumMap;
   }
 
   /// Nạp toàn bộ file cấu hình từ `assets/data/*.json`

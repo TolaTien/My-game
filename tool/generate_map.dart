@@ -1215,31 +1215,22 @@ class MapImageRenderer {
       final rng = Random(map.seed);
       final palette = ThemePalette.forTheme(map.theme);
 
-      // 1. Vẽ nền gạch và hoa văn theo theme
-      _renderFloorTiles(buf, map, rng, palette);
+      // 1. Sàn đá tự nhiên theo chủ đề (không có vạch trầy xước bừa bãi)
+      _renderNaturalFloor(buf, map, rng, palette);
 
-      // 2. Vẽ các đường mạch năng lượng / dung nham / dây leo uốn lượn xuyên suốt bản đồ
-      _renderEnvironmentalVeins(buf, map, rng, palette);
+      // 2. Địa hình môi trường tự nhiên (vũng dung nham hữu cơ, sông băng, mảng rêu phong)
+      _renderOrganicTerrainFeatures(buf, map, rng, palette);
 
-      // 3. Vẽ tường ranh giới bản đồ (Outer Border)
+      // 3. Hiệu ứng ánh sáng điện ảnh (Cinematic Vignette) tạo chiều sâu sân khấu
+      _renderCinematicVignette(buf, width, height);
+
+      // 4. Tường ranh giới đấu trường (Outer Border Parapet)
       _renderBorderWalls(buf, map, palette);
 
-      // 4. Vẽ chướng ngại vật & cột đá (Obstacles) khớp 100% với mapConfig
+      // 5. Cột đá & Chướng ngại vật 3D đồ sộ (Obstacle Monoliths)
       _renderObstacles(buf, map, rng, palette);
 
-      // 5. Vẽ Vùng Xuất Phát Người Chơi (Player Spawn Crest)
-      _renderPlayerSpawnZone(buf, map, palette);
-
-      // 6. Vẽ Đấu Trường Triệu Hồi Boss (Boss Arena Seal)
-      _renderBossSpawnZone(buf, map, palette);
-
-      // 7. Vẽ Cổng Quái Vật (Monster Portals)
-      _renderMonsterPortals(buf, map, palette);
-
-      // 8. Vẽ Điểm Buff / Đài Báu Vật (Buff Nodes)
-      _renderBuffNodes(buf, map, palette);
-
-      // 9. Mã hóa sang PNG và ghi ra file
+      // 6. Mã hóa sang PNG và ghi ra file
       final pngBytes = PngEncoder.encodeRgba(width, height, buf.pixels);
       final outFile = File(outputPath);
       outFile.parent.createSync(recursive: true);
@@ -1251,7 +1242,8 @@ class MapImageRenderer {
     }
   }
 
-  static void _renderFloorTiles(
+  /// Vẽ sàn đá tự nhiên cao cấp với biến thiên sắc độ & đường chỉ vát cạnh
+  static void _renderNaturalFloor(
     ImageBuffer buf,
     GeneratedMapData map,
     Random rng,
@@ -1263,64 +1255,136 @@ class MapImageRenderer {
         final px = c * ts;
         final py = r * ts;
         final isAlt = (c + r) % 2 == 1;
-        final col = isAlt ? pal.floorAlt : pal.floorBase;
 
-        // Đổ màu sàn
-        buf.fillRect(px, py, ts, ts, col.r, col.g, col.b);
+        // Biến thiên nhẹ ngẫu nhiên trên từng viên gạch để sàn sống động như đá thật
+        final noise = ((c * 17 + r * 31 + map.seed) % 9) - 4;
+        final base = isAlt ? pal.floorAlt : pal.floorBase;
+        final rVal = (base.r + noise).clamp(0, 255);
+        final gVal = (base.g + noise).clamp(0, 255);
+        final bVal = (base.b + noise).clamp(0, 255);
 
-        // Viền vát cạnh trên & trái tạo khối 3D gạch sàn đá
-        buf.drawLine(px, py, px + ts - 1, py, 1, pal.floorHighlight.r, pal.floorHighlight.g, pal.floorHighlight.b, 130);
-        buf.drawLine(px, py, px, py + ts - 1, 1, pal.floorHighlight.r, pal.floorHighlight.g, pal.floorHighlight.b, 130);
+        // Đổ màu nền viên đá
+        buf.fillRect(px, py, ts, ts, rVal, gVal, bVal);
 
-        // Rãnh chỉ vữa viền gạch dưới & phải
-        buf.drawLine(px, py + ts - 1, px + ts - 1, py + ts - 1, 1, pal.floorBorder.r, pal.floorBorder.g, pal.floorBorder.b, 200);
-        buf.drawLine(px + ts - 1, py, px + ts - 1, py + ts - 1, 1, pal.floorBorder.r, pal.floorBorder.g, pal.floorBorder.b, 200);
+        // Ánh sáng cạnh trên & trái của viên gạch
+        buf.drawLine(px, py, px + ts - 2, py, 1, pal.floorHighlight.r, pal.floorHighlight.g, pal.floorHighlight.b, 90);
+        buf.drawLine(px, py, px, py + ts - 2, 1, pal.floorHighlight.r, pal.floorHighlight.g, pal.floorHighlight.b, 90);
 
-        // Vết rạn nứt tự nhiên trên một số viên gạch (tỷ lệ 16%)
-        final randSeed = (c * 19 + r * 37 + map.seed) % 100;
-        if (randSeed < 16) {
-          final fx = px + (randSeed % 12) + 4;
-          final fy = py + ((randSeed * 3) % 12) + 4;
-          buf.drawLine(fx, fy, fx + 8, fy + 7, 1, pal.veinOuter.r, pal.veinOuter.g, pal.veinOuter.b, 140);
-          buf.drawLine(fx + 8, fy + 7, fx + 16, fy + 12, 1, pal.veinInner.r, pal.veinInner.g, pal.veinInner.b, 180);
-        }
+        // Rãnh vữa tối ở cạnh dưới & phải
+        buf.drawLine(px, py + ts - 1, px + ts - 1, py + ts - 1, 1, pal.floorBorder.r, pal.floorBorder.g, pal.floorBorder.b, 220);
+        buf.drawLine(px + ts - 1, py, px + ts - 1, py + ts - 1, 1, pal.floorBorder.r, pal.floorBorder.g, pal.floorBorder.b, 220);
       }
     }
   }
 
-  static void _renderEnvironmentalVeins(
+  /// Địa hình môi trường hữu cơ đẹp mắt (vũng nham thạch, sông băng, thảm rêu)
+  static void _renderOrganicTerrainFeatures(
     ImageBuffer buf,
     GeneratedMapData map,
     Random rng,
     ThemePalette pal,
   ) {
-    final ts = map.tileSize;
-    final targets = <List<int>>[];
-    targets.add(map.bossSpawn);
-    targets.addAll(map.monsterPortals);
-    targets.addAll(map.buffNodes);
+    final w = map.cols * map.tileSize;
+    final h = map.rows * map.tileSize;
+    final isVolcanic = map.theme.toLowerCase() == 'volcanic';
+    final isIce = map.theme.toLowerCase().contains('ice') || map.theme.toLowerCase().contains('frost');
 
-    final startX = ((map.playerSpawn[0] + 0.5) * ts).round();
-    final startY = ((map.playerSpawn[1] + 0.5) * ts).round();
+    if (isVolcanic) {
+      // Vẽ các dòng sông dung nham uốn lượn tự nhiên mềm mại
+      final flows = [
+        // Sông dung nham phía trên uốn lượn
+        [
+          [w * 0.10, h * 0.15],
+          [w * 0.25, h * 0.22],
+          [w * 0.45, h * 0.18],
+          [w * 0.65, h * 0.25],
+          [w * 0.88, h * 0.20],
+        ],
+        // Dòng macma phía dưới
+        [
+          [w * 0.12, h * 0.80],
+          [w * 0.35, h * 0.74],
+          [w * 0.55, h * 0.82],
+          [w * 0.78, h * 0.76],
+          [w * 0.90, h * 0.85],
+        ],
+      ];
 
-    for (final t in targets) {
-      final tx = ((t[0] + 0.5) * ts).round();
-      final ty = ((t[1] + 0.5) * ts).round();
+      for (final flow in flows) {
+        for (int i = 0; i < flow.length - 1; i++) {
+          final x1 = flow[i][0].round();
+          final y1 = flow[i][1].round();
+          final x2 = flow[i + 1][0].round();
+          final y2 = flow[i + 1][1].round();
 
-      // Uốn lượn qua trung gian
-      final midX = ((startX + tx) ~/ 2) + ((t[0] % 5 - 2) * 16);
-      final midY = ((startY + ty) ~/ 2) + ((t[1] % 5 - 2) * 16);
+          // 1. Vùng nhiệt đỏ sẫm tỏa nhiệt
+          buf.drawLine(x1, y1, x2, y2, 22, 140, 15, 0, 130);
+          // 2. Dòng nham thạch cam rực cháy
+          buf.drawLine(x1, y1, x2, y2, 12, 255, 80, 0, 220);
+          // 3. Lõi vàng sáng nóng chảy cực độ
+          buf.drawLine(x1, y1, x2, y2, 4, 255, 230, 80, 255);
+        }
+      }
+    } else if (isIce) {
+      // Vết nứt băng tuyết pha lê lan tỏa
+      final fissures = [
+        [
+          [w * 0.15, h * 0.20],
+          [w * 0.35, h * 0.25],
+          [w * 0.50, h * 0.18],
+          [w * 0.80, h * 0.24],
+        ],
+        [
+          [w * 0.20, h * 0.78],
+          [w * 0.48, h * 0.82],
+          [w * 0.72, h * 0.74],
+          [w * 0.85, h * 0.80],
+        ],
+      ];
 
-      // Lớp ngoài phát sáng (quầng sáng)
-      buf.drawLine(startX, startY, midX, midY, 3, pal.veinOuter.r, pal.veinOuter.g, pal.veinOuter.b, 110);
-      buf.drawLine(midX, midY, tx, ty, 3, pal.veinOuter.r, pal.veinOuter.g, pal.veinOuter.b, 110);
+      for (final path in fissures) {
+        for (int i = 0; i < path.length - 1; i++) {
+          final x1 = path[i][0].round();
+          final y1 = path[i][1].round();
+          final x2 = path[i + 1][0].round();
+          final y2 = path[i + 1][1].round();
 
-      // Lõi năng lượng nóng chảy phát quang
-      buf.drawLine(startX, startY, midX, midY, 1, pal.veinInner.r, pal.veinInner.g, pal.veinInner.b, 230);
-      buf.drawLine(midX, midY, tx, ty, 1, pal.veinInner.r, pal.veinInner.g, pal.veinInner.b, 230);
+          buf.drawLine(x1, y1, x2, y2, 12, 0, 140, 200, 100);
+          buf.drawLine(x1, y1, x2, y2, 6, 0, 220, 255, 190);
+          buf.drawLine(x1, y1, x2, y2, 2, 220, 250, 255, 240);
+        }
+      }
     }
   }
 
+  /// Hiệu ứng ánh sáng điện ảnh (Vignette) làm tối dần 4 góc và viền, tôn lên sàn đấu trung tâm
+  static void _renderCinematicVignette(ImageBuffer buf, int width, int height) {
+    final cx = width / 2.0;
+    final cy = height / 2.0;
+    final maxDist = sqrt(cx * cx + cy * cy);
+
+    // Vignette 4 góc
+    for (int y = 0; y < height; y += 2) {
+      for (int x = 0; x < width; x += 2) {
+        final dx = x - cx;
+        final dy = y - cy;
+        final dist = sqrt(dx * dx + dy * dy);
+        final ratio = (dist / maxDist);
+        if (ratio > 0.45) {
+          final darkFactor = ((ratio - 0.45) / 0.55).clamp(0.0, 1.0);
+          final alpha = (darkFactor * darkFactor * 120).round();
+          if (alpha > 0) {
+            buf.setPixel(x, y, 0, 0, 0, alpha);
+            buf.setPixel(x + 1, y, 0, 0, 0, alpha);
+            buf.setPixel(x, y + 1, 0, 0, 0, alpha);
+            buf.setPixel(x + 1, y + 1, 0, 0, 0, alpha);
+          }
+        }
+      }
+    }
+  }
+
+  /// Tường đá biên giới đấu trường có chiều sâu
   static void _renderBorderWalls(
     ImageBuffer buf,
     GeneratedMapData map,
@@ -1342,11 +1406,13 @@ class MapImageRenderer {
       buf.fillRect((map.cols - 1) * ts, r * ts, ts, ts, pal.wallBase.r, pal.wallBase.g, pal.wallBase.b);
     }
 
-    // Viền bảo vệ bên ngoài
+    // Viền bảo vệ ngoài cùng
     buf.strokeRect(0, 0, w, h, pal.wallShadow.r, pal.wallShadow.g, pal.wallShadow.b, 255, 3);
-    buf.strokeRect(ts, ts, w - ts * 2, h - ts * 2, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 140, 1);
+    // Viền vát đá sáng phía trong
+    buf.strokeRect(ts, ts, w - ts * 2, h - ts * 2, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 100, 1);
   }
 
+  /// Khối chướng ngại vật & cột đá cổ đại 3D tự nhiên
   static void _renderObstacles(
     ImageBuffer buf,
     GeneratedMapData map,
@@ -1362,13 +1428,13 @@ class MapImageRenderer {
       final ow = obs[2] * ts;
       final oh = obs[3] * ts;
 
-      // 1. Bóng đổ phía dưới và bên phải
-      buf.fillRect(ox + 4, oy + 4, ow, oh, 0, 0, 0, 130);
+      // 1. Bóng đổ 3D sâu dưới chân cột
+      buf.fillRect(ox + 6, oy + 6, ow, oh, 0, 0, 0, 150);
 
-      // 2. Thân khối trụ đá / chướng ngại vật
+      // 2. Thân cột đá nguyên khối
       buf.fillRect(ox, oy, ow, oh, pal.wallBase.r, pal.wallBase.g, pal.wallBase.b);
 
-      // 3. Mặt trên đỉnh nổi khối 3D (35% chiều cao)
+      // 3. Mặt trên đỉnh cột đá nổi khối (35% chiều cao)
       final topH = (oh * 0.35).round();
       buf.fillRect(ox, oy, ow, topH, pal.wallTop.r, pal.wallTop.g, pal.wallTop.b);
 
@@ -1376,111 +1442,12 @@ class MapImageRenderer {
       buf.strokeRect(ox, oy, ow, oh, pal.wallShadow.r, pal.wallShadow.g, pal.wallShadow.b, 255, 2);
 
       // 5. Đường gân sáng phân chia đỉnh và thân trụ
-      buf.drawLine(ox + 2, oy + topH, ox + ow - 3, oy + topH, 1, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 220);
+      buf.drawLine(ox + 2, oy + topH, ox + ow - 3, oy + topH, 1, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 180);
 
-      // 6. Lõi linh thạch / ấn ký phát sáng tại trung tâm khối trụ
+      // 6. Khe nứt năng lượng dung nham / pha lê tự nhiên dọc thân cột
       final cx = ox + ow ~/ 2;
-      final cy = oy + oh ~/ 2;
-      if (ow >= ts * 1.5 && oh >= ts * 1.5) {
-        buf.fillCircle(cx, cy, 7, pal.coreGlow.r, pal.coreGlow.g, pal.coreGlow.b, 240);
-        buf.drawCircle(cx, cy, 10, 1, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 180);
-      }
-    }
-  }
-
-  static void _renderPlayerSpawnZone(
-    ImageBuffer buf,
-    GeneratedMapData map,
-    ThemePalette pal,
-  ) {
-    final ts = map.tileSize;
-    final cx = ((map.playerSpawn[0] + 0.5) * ts).round();
-    final cy = ((map.playerSpawn[1] + 0.5) * ts).round();
-
-    // Vòng hào quang ngoài
-    buf.drawCircle(cx, cy, 38, 2, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 220);
-    // Vòng hào quang trong
-    buf.drawCircle(cx, cy, 26, 1, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 180);
-
-    // 4 Mũi tên định hướng xuất trận
-    buf.drawLine(cx - 32, cy, cx - 18, cy, 2, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 240);
-    buf.drawLine(cx + 18, cy, cx + 32, cy, 2, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 240);
-    buf.drawLine(cx, cy - 32, cx, cy - 18, 2, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 240);
-    buf.drawLine(cx, cy + 18, cx, cy + 32, 2, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 240);
-
-    // Điểm tâm sáng
-    buf.fillCircle(cx, cy, 6, pal.playerCrest.r, pal.playerCrest.g, pal.playerCrest.b, 255);
-  }
-
-  static void _renderBossSpawnZone(
-    ImageBuffer buf,
-    GeneratedMapData map,
-    ThemePalette pal,
-  ) {
-    final ts = map.tileSize;
-    final cx = ((map.bossSpawn[0] + 0.5) * ts).round();
-    final cy = ((map.bossSpawn[1] + 0.5) * ts).round();
-
-    // Đấu trường rực lửa / gai nhọn ngoài
-    buf.drawCircle(cx, cy, 54, 3, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 240);
-    buf.drawCircle(cx, cy, 42, 1, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 170);
-
-    // 12 Gai nhọn triệu hồi Boss tỏa ra xung quanh
-    for (int i = 0; i < 12; i++) {
-      final angle = i * (pi / 6);
-      final x1 = (cx + cos(angle) * 44).round();
-      final y1 = (cy + sin(angle) * 44).round();
-      final x2 = (cx + cos(angle) * 58).round();
-      final y2 = (cy + sin(angle) * 58).round();
-      buf.drawLine(x1, y1, x2, y2, 2, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 220);
-    }
-
-    // Tâm ấn phong ấn ma thần hình thoi
-    buf.drawLine(cx - 14, cy, cx, cy - 14, 2, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 255);
-    buf.drawLine(cx, cy - 14, cx + 14, cy, 2, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 255);
-    buf.drawLine(cx + 14, cy, cx, cy + 14, 2, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 255);
-    buf.drawLine(cx, cy + 14, cx - 14, cy, 2, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 255);
-    buf.fillCircle(cx, cy, 5, pal.bossSeal.r, pal.bossSeal.g, pal.bossSeal.b, 255);
-  }
-
-  static void _renderMonsterPortals(
-    ImageBuffer buf,
-    GeneratedMapData map,
-    ThemePalette pal,
-  ) {
-    final ts = map.tileSize;
-    for (final p in map.monsterPortals) {
-      final cx = ((p[0] + 0.5) * ts).round();
-      final cy = ((p[1] + 0.5) * ts).round();
-
-      // Vòng xoáy hư không triệu hồi
-      buf.drawCircle(cx, cy, 24, 2, pal.veinOuter.r, pal.veinOuter.g, pal.veinOuter.b, 220);
-      buf.drawCircle(cx, cy, 18, 1, pal.veinInner.r, pal.veinInner.g, pal.veinInner.b, 190);
-
-      // Lỗ đen trung tâm cổng quái
-      buf.fillCircle(cx, cy, 11, 14, 8, 20, 255);
-      buf.fillCircle(cx, cy, 4, pal.veinInner.r, pal.veinInner.g, pal.veinInner.b, 240);
-    }
-  }
-
-  static void _renderBuffNodes(
-    ImageBuffer buf,
-    GeneratedMapData map,
-    ThemePalette pal,
-  ) {
-    final ts = map.tileSize;
-    for (final b in map.buffNodes) {
-      final cx = ((b[0] + 0.5) * ts).round();
-      final cy = ((b[1] + 0.5) * ts).round();
-
-      // Bệ đài báu vật hoàng kim
-      buf.drawCircle(cx, cy, 20, 2, 255, 215, 0, 240);
-      buf.drawCircle(cx, cy, 13, 1, 255, 235, 120, 180);
-
-      // Ngôi sao vàng phát quang
-      buf.drawLine(cx - 10, cy, cx + 10, cy, 2, 255, 235, 80, 255);
-      buf.drawLine(cx, cy - 10, cx, cy + 10, 2, 255, 235, 80, 255);
-      buf.fillCircle(cx, cy, 4, 255, 255, 200, 255);
+      buf.drawLine(cx, oy + 4, cx, oy + oh - 6, 2, pal.coreGlow.r, pal.coreGlow.g, pal.coreGlow.b, 200);
+      buf.drawLine(cx, oy + 6, cx, oy + oh - 8, 1, pal.wallHighlight.r, pal.wallHighlight.g, pal.wallHighlight.b, 240);
     }
   }
 }
