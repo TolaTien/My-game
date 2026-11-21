@@ -5,6 +5,7 @@ import 'registry/asset_registry.dart';
 import 'registry/sprite_image_cache.dart';
 import 'screens/auth_screen.dart';
 import 'screens/lobby_screen.dart';
+import 'screens/widgets/orientation_guard.dart';
 import 'services/audio_service.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
@@ -80,6 +81,9 @@ class BigWarApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        return OrientationGuard(child: child ?? const SizedBox.shrink());
+      },
       home: isSignedIn ? const LobbyScreen() : const AuthScreen(),
     );
   }

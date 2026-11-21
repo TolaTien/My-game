@@ -170,54 +170,30 @@ class _AuthScreenState extends State<AuthScreen>
             },
           ),
 
-          // 2. Lớp giao diện tương tác (Logo BIG-WAR góc trên phải + Bảng lệnh giữa màn)
+          // 2. Lớp giao diện tương tác (Bảng lệnh Chiến Giáp Hoàng Kim đặt tại trung tâm)
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 680;
+                final isCompactHeight = constraints.maxHeight < 500;
+                final boxWidth = math.min(
+                  430.0,
+                  math.max(340.0, constraints.maxWidth * 0.58),
+                );
 
-                if (!isWide) {
-                  return Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildBigWarLogo(compact: true),
-                          const SizedBox(height: 10),
-                          _buildCentralCommandBox(isWide: false),
-                        ],
-                      ),
+                return Center(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: isCompactHeight ? 6 : 14,
                     ),
-                  );
-                }
-
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Góc trên phải: Logo BIG-WAR kèm Hỏa Cầu Chiến Thần (đúng vị trí ảnh mẫu)
-                    Positioned(
-                      top: 12,
-                      right: math.max(24, constraints.maxWidth * 0.08),
-                      child: _buildBigWarLogo(compact: false),
-                    ),
-
-                    // Trung tâm hơi chếch phải (nhường không gian bên trái cho Rồng Chiến Thần
-                    // và bên dưới cho 2 Hộ Vệ giao chiến, đúng bố cục ảnh mẫu)
-                    Align(
-                      alignment: const Alignment(0.10, -0.10),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: _buildCentralCommandBox(isWide: true),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: boxWidth),
+                      child: _buildCentralCommandBox(
+                        isWide: constraints.maxWidth >= 600,
+                        isCompactHeight: isCompactHeight,
                       ),
                     ),
-                  ],
+                  ),
                 );
               },
             ),
@@ -227,20 +203,20 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-  /// Cụm Logo BIG-WAR góc trên phải với Quả Cầu Hỏa Ngục cháy rực phía trên
+  /// Cụm Logo BIG-WAR trên đỉnh bảng lệnh với Quả Cầu Hỏa Ngục cháy rực phía trên
   Widget _buildBigWarLogo({required bool compact}) {
-    final titleSize = compact ? 30.0 : 40.0;
-    final orbSize = compact ? 44.0 : 58.0;
+    final titleSize = compact ? 25.0 : 34.0;
+    final orbSize = compact ? 36.0 : 46.0;
 
     return IgnorePointer(
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Quả cầu lửa bốc cháy phía trên góc phải chữ BIG-WAR (như ảnh mẫu)
+          // Quả cầu lửa bốc cháy phía trên góc phải chữ BIG-WAR
           Positioned(
-            top: compact ? -14 : -20,
-            right: compact ? 8 : 12,
+            top: compact ? -10 : -14,
+            right: compact ? -4 : 2,
             child: SizedBox(
               width: orbSize,
               height: orbSize,
@@ -251,9 +227,9 @@ class _AuthScreenState extends State<AuthScreen>
           ),
 
           Padding(
-            padding: EdgeInsets.only(top: compact ? 10 : 14),
+            padding: EdgeInsets.only(top: compact ? 6 : 10),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Stack(
@@ -265,11 +241,11 @@ class _AuthScreenState extends State<AuthScreen>
                         fontFamily: _brandFontFamily,
                         fontSize: titleSize,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 3.0,
+                        letterSpacing: 2.5,
                         height: 1.0,
                         foreground: Paint()
                           ..style = PaintingStyle.stroke
-                          ..strokeWidth = 6.0
+                          ..strokeWidth = 5.2
                           ..strokeJoin = StrokeJoin.round
                           ..color = const Color(0xFF042F2E),
                       ),
@@ -281,11 +257,11 @@ class _AuthScreenState extends State<AuthScreen>
                         fontFamily: _brandFontFamily,
                         fontSize: titleSize,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 3.0,
+                        letterSpacing: 2.5,
                         height: 1.0,
                         foreground: Paint()
                           ..style = PaintingStyle.stroke
-                          ..strokeWidth = 2.6
+                          ..strokeWidth = 2.2
                           ..strokeJoin = StrokeJoin.round
                           ..color = _jade,
                       ),
@@ -310,7 +286,7 @@ class _AuthScreenState extends State<AuthScreen>
                           color: Colors.white,
                           fontSize: titleSize,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 3.0,
+                          letterSpacing: 2.5,
                           height: 1.0,
                         ),
                       ),
@@ -321,7 +297,7 @@ class _AuthScreenState extends State<AuthScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 3,
+                    vertical: 2.5,
                   ),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
@@ -381,29 +357,40 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   /// Bảng lệnh Đăng nhập / Tạo tài khoản trung tâm phong cách Chiến Giáp Hầm Hố
-  Widget _buildCentralCommandBox({required bool isWide}) {
+  Widget _buildCentralCommandBox({
+    required bool isWide,
+    required bool isCompactHeight,
+  }) {
     final online = AuthService.instance.isAvailable;
+    final padVert = isCompactHeight ? 12.0 : 20.0;
+    final padHoriz = isWide ? 22.0 : 16.0;
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: isWide ? 415 : 380),
-      child: CustomPaint(
-        painter: _OrnateRpgBoxPainter(
-          isRegister: _isRegister,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(26, 24, 26, 22),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Tiêu đề trạng thái cổng chiến trường dập nổi hầm hố
-                Row(
+    return CustomPaint(
+      painter: _OrnateRpgBoxPainter(
+        isRegister: _isRegister,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(padHoriz, padVert, padHoriz, padVert),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Logo BIG-WAR rực lửa & Đấu Trường Sinh Tử nằm trang trọng ngay đỉnh bảng lệnh
+              Center(
+                child: _buildBigWarLogo(compact: isCompactHeight),
+              ),
+              SizedBox(height: isCompactHeight ? 6 : 10),
+
+              // 2. Tiêu đề trạng thái cổng chiến trường dập nổi hầm hố
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 28,
+                      width: 24,
                       height: 2.0,
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
@@ -417,7 +404,7 @@ class _AuthScreenState extends State<AuthScreen>
                           ? Icons.local_fire_department_rounded
                           : Icons.shield_rounded,
                       color: _isRegister ? const Color(0xFFFF7043) : _goldBright,
-                      size: 19,
+                      size: isCompactHeight ? 16 : 18,
                       shadows: [
                         BoxShadow(
                           color: _isRegister ? const Color(0xFFFF5722) : _gold,
@@ -430,13 +417,13 @@ class _AuthScreenState extends State<AuthScreen>
                       _isRegister
                           ? 'TẠO TÀI KHOẢN CHIẾN BINH'
                           : 'ĐĂNG NHẬP CHIẾN TRƯỜNG',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: _brandFontFamily,
                         color: _goldBright,
-                        fontSize: 13.5,
+                        fontSize: isCompactHeight ? 12.0 : 13.5,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.4,
-                        shadows: [
+                        letterSpacing: 1.2,
+                        shadows: const [
                           Shadow(
                             color: Color(0xFFE65100),
                             blurRadius: 8,
@@ -452,7 +439,7 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      width: 28,
+                      width: 24,
                       height: 2.0,
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
@@ -462,143 +449,149 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+              ),
+              SizedBox(height: isCompactHeight ? 8 : 12),
 
-                if (!online) ...[
-                  _buildBanner(
-                    'Không kết nối được máy chủ. Vui lòng kiểm tra mạng rồi thử lại.',
-                    Colors.orangeAccent,
-                    Icons.wifi_off_rounded,
-                  ),
-                  const SizedBox(height: 10),
-                ],
+              if (!online) ...[
+                _buildBanner(
+                  'Không kết nối được máy chủ. Vui lòng kiểm tra mạng rồi thử lại.',
+                  Colors.orangeAccent,
+                  Icons.wifi_off_rounded,
+                ),
+                SizedBox(height: isCompactHeight ? 6 : 10),
+              ],
 
-                // Hàng 0 (Khi Đăng ký): Chiến danh
-                if (_isRegister) ...[
-                  _buildRpgFieldRow(
-                    label: 'Chiến danh',
-                    icon: Icons.military_tech_rounded,
-                    controller: _nameCtrl,
-                    focusNode: _nameFocus,
-                    placeholder: 'Nhập tên nhân vật (3–16 ký tự)',
-                    action: TextInputAction.next,
-                    onSubmitted: (_) => _emailFocus.requestFocus(),
-                    validator: (v) {
-                      final s = v?.trim() ?? '';
-                      if (s.isEmpty) return 'Chưa nhập tên nhân vật';
-                      if (s.length < 3 || s.length > 16) {
-                        return 'Tên nhân vật cần từ 3 đến 16 ký tự';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 11),
-                ],
-
-                // Hàng 1: Tài khoản
+              // Hàng 0 (Khi Đăng ký): Chiến danh
+              if (_isRegister) ...[
                 _buildRpgFieldRow(
-                  label: 'Tài khoản',
-                  icon: Icons.badge_rounded,
-                  controller: _emailCtrl,
-                  focusNode: _emailFocus,
-                  placeholder: 'Nhập email chiến binh',
-                  keyboard: TextInputType.emailAddress,
+                  label: 'Chiến danh',
+                  icon: Icons.military_tech_rounded,
+                  controller: _nameCtrl,
+                  focusNode: _nameFocus,
+                  placeholder: 'Nhập tên nhân vật (3–16 ký tự)',
                   action: TextInputAction.next,
-                  autofill: const [AutofillHints.email],
-                  onSubmitted: (_) => _passFocus.requestFocus(),
+                  isCompactHeight: isCompactHeight,
+                  onSubmitted: (_) => _emailFocus.requestFocus(),
                   validator: (v) {
                     final s = v?.trim() ?? '';
-                    if (s.isEmpty) return 'Chưa nhập email';
-                    if (!_isValidEmail(s)) {
-                      return 'Email phải có dấu @ và tên miền hợp lệ';
+                    if (s.isEmpty) return 'Chưa nhập tên nhân vật';
+                    if (s.length < 3 || s.length > 16) {
+                      return 'Tên nhân vật cần từ 3 đến 16 ký tự';
                     }
                     return null;
                   },
                 ),
-                const SizedBox(height: 11),
+                SizedBox(height: isCompactHeight ? 6 : 10),
+              ],
 
-                // Hàng 2: Mật khẩu
-                _buildRpgFieldRow(
-                  label: 'Mật khẩu',
-                  icon: Icons.lock_rounded,
-                  controller: _passCtrl,
-                  focusNode: _passFocus,
-                  placeholder: _isRegister
-                      ? 'Tạo mật khẩu (tối thiểu 6 ký tự)'
-                      : 'Nhập mật khẩu',
-                  obscure: _obscure,
-                  action: TextInputAction.done,
-                  autofill: [
-                    _isRegister
-                        ? AutofillHints.newPassword
-                        : AutofillHints.password,
-                  ],
-                  onSubmitted: (_) => _submit(),
-                  trailingButton: Tooltip(
-                    message: _obscure ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () => setState(() => _obscure = !_obscure),
-                      child: Container(
-                        width: 36,
-                        height: 42,
-                        margin: const EdgeInsets.only(left: 6),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF2E1908), Color(0xFF140B04)],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: const Color(0xFFFFB300).withValues(alpha: 0.8),
-                            width: 1.3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFF6F00).withValues(alpha: 0.25),
-                              blurRadius: 4,
-                            ),
-                          ],
+              // Hàng 1: Tài khoản
+              _buildRpgFieldRow(
+                label: 'Tài khoản',
+                icon: Icons.badge_rounded,
+                controller: _emailCtrl,
+                focusNode: _emailFocus,
+                placeholder: 'Nhập email chiến binh',
+                keyboard: TextInputType.emailAddress,
+                action: TextInputAction.next,
+                isCompactHeight: isCompactHeight,
+                autofill: const [AutofillHints.email],
+                onSubmitted: (_) => _passFocus.requestFocus(),
+                validator: (v) {
+                  final s = v?.trim() ?? '';
+                  if (s.isEmpty) return 'Chưa nhập email';
+                  if (!_isValidEmail(s)) {
+                    return 'Email phải có dấu @ và tên miền hợp lệ';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: isCompactHeight ? 6 : 10),
+
+              // Hàng 2: Mật khẩu
+              _buildRpgFieldRow(
+                label: 'Mật khẩu',
+                icon: Icons.lock_rounded,
+                controller: _passCtrl,
+                focusNode: _passFocus,
+                placeholder: _isRegister
+                    ? 'Tạo mật khẩu (tối thiểu 6 ký tự)'
+                    : 'Nhập mật khẩu',
+                obscure: _obscure,
+                action: TextInputAction.done,
+                isCompactHeight: isCompactHeight,
+                autofill: [
+                  _isRegister
+                      ? AutofillHints.newPassword
+                      : AutofillHints.password,
+                ],
+                onSubmitted: (_) => _submit(),
+                trailingButton: Tooltip(
+                  message: _obscure ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => setState(() => _obscure = !_obscure),
+                    child: Container(
+                      width: 36,
+                      height: isCompactHeight ? 36 : 42,
+                      margin: const EdgeInsets.only(left: 6),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2E1908), Color(0xFF140B04)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
-                        child: Icon(
-                          _obscure
-                              ? Icons.visibility_rounded
-                              : Icons.visibility_off_rounded,
-                          color: _goldBright,
-                          size: 18,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFFFFB300).withValues(alpha: 0.8),
+                          width: 1.3,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF6F00).withValues(alpha: 0.25),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _obscure
+                            ? Icons.visibility_rounded
+                            : Icons.visibility_off_rounded,
+                        color: _goldBright,
+                        size: 18,
                       ),
                     ),
                   ),
-                  validator: (v) {
-                    final s = v ?? '';
-                    if (s.isEmpty) return 'Chưa nhập mật khẩu';
-                    if (s.length < 6) return 'Mật khẩu cần ít nhất 6 ký tự';
-                    return null;
-                  },
                 ),
-                const SizedBox(height: 14),
+                validator: (v) {
+                  final s = v ?? '';
+                  if (s.isEmpty) return 'Chưa nhập mật khẩu';
+                  if (s.length < 6) return 'Mật khẩu cần ít nhất 6 ký tự';
+                  return null;
+                },
+              ),
+              SizedBox(height: isCompactHeight ? 6 : 10),
 
-                if (_error != null) ...[
-                  _buildBanner(
-                    _error!,
-                    const Color(0xFFFF5252),
-                    Icons.error_outline_rounded,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // Nút hành động chính dập nổi Hoàng Kim chiến đấu
-                Center(
-                  child: _buildEmbossedSubmitButton(online: online),
+              if (_error != null) ...[
+                _buildBanner(
+                  _error!,
+                  const Color(0xFFFF5252),
+                  Icons.error_outline_rounded,
                 ),
-                const SizedBox(height: 12),
-
-                // Link chuyển đổi chế độ ("Đăng ký" / "Đăng nhập") dưới nút chính
-                _buildFooterLinks(),
+                SizedBox(height: isCompactHeight ? 6 : 10),
               ],
-            ),
+
+              // Nút hành động chính dập nổi Hoàng Kim chiến đấu
+              Center(
+                child: _buildEmbossedSubmitButton(
+                  online: online,
+                  isCompactHeight: isCompactHeight,
+                ),
+              ),
+              SizedBox(height: isCompactHeight ? 6 : 10),
+
+              // Link chuyển đổi chế độ ("Đăng ký" / "Đăng nhập") dưới nút chính
+              _buildFooterLinks(isCompactHeight: isCompactHeight),
+            ],
           ),
         ),
       ),
@@ -613,6 +606,7 @@ class _AuthScreenState extends State<AuthScreen>
     required String placeholder,
     IconData? icon,
     bool obscure = false,
+    bool isCompactHeight = false,
     TextInputType? keyboard,
     TextInputAction? action,
     Iterable<String>? autofill,
@@ -633,19 +627,19 @@ class _AuthScreenState extends State<AuthScreen>
       children: [
         // Nhãn bên trái dập nổi viền đen bóng đêm kèm icon chiến binh
         SizedBox(
-          width: 98,
+          width: isCompactHeight ? 88 : 96,
           child: Padding(
-            padding: const EdgeInsets.only(top: 10),
+            padding: EdgeInsets.only(top: isCompactHeight ? 8 : 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
                   Icon(
                     icon,
-                    size: 15,
+                    size: isCompactHeight ? 13 : 15,
                     color: _goldBright,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 4),
                 ],
                 Expanded(
                   child: Stack(
@@ -654,23 +648,23 @@ class _AuthScreenState extends State<AuthScreen>
                         label,
                         style: TextStyle(
                           fontFamily: _brandFontFamily,
-                          fontSize: 13.0,
+                          fontSize: isCompactHeight ? 12.0 : 13.0,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.4,
                           foreground: Paint()
                             ..style = PaintingStyle.stroke
-                            ..strokeWidth = 3.2
+                            ..strokeWidth = 3.0
                             ..color = const Color(0xFF0F0500),
                         ),
                       ),
                       Text(
                         label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: _brandFontFamily,
                           color: _goldBright,
-                          fontSize: 13.0,
+                          fontSize: isCompactHeight ? 12.0 : 13.0,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.4,
                         ),
                       ),
                     ],
@@ -696,21 +690,21 @@ class _AuthScreenState extends State<AuthScreen>
             style: const TextStyle(
               fontFamily: _brandFontFamily,
               color: Color(0xFFF8FAFC),
-              fontSize: 13.5,
+              fontSize: 13.0,
               fontWeight: FontWeight.w600,
             ),
             cursorColor: _gold,
             decoration: InputDecoration(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 11,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: isCompactHeight ? 8 : 10,
               ),
               hintText: placeholder,
               hintStyle: const TextStyle(
                 fontFamily: _brandFontFamily,
                 color: Color(0xFF64748B),
-                fontSize: 12.0,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w400,
               ),
               filled: true,
@@ -741,7 +735,7 @@ class _AuthScreenState extends State<AuthScreen>
               errorStyle: const TextStyle(
                 fontFamily: _brandFontFamily,
                 color: Color(0xFFFCA5A5),
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -754,11 +748,17 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   /// Nút bấm chiến đấu dập nổi Hoàng Kim – Hỏa Ngục cực kỳ hầm hố
-  Widget _buildEmbossedSubmitButton({required bool online}) {
+  Widget _buildEmbossedSubmitButton({
+    required bool online,
+    bool isCompactHeight = false,
+  }) {
     final disabled = _loading || !online;
+    final btnHeight = isCompactHeight ? 40.0 : 46.0;
+    final btnWidth = isCompactHeight ? 210.0 : 235.0;
+
     return SizedBox(
-      width: 235,
-      height: 48,
+      width: btnWidth,
+      height: btnHeight,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: disabled
@@ -783,7 +783,7 @@ class _AuthScreenState extends State<AuthScreen>
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: disabled ? Colors.white24 : const Color(0xFFFFF176),
-            width: 2.2,
+            width: 2.0,
           ),
           boxShadow: disabled
               ? null
@@ -791,11 +791,11 @@ class _AuthScreenState extends State<AuthScreen>
                   const BoxShadow(
                     color: Color(0xFF1B0702),
                     blurRadius: 0,
-                    offset: Offset(0, 4),
+                    offset: Offset(0, 3),
                   ),
                   BoxShadow(
                     color: const Color(0xFFFF6D00).withValues(alpha: 0.55),
-                    blurRadius: 16,
+                    blurRadius: 14,
                     spreadRadius: 1,
                   ),
                 ],
@@ -814,60 +814,63 @@ class _AuthScreenState extends State<AuthScreen>
           ),
           child: _loading
               ? const SizedBox(
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2.8,
+                    strokeWidth: 2.6,
                     color: Color(0xFF200B02),
                   ),
                 )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _isRegister
-                          ? Icons.local_fire_department_rounded
-                          : Icons.sports_kabaddi_rounded,
-                      color: const Color(0xFF200B02),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Stack(
-                      children: [
-                        Text(
-                          _isRegister ? 'TẠO TÀI KHOẢN' : 'ĐĂNG NHẬP',
-                          style: TextStyle(
-                            fontFamily: _brandFontFamily,
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                            foreground: Paint()
-                              ..style = PaintingStyle.stroke
-                              ..strokeWidth = 3.6
-                              ..color = const Color(0xFFFFF9C4),
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _isRegister
+                            ? Icons.local_fire_department_rounded
+                            : Icons.sports_kabaddi_rounded,
+                        color: const Color(0xFF200B02),
+                        size: isCompactHeight ? 17 : 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Stack(
+                        children: [
+                          Text(
+                            _isRegister ? 'TẠO TÀI KHOẢN' : 'ĐĂNG NHẬP',
+                            style: TextStyle(
+                              fontFamily: _brandFontFamily,
+                              fontSize: isCompactHeight ? 13.5 : 15.0,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                              foreground: Paint()
+                                ..style = PaintingStyle.stroke
+                                ..strokeWidth = 3.2
+                                ..color = const Color(0xFFFFF9C4),
+                            ),
                           ),
-                        ),
-                        Text(
-                          _isRegister ? 'TẠO TÀI KHOẢN' : 'ĐĂNG NHẬP',
-                          style: const TextStyle(
-                            fontFamily: _brandFontFamily,
-                            color: Color(0xFF2E0D03),
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
+                          Text(
+                            _isRegister ? 'TẠO TÀI KHOẢN' : 'ĐĂNG NHẬP',
+                            style: TextStyle(
+                              fontFamily: _brandFontFamily,
+                              color: const Color(0xFF2E0D03),
+                              fontSize: isCompactHeight ? 13.5 : 15.0,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      _isRegister
-                          ? Icons.local_fire_department_rounded
-                          : Icons.sports_kabaddi_rounded,
-                      color: const Color(0xFF200B02),
-                      size: 20,
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _isRegister
+                            ? Icons.local_fire_department_rounded
+                            : Icons.sports_kabaddi_rounded,
+                        color: const Color(0xFF200B02),
+                        size: isCompactHeight ? 17 : 20,
+                      ),
+                    ],
+                  ),
                 ),
         ),
       ),
@@ -875,7 +878,7 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   /// Link chuyển đổi chế độ ("Đăng ký" / "Đăng nhập") căn giữa bên dưới nút chính
-  Widget _buildFooterLinks() {
+  Widget _buildFooterLinks({bool isCompactHeight = false}) {
     return Center(
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
@@ -885,7 +888,10 @@ class _AuthScreenState extends State<AuthScreen>
                   _isRegister ? _AuthMode.login : _AuthMode.register,
                 ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: isCompactHeight ? 4 : 6,
+          ),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(6),
@@ -894,32 +900,35 @@ class _AuthScreenState extends State<AuthScreen>
               width: 1.0,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                _isRegister
-                    ? Icons.login_rounded
-                    : Icons.person_add_alt_1_rounded,
-                size: 14,
-                color: _goldBright,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _isRegister
-                    ? 'Đã có tài khoản? Đăng nhập'
-                    : 'Chưa có tài khoản? Đăng ký ngay',
-                style: const TextStyle(
-                  fontFamily: _brandFontFamily,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isRegister
+                      ? Icons.login_rounded
+                      : Icons.person_add_alt_1_rounded,
+                  size: 14,
                   color: _goldBright,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                  decoration: TextDecoration.underline,
-                  decorationColor: _gold,
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  _isRegister
+                      ? 'Đã có tài khoản? Đăng nhập'
+                      : 'Chưa có tài khoản? Đăng ký ngay',
+                  style: const TextStyle(
+                    fontFamily: _brandFontFamily,
+                    color: _goldBright,
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    decoration: TextDecoration.underline,
+                    decorationColor: _gold,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
