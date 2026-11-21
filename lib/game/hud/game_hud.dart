@@ -354,16 +354,16 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.6)),
+                    border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.8)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.monetization_on, color: Colors.amberAccent, size: 20),
+                      const Icon(Icons.currency_exchange_rounded, color: Colors.orangeAccent, size: 20),
                       const SizedBox(width: 6),
                       Text(
-                        '${player.coinsCollected * GameConstants.goldPerCoinPickup} Vàng',
+                        '${player.coinsCollected} Xu',
                         style: const TextStyle(
-                          color: Colors.amberAccent,
+                          color: Colors.orangeAccent,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),

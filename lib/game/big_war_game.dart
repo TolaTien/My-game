@@ -161,10 +161,6 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
         GameAssetRegistry.instance.getRandomMap(excludeId: currentMapConfig.id);
     _switchDungeonMap(newMap);
 
-    // Thưởng vàng vượt ải
-    player.coinsCollected += 50 * currentFloor;
-    PlayerStorage.addGold(50 * currentFloor);
-
     // Hồi phục sinh lực và Ki cho tầng mới
     final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
         ? currentMapConfig.playerSpawn[0] * 32.0

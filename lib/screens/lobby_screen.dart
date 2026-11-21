@@ -611,6 +611,8 @@ class _LobbyScreenState extends State<LobbyScreen>
     if (mounted) {
       // Khi quay lại sảnh chờ: tiếp tục phát lặp lại nhạc sảnh
       AudioService.instance.playBgm(BgmTrack.lobby);
+      await PlayerStorage.loadProfile();
+      setState(() {});
     }
   }
 
