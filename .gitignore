@@ -49,12 +49,19 @@ app.*.map.json
 
 # AI Agent / Teamwork local logs
 .agents/
+/rules/
+.firebase/
 PROJECT.md
 TEST_INFRA.md
 AGENTS
 
-*.md
-.rules/
-/rules/
-!README.md
-.firebase/
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+server/ai_proxy/.env
+server/ai_proxy/.venv/
+**/__pycache__/
+*.jks
+*.keystore
+android/key.properties
