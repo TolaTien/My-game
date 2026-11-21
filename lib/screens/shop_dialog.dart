@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../models/player_profile.dart';
 import '../services/player_storage.dart';
 import '../core/constants.dart';
+import '../core/companion_catalog.dart';
+import 'widgets/lobby_companion.dart';
 
 class ShopDialog extends StatefulWidget {
   const ShopDialog({super.key});
@@ -322,6 +324,8 @@ class _ShopDialogState extends State<ShopDialog>
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
+                          // Horizontal gestures belong to the offer carousels.
+                          physics: const NeverScrollableScrollPhysics(),
                           children: [
                             _buildHeroesTab(profile, compact: compact),
                             _buildCompanionsTab(profile, compact: compact),
@@ -711,7 +715,43 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFFFFD700),
         icon: Icons.auto_awesome_rounded,
       ),
-    ];
+      _CompanionItem(
+        id: 'cyber_drone',
+        name: 'Cyber Drone (PIXEL-01)',
+        tag: 'SUPPORT • UTILITY (ASSET 1 & 2)',
+        description: 'Drone sừng trắng mắt lam: Bắn đạn Plasma, hồi máu đồng minh & bật Khiên Cầu Năng Lượng.',
+        price: 650,
+        color: const Color(0xFF00E5FF),
+        icon: Icons.smart_toy_rounded,
+      ),
+      _CompanionItem(
+        id: 'pyro_frost_dragon',
+        name: 'Pyro-Frost Dragon',
+        tag: 'RỒNG BĂNG HỎA 2 ĐẦU (ASSET 3)',
+        description: 'Phun lửa & tuyết xen kẽ; kích hoạt Hơi Thở Bão Tố đóng băng kẻ địch và buff khiên lửa.',
+        price: 900,
+        color: const Color(0xFFFF5252),
+        icon: Icons.whatshot_rounded,
+      ),
+      _CompanionItem(
+        id: 'luna_fox',
+        name: 'Hồ Ly Luna',
+        tag: 'PET FOX (ASSET 2)',
+        description: 'Linh thú Hồ Ly trắng xanh: Bắn cầu linh lực băng lam làm chậm quái và hồi Ki.',
+        price: 750,
+        color: const Color(0xFF80D8FF),
+        icon: Icons.pets_rounded,
+      ),
+      _CompanionItem(
+        id: 'orbit_03',
+        name: 'ORBIT-03 Drone',
+        tag: 'MECH SPHERE (ASSET 2)',
+        description: 'Cầu cơ khí Hoàng Kim bắn tia laser năng lượng tốc độ cao liên hoàn.',
+        price: 700,
+        color: const Color(0xFFFFAB00),
+        icon: Icons.radar_rounded,
+      ),
+    ].where((item) => availableCompanionIds.contains(item.id)).toList();
 
     return ListView.builder(
       scrollDirection: Axis.horizontal,
@@ -752,9 +792,7 @@ class _ShopDialogState extends State<ShopDialog>
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: comp.color.withValues(alpha: 0.4)),
                 ),
-                child: Center(
-                  child: Icon(comp.icon, color: comp.color, size: 40),
-                ),
+                child: Center(child: LobbyCompanion(companionId: comp.id)),
               ),
               const SizedBox(height: 8),
               Text(

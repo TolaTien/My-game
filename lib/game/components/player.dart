@@ -117,6 +117,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double _baseDamageAbsorption = 0.0;
   double _companionDamageAbsorption = 0.0;
   double temporaryPetDamageAbsorption = 0.0;
+  Object? activePetShieldOwner;
   double get damageAbsorption => max(
     max(_baseDamageAbsorption, _companionDamageAbsorption),
     goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0,
@@ -238,6 +239,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       if (goldenShieldTimer <= 0) {
         goldenShieldTimer = 0.0;
         temporaryPetDamageAbsorption = 0.0;
+        activePetShieldOwner = null;
       }
     }
 

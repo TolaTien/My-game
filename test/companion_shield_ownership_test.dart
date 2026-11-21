@@ -4,6 +4,42 @@ import 'package:my_game/game/components/companion_component.dart';
 import 'package:my_game/game/components/player.dart';
 
 void main() {
+  for (final resetForFloor in [false, true]) {
+    test(
+      'Replaced shield owner ${resetForFloor ? 'floor reset' : 'cleanup'} preserves the current shield',
+      () {
+        final player = PlayerComponent(position: Vector2.zero());
+        final a = CompanionComponent(companionId: 'orbit_03', player: player);
+        final b = CompanionComponent(companionId: 'luna_fox', player: player);
+        expect(a.activateSpecialSkill(), isTrue);
+        player.update(3);
+        a.update(3);
+        expect(b.activateSpecialSkill(), isTrue);
+        expect(player.activePetShieldOwner, same(b));
+
+        // Pass A's original expiry while B still has three seconds left.
+        player.update(1);
+        a.update(1);
+        b.update(1);
+        if (resetForFloor) {
+          a.resetForFloor();
+        } else {
+          a.cleanup();
+        }
+        expect(player.goldenShieldTimer, 3);
+        expect(player.temporaryPetDamageAbsorption, .25);
+        expect(player.damageAbsorption, .25);
+        expect(player.activePetShieldOwner, same(b));
+
+        b.cleanup();
+        expect(player.goldenShieldTimer, 0);
+        expect(player.temporaryPetDamageAbsorption, 0);
+        expect(player.damageAbsorption, 0);
+        expect(player.activePetShieldOwner, isNull);
+      },
+    );
+  }
+
   for (final id in ['orbit_03', 'luna_fox', 'aegis_x9', 'cyber_drone']) {
     test(
       '$id PET shield survives the visual and expires at four seconds',
@@ -34,6 +70,7 @@ void main() {
         expect(player.goldenShieldTimer, 0);
         expect(player.temporaryPetDamageAbsorption, 0);
         expect(player.damageAbsorption, passive);
+        expect(player.activePetShieldOwner, isNull);
       },
     );
   }

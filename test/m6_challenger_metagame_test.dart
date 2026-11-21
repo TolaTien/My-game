@@ -272,12 +272,14 @@ void main() {
       );
       expect(companionSuccess, isTrue);
       expect(PlayerStorage.currentProfile.gold, equals(0));
-      expect(
-        PlayerStorage.currentProfile.unlockedCompanionIds.contains(
-          'drone_attack',
-        ),
-        isTrue,
-      );
+      expect(PlayerStorage.currentProfile.unlockedCompanionIds, ['comp_attack']);
+      expect(PlayerStorage.currentProfile.selectedCompanionId, 'comp_attack');
+
+      // Retrying through either ID must not debit or grant a second time.
+      expect(await PlayerStorage.unlockCompanion('drone_attack', 600), isTrue);
+      expect(await PlayerStorage.unlockCompanion('comp_attack', 600), isTrue);
+      expect(PlayerStorage.currentProfile.gold, equals(0));
+      expect(PlayerStorage.currentProfile.unlockedCompanionIds, ['comp_attack']);
 
       // 4. Diamond Skin purchase invariance (50 diamonds cost, 50 balance)
       await PlayerStorage.saveProfile(
@@ -340,12 +342,8 @@ void main() {
       );
       expect(companionResult, isFalse);
       expect(PlayerStorage.currentProfile.gold, equals(499));
-      expect(
-        PlayerStorage.currentProfile.unlockedCompanionIds.contains(
-          'drone_shield',
-        ),
-        isFalse,
-      );
+      expect(PlayerStorage.currentProfile.unlockedCompanionIds, isEmpty);
+      expect(PlayerStorage.currentProfile.selectedCompanionId, isNull);
 
       // Attempt 4: Skin 50 diamonds cost with 49 diamonds
       await PlayerStorage.saveProfile(

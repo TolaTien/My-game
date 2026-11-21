@@ -87,8 +87,8 @@ void main() {
         contains('Pyro-Frost Dragon'),
       );
       expect(
-        GameAssetRegistry.instance.getCompanion('gem_tumbler')?.name,
-        contains('Gem-Tumbler'),
+        GameAssetRegistry.instance.getCompanion('gem_tumbler'),
+        isNull,
       );
       expect(GameAssetRegistry.instance.maps.length, greaterThanOrEqualTo(6));
     });

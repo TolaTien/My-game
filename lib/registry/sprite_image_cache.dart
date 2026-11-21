@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'asset_registry.dart';
+import 'companion_texture.dart';
 import 'sprite_animation_catalog.dart';
 
 export 'sprite_animation_catalog.dart'
@@ -88,9 +89,18 @@ class SpriteImageCache {
     'aegis_x9': 'assets/images/companions/aegis_x9.png',
     'cyber_drone': 'assets/images/companions/cyber_drone.png',
     'pyro_frost_dragon': 'assets/images/companions/pyro_frost_dragon.png',
-    'gem_tumbler': 'assets/images/companions/gem_tumbler.png',
     'luna_fox': 'assets/images/companions/luna_fox.png',
     'orbit_03': 'assets/images/companions/orbit_03.png',
+  };
+
+  static const companionIdleSheetPaths = {
+    'luna_fox': 'assets/images/companions/luna_fox_idle_v2.png',
+    'pyro_frost_dragon':
+        'assets/images/companions/pyro_frost_dragon_fly_v2.png',
+  };
+
+  static const companionRunSheetPaths = {
+    'luna_fox': 'assets/images/companions/luna_fox_run_v2.png',
   };
 
   static const skillEffectPaths = {
@@ -120,6 +130,8 @@ class SpriteImageCache {
     ...heroRunPaths.values,
     ...heroSkillSheetPaths.values,
     ...companionSpritePaths.values,
+    ...companionIdleSheetPaths.values,
+    ...companionRunSheetPaths.values,
     ...skillEffectPaths.values,
     ...mapImagePaths.values,
   };
@@ -141,6 +153,12 @@ class SpriteImageCache {
 
   ui.Image? getCompanionImage(String companionId) =>
       _getLegacy(companionSpritePaths[companionId]);
+
+  ui.Image? getCompanionIdleSheet(String companionId) =>
+      _getLegacy(companionIdleSheetPaths[companionId]);
+
+  ui.Image? getCompanionRunSheet(String companionId) =>
+      _getLegacy(companionRunSheetPaths[companionId]);
 
   ui.Image? getSkillEffectImage(String heroId, int skillSlot) =>
       _getLegacy(skillEffectPaths['${_canonical(heroId)}_$skillSlot']);
@@ -308,8 +326,16 @@ class SpriteImageCache {
           );
           try {
             final frame = await codec.getNextFrame();
-            if (_legacyPaths.contains(path)) _images[path] = frame.image;
-            return frame.image;
+            var image = frame.image;
+            if (companionSpritePaths.containsValue(path)) {
+              image = await cleanCompanionTexture(
+                frame.image,
+                fox: path.endsWith('/luna_fox.png'),
+              );
+              if (!identical(image, frame.image)) frame.image.dispose();
+            }
+            if (_legacyPaths.contains(path)) _images[path] = image;
+            return image;
           } finally {
             codec.dispose();
           }

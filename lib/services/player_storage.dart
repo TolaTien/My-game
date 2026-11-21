@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/stat_growth_formula.dart';
+import '../core/companion_catalog.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
 import 'friend_party_service.dart';
@@ -334,15 +335,20 @@ class PlayerStorage {
 
   /// Mở khóa Trợ thủ AI
   static Future<bool> unlockCompanion(String companionId, int price) async {
-    if (currentProfile.unlockedCompanionIds.contains(companionId)) return true;
-    if (currentProfile.gold < price) return false;
+    final catalogId = switch (companionId) {
+      'drone_attack' => 'comp_attack',
+      'drone_shield' => 'comp_defense',
+      _ => companionId,
+    };
+    if (!availableCompanionIds.contains(catalogId) || price < 0) return false;
+    final profile = currentProfile;
+    if (profile.unlockedCompanionIds.contains(catalogId)) return true;
+    if (profile.gold < price) return false;
 
-    final newCompanions = List<String>.from(currentProfile.unlockedCompanionIds)
-      ..add(companionId);
-    final updated = currentProfile.copyWith(
-      gold: currentProfile.gold - price,
-      unlockedCompanionIds: newCompanions,
-      selectedCompanionId: companionId,
+    final updated = profile.copyWith(
+      gold: profile.gold - price,
+      unlockedCompanionIds: [...profile.unlockedCompanionIds, catalogId],
+      selectedCompanionId: catalogId,
     );
     await saveProfile(updated);
     return true;
@@ -350,6 +356,12 @@ class PlayerStorage {
 
   /// Trang bị / Gỡ trợ thủ AI
   static Future<void> selectCompanion(String? companionId) async {
+    if (companionId != null &&
+        !availableCompanionIds.contains(companionId) &&
+        !(legacyCompanionIds.contains(companionId) &&
+            currentProfile.unlockedCompanionIds.contains(companionId))) {
+      return;
+    }
     final updated = currentProfile.copyWith(
       selectedCompanionId: companionId,
       clearCompanion: companionId == null,

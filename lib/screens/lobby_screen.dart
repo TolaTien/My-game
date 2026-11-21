@@ -1482,6 +1482,7 @@ class _LobbyScreenState extends State<LobbyScreen>
 
               HeroShowcaseWidget(
                 heroId: profile.selectedHeroId,
+                companionId: profile.selectedCompanionId,
                 themeColor: heroInfo.themeColor,
                 width: compact ? 200 : 260,
                 height: compact ? 190 : 270,
@@ -1768,6 +1769,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                         // CANVAS SHOWCASE NHÂN VẬT
                         HeroShowcaseWidget(
                           heroId: member.heroId,
+                          companionId: member.isMe ? profile.selectedCompanionId : null,
                           themeColor: heroInfo.themeColor,
                           width: heroWidth,
                           height: heroHeight,

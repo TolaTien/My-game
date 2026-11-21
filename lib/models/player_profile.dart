@@ -6,6 +6,7 @@ import '../core/stat_growth_formula.dart';
 import 'pvp_match.dart';
 
 class PlayerProfile {
+  final Map<String, dynamic> _extraFields;
   final String playerName;
   final String playerCode;
   final int gold;
@@ -49,8 +50,11 @@ class PlayerProfile {
     this.heroLevels = const {'george': 1},
     this.heroExp = const {'george': 0},
     this.friendIds = const [],
+    Map<String, dynamic> extraFields = const {},
     // ignore: prefer_initializing_formals
-  }) : _rankStars = rankStars,
+  }) : _extraFields = extraFields,
+       // ignore: prefer_initializing_formals
+       _rankStars = rankStars,
        // ignore: prefer_initializing_formals
        _isChallengerTop10 = isChallengerTop10;
 
@@ -283,11 +287,13 @@ class PlayerProfile {
       heroLevels: heroLevels ?? this.heroLevels,
       heroExp: heroExp ?? this.heroExp,
       friendIds: friendIds ?? this.friendIds,
+      extraFields: _extraFields,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      ..._extraFields,
       'playerName': playerName,
       'playerCode': playerCode,
       'gold': gold,
@@ -360,12 +366,15 @@ class PlayerProfile {
       unlockedCompanionIds: parseStringList(
         json['unlockedCompanionIds'],
         const [],
-      ),
-      selectedCompanionId: json['selectedCompanionId'] as String?,
+      ).where((id) => id != 'gem_tumbler').toList(),
+      selectedCompanionId: json['selectedCompanionId'] == 'gem_tumbler'
+          ? null
+          : json['selectedCompanionId'] as String?,
       lastSpinTimestamp: (json['lastSpinTimestamp'] as num?)?.toInt() ?? 0,
       heroLevels: parseIntMap(json['heroLevels'], const {'george': 1}),
       heroExp: parseIntMap(json['heroExp'], const {'george': 0}),
       friendIds: parseStringList(json['friendIds'], const []),
+      extraFields: Map<String, dynamic>.of(json),
     );
   }
 }
