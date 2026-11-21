@@ -3,10 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/screens/auth_screen.dart';
 
 void main() {
-  group('AuthScreen Responsive Layout Tests', () {
-    testWidgets('AuthScreen renders cleanly on mobile landscape without text clipping or overflow',
+  group('AuthScreen Modern Card Layout Tests', () {
+    testWidgets(
+        'AuthScreen renders two-column modern card cleanly with chibi dragon and form',
         (tester) async {
-      tester.view.physicalSize = const Size(800, 380); // Typical mobile landscape
+      tester.view.physicalSize = const Size(800, 380); // Landscape mobile
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -21,14 +22,23 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // Kiểm tra các thành phần thương hiệu và nhãn nhập liệu đều hiện đầy đủ
-      expect(find.text('BIG-WAR'), findsNWidgets(3)); // 3 text layer hiệu ứng 3D
-      expect(find.text('ĐẤU TRƯỜNG SINH TỬ'), findsOneWidget);
-      expect(find.text('ĐĂNG NHẬP CHIẾN TRƯỜNG'), findsOneWidget);
-      expect(find.text('Tài khoản'), findsNWidgets(2)); // Stroke + Fill
-      expect(find.text('Mật khẩu'), findsNWidgets(2));
-      expect(find.text('ĐĂNG NHẬP'), findsNWidgets(2)); // Nút hành động dập nổi
-      expect(find.text('Chưa có tài khoản? Đăng ký ngay'), findsOneWidget);
+      // Kiểm tra tiêu đề Welcome 👋 và mô tả
+      expect(find.text('Welcome'), findsOneWidget);
+      expect(find.text('👋'), findsOneWidget);
+      expect(find.text('Please enter your email and password'), findsOneWidget);
+
+      // Kiểm tra các trường Email & Password
+      expect(find.text('Email'), findsOneWidget);
+      expect(find.text('Password'), findsOneWidget);
+
+      // Kiểm tra nút Login cam và liên kết Register now!
+      expect(find.text('Login'), findsOneWidget);
+      expect(find.textContaining('Register now!'), findsOneWidget);
+
+      // Xác nhận không có nút fb, google, forgot password
+      expect(find.textContaining('Forgot password'), findsNothing);
+      expect(find.textContaining('google'), findsNothing);
+      expect(find.textContaining('facebook'), findsNothing);
 
       // Đảm bảo không có ngoại lệ RenderFlex overflow
       expect(tester.takeException(), isNull);
@@ -51,15 +61,15 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // Bấm vào nút chuyển sang Đăng ký
-      await tester.tap(find.text('Chưa có tài khoản? Đăng ký ngay'));
+      // Bấm vào Register now!
+      await tester.tap(find.textContaining('Register now!'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // Kiểm tra trường Chiến danh xuất hiện
-      expect(find.text('TẠO TÀI KHOẢN CHIẾN BINH'), findsOneWidget);
-      expect(find.text('Chiến danh'), findsNWidgets(2));
-      expect(find.text('Đã có tài khoản? Đăng nhập'), findsOneWidget);
+      // Kiểm tra trường Display Name xuất hiện và nút đổi thành Register
+      expect(find.textContaining('Display Name'), findsOneWidget);
+      expect(find.text('Register'), findsOneWidget);
+      expect(find.textContaining('Login now!'), findsOneWidget);
 
       expect(tester.takeException(), isNull);
     });
