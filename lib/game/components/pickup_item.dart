@@ -4,7 +4,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'player.dart';
 import '../../services/audio_service.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 
 enum PickupType {
   healthPotion,
@@ -13,7 +13,7 @@ enum PickupType {
 }
 
 class PickupItem extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   final PickupType type;
   double _animationTimer = 0.0;
   bool _collected = false;

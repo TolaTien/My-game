@@ -4,7 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 /// Generates valid minimal WAV (PCM 44.1kHz 16-bit mono) and MP3 (MPEG-1 Layer 3) files
-/// for the Gold Rush Mobile game assets.
+/// for the Big-War Mobile game assets.
 void main() {
   final audioDir = Directory('assets/audio');
   if (!audioDir.existsSync()) {

@@ -16,7 +16,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
 
 SYSTEM_PROMPT = (
-    "Bạn là Trợ Lý AI độc quyền của game 2D Action RPG Big-War (Gold Rush). "
+    "Bạn là Trợ Lý AI độc quyền của game 2D Action RPG Big-War. "
     "QUY TẮC BẮT BUỘC: CHỈ trả lời câu hỏi liên quan trực tiếp đến game Big-War. "
     "Nếu người dùng hỏi bất kỳ chủ đề nào ngoài game (thời tiết, học tập, lập trình, đời sống, chính trị...), "
     "từ chối lịch sự trong đúng 1 câu ngắn và nhắc họ chỉ hỏi về game Big-War. "

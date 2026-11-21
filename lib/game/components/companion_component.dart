@@ -6,7 +6,7 @@ import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../rendering/fox_spirit_visual.dart';
 import '../rendering/dragon_spirit_visual.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 import 'player.dart';
 import 'enemy_zombie.dart';
 import 'enemy_skeleton.dart';
@@ -81,7 +81,7 @@ extension CompanionTypeExtension on CompanionType {
 
 /// AI Companion Drone bay lơ lửng quanh Player
 class CompanionComponent extends PositionComponent
-    with HasGameReference<GoldRushGame> {
+    with HasGameReference<BigWarGame> {
   final String companionId;
   final CompanionType type;
   final PlayerComponent player;
@@ -821,7 +821,7 @@ class CompanionComponent extends PositionComponent
 
 /// Tia đạn Plasma mini của Attack Drone / Aegis-X9
 class CompanionPlasmaProjectile extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   final Vector2 direction;
   final double speed = 280.0;
   final double damage = 12.0;

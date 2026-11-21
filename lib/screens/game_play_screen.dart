@@ -2,7 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import '../core/game_keyboard_controller.dart';
 import '../core/stat_growth_formula.dart';
-import '../game/gold_rush_game.dart';
+import '../game/big_war_game.dart';
 import '../game/hud/game_hud.dart';
 import '../registry/asset_registry.dart';
 import '../services/player_storage.dart';
@@ -18,7 +18,7 @@ class GamePlayScreen extends StatefulWidget {
 
 class _GamePlayScreenState extends State<GamePlayScreen>
     with WidgetsBindingObserver {
-  late final GoldRushGame _game;
+  late final BigWarGame _game;
   late final GameKeyboardController _keyboardController;
   final FocusNode _focusNode = FocusNode(debugLabel: 'gameplay_focus');
 
@@ -26,7 +26,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _game = GoldRushGame(
+    _game = BigWarGame(
       playerProfile: PlayerStorage.currentProfile,
       selectedMapConfig: widget.initialMapConfig,
     );
@@ -133,7 +133,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
       body: Focus(
         focusNode: _focusNode,
         autofocus: true,
-        child: GameWidget<GoldRushGame>(
+        child: GameWidget<BigWarGame>(
           game: _game,
           overlayBuilderMap: {
             'HUD': (context, game) => GameHudOverlay(

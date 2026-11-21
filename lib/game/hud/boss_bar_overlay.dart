@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 import '../components/boss_enemy.dart';
 
 class BossBarOverlay extends StatelessWidget {
-  final GoldRushGame game;
+  final BigWarGame game;
 
   const BossBarOverlay({super.key, required this.game});
 

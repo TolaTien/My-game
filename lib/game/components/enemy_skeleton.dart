@@ -8,10 +8,10 @@ import 'dungeon_map.dart';
 import 'arrow_projectile.dart';
 import 'pickup_item.dart';
 import '../ai/astar_pathfinder.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 
 class SkeletonEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   double maxHp = 45.0;
   double currentHp = 45.0;
   double speed = 50.0;

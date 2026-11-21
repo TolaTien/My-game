@@ -10,7 +10,8 @@ import '../models/pvp_match.dart';
 import 'friend_party_service.dart';
 
 class PlayerStorage {
-  static const String _storageKey = 'gold_rush_player_profile';
+  static const String _storageKey = 'big_war_player_profile';
+  static const String _legacyStorageKey = 'gold_rush_player_profile';
 
   /// Tỷ giá quy đổi chuẩn: 1 Xu = 1000 Vàng
   static const int goldPerXu = PlayerProfile.goldPerXu;
@@ -49,7 +50,11 @@ class PlayerStorage {
   static Future<PlayerProfile> loadProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_activeKey);
+      var jsonString = prefs.getString(_activeKey);
+      if (jsonString == null || jsonString.isEmpty) {
+        final legacyKey = _activeUid == null ? _legacyStorageKey : '${_legacyStorageKey}_$_activeUid';
+        jsonString = prefs.getString(legacyKey);
+      }
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> map = jsonDecode(jsonString);
         var profile = PlayerProfile.fromJson(map);

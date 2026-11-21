@@ -53,7 +53,6 @@ class ChatAiAssistantService {
     'big-war',
     'big war',
     'bigwar',
-    'gold rush',
     'game',
     'tro choi',
     'choi',

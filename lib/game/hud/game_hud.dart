@@ -7,12 +7,12 @@ import '../../core/game_keyboard_controller.dart';
 import '../../screens/settings_dialog.dart';
 import '../components/companion_component.dart';
 import '../components/player.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 import 'boss_bar_overlay.dart';
 import 'virtual_joystick.dart';
 
 class GameHudOverlay extends StatefulWidget {
-  final GoldRushGame game;
+  final BigWarGame game;
   final GameKeyboardController? keyboardController;
 
   const GameHudOverlay({

@@ -5,10 +5,10 @@ import 'package:flame/components.dart';
 import 'player.dart';
 import 'dungeon_map.dart';
 import '../ai/astar_pathfinder.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 
 class ZombieEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   double maxHp = 60.0;
   double currentHp = 60.0;
   double speed = 65.0;

@@ -67,7 +67,7 @@ abstract class DatabaseService {
 /// Dịch vụ giả lập Offline-First Fallback
 /// Hoạt động 100% độc lập, không phụ thuộc internet hay cấu hình Firebase
 class MockDatabaseService implements DatabaseService {
-  static const String storageKeyLeaderboard = 'gold_rush_mock_leaderboard';
+  static const String storageKeyLeaderboard = 'big_war_mock_leaderboard';
 
   Duration matchSimulatedDelay;
 

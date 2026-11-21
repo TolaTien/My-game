@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/components/companion_component.dart';
 import 'package:my_game/game/components/player.dart';
-import 'package:my_game/game/gold_rush_game.dart';
+import 'package:my_game/game/big_war_game.dart';
 import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/registry/asset_registry.dart';
 import 'package:my_game/registry/sprite_image_cache.dart';
@@ -114,7 +114,7 @@ void main() {
   test(
     'PET hotkey cannot summon a free companion when nothing is equipped',
     () {
-      final game = GoldRushGame(playerProfile: const PlayerProfile());
+      final game = BigWarGame(playerProfile: const PlayerProfile());
       game.onCompanionSkill();
       expect(game.companion, isNull);
     },
@@ -132,7 +132,7 @@ void main() {
           }
         }
       });
-      final game = GoldRushGame(
+      final game = BigWarGame(
         playerProfile: const PlayerProfile(selectedCompanionId: 'aegis_x9'),
         selectedMapConfig: GameAssetRegistry.defaultSanctumMap,
       );

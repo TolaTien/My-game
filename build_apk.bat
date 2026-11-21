@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================================
-echo   GOLD RUSH MOBILE - DONG GOI FILE APK CHO ANDROID
+echo   BIG-WAR MOBILE - DONG GOI FILE APK CHO ANDROID
 echo ========================================================
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"

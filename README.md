@@ -1,7 +1,7 @@
-# 🏆 Big-War (Gold Rush Mobile) — 2D Pixel-Art Action RPG
+# 🏆 Big-War — 2D Pixel-Art Action RPG Mobile
 
 > **Học phần:** `INT1449 · Lập trình di động`  
-> **Nhóm chủ đề:** **Nhóm A — Game 2D với Flame** *(phát triển mở rộng từ project mẫu **Gold Rush**: Chủ đề #1 Thu thập vàng trên bản đồ ô, #2 Quái đuổi bằng tìm đường A\*, #4 Game nhiều màn đọc từ JSON)* kết hợp mở rộng **Nhóm B — Trợ lý AI qua máy chủ Proxy giữ khóa + Chế độ Demo offline**.
+> **Nhóm chủ đề:** **Nhóm A — Game 2D với Flame** *(Chủ đề #1 Thu thập tài nguyên trên bản đồ ô, #2 Quái đuổi bằng tìm đường A\*, #4 Game nhiều màn đọc từ JSON)* kết hợp mở rộng **Nhóm B — Trợ lý AI qua máy chủ Proxy giữ khóa + Chế độ Demo offline**.
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.24%2B%20(Dart%20%5E3.13.5)-02569B?logo=flutter)
 ![Flame](https://img.shields.io/badge/Flame%20Engine-1.38.2-FF6F00)
@@ -31,7 +31,7 @@
 
 ## 1. Mục đích & Tổng quan dự án
 
-**Big-War (Gold Rush Mobile)** là tựa game **2D Pixel-Art Action RPG** đa nền tảng (**Android & Web**) được xây dựng bằng **Flutter** và **Flame Engine (`1.38.2`)**, phát triển mở rộng toàn diện từ dự án mẫu **Gold Rush** của học phần `INT1449 · Lập trình di động`.
+**Big-War** là tựa game **2D Pixel-Art Action RPG** đa nền tảng (**Android & Web**) được xây dựng bằng **Flutter** và **Flame Engine (`1.38.2`)** của học phần `INT1449 · Lập trình di động`.
 
 Mục tiêu của dự án là xây dựng một sản phẩm game di động hoàn chỉnh theo kiến trúc tách tầng rõ ràng, chạy mượt **60 FPS** trên điện thoại Android thật, hỗ trợ chơi **Offline-First** (không phụ thuộc mạng khi chơi PvE, Cửa hàng, Vòng quay, PvP với Bot và Trợ lý AI Demo) đồng thời mở rộng mượt mà sang **Online Realtime** (Đăng nhập Firebase Auth, Bảng xếp hạng, Kết bạn, Tổ đội Party 2v2/4v4, PvP thời gian thực và Trợ lý AI kết nối Gemini qua máy chủ FastAPI riêng).
 
@@ -130,7 +130,7 @@ flowchart TB
     end
 
     subgraph Logic["Tầng Logic & Flame Engine (Domain / Engine Layer)"]
-        GRG["GoldRushGame<br/>(Vòng lặp PvE, Va chạm, Loot)"]
+        BWG["BigWarGame<br/>(Vòng lặp PvE, Va chạm, Loot)"]
         PAG["PvpArenaGame<br/>(Vòng lặp PvP Bo3, Sync)"]
         AI["AStarPathfinder (Min-Heap)<br/>PvpBotAi (FSM 3 bậc)"]
         Reg["GameAssetRegistry & SpriteImageCache<br/>(Data-Driven JSON + Preload)"]
@@ -183,7 +183,7 @@ my-game/
 │   ├── models/                       # PlayerProfile, PvpMatch/PvpRankSystem, DatabaseModels, FriendPartyModels
 │   ├── registry/                     # GameAssetRegistry (đọc JSON), SpriteImageCache (preload nền)
 │   ├── game/
-│   │   ├── gold_rush_game.dart       # Engine màn chơi PvE
+│   │   ├── big_war_game.dart         # Engine màn chơi PvE (BigWarGame)
 │   │   ├── pvp_arena_game.dart       # Engine Đấu trường PvP 1v1 / 2v2 / 4v4
 │   │   ├── ai/                       # astar_pathfinder.dart, pvp_bot_ai.dart
 │   │   ├── components/               # Player, Zombie, Skeleton, Boss, Companion, Map, Projectiles, Pickups
@@ -209,7 +209,7 @@ my-game/
 
 ### 4.3. Quản lý trạng thái, Khả năng thay thế phụ thuộc & Xử lý 3 trạng thái UX
 
-- **Quản lý trạng thái tập trung**: dùng `ValueNotifier` (`PlayerStorage.profileNotifier`, `FriendPartyService.partyNotifier` / `friendsNotifier` / `incomingInviteNotifier`, `AudioService.*Notifier`, `GameSettingsService.*Notifier`, `GoldRushGame.bossHpNotifier`) giúp UI cập nhật phản ứng tức thì, không gọi mạng trong `build()` và `dispose()` đầy đủ mọi controller/subscription/timer.
+- **Quản lý trạng thái tập trung**: dùng `ValueNotifier` (`PlayerStorage.profileNotifier`, `FriendPartyService.partyNotifier` / `friendsNotifier` / `incomingInviteNotifier`, `AudioService.*Notifier`, `GameSettingsService.*Notifier`, `BigWarGame.bossHpNotifier`) giúp UI cập nhật phản ứng tức thì, không gọi mạng trong `build()` và `dispose()` đầy đủ mọi controller/subscription/timer.
 - **Thay thế phụ thuộc bằng đồ giả (Testable Architecture)**:
   - `DatabaseService.setInstance(MockDatabaseService())`
   - `AudioService.setInstance(MockAudioService())` và `FlameAudioService(bgmPlayback: fakePlayback)`
@@ -399,9 +399,9 @@ flutter test --reporter expanded
 
 | Loại dữ liệu | Vị trí lưu trữ | Mục đích & Vòng đời |
 |---|---|---|
-| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Kim Cương, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `gold_rush_player_profile` hoặc `gold_rush_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
+| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Kim Cương, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `big_war_player_profile` hoặc `big_war_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
 | **Cài đặt âm thanh & đồ họa/điều khiển** (`targetFps`, `graphicsQuality`, bật/tắt số sát thương, auto-aim, rung haptic, rung màn hình, âm lượng/tắt BGM & SFX) | Thiết bị người dùng — `SharedPreferences` | Khôi phục ngay khi mở lại ứng dụng (`AudioService`, `GameSettingsService`). |
-| **Bộ nhớ đệm BXH & Tổ đội cục bộ** | Thiết bị người dùng — `SharedPreferences` (`gold_rush_mock_leaderboard`, `gold_rush_shared_*`) | Dự phòng mượt mà khi tắt mạng hoặc chạy test/offline. |
+| **Bộ nhớ đệm BXH & Tổ đội cục bộ** | Thiết bị người dùng — `SharedPreferences` (`big_war_mock_leaderboard`, `big_war_shared_*`) | Dự phòng mượt mà khi tắt mạng hoặc chạy test/offline. |
 | **Tài khoản đăng nhập** (Email, UID, DisplayName) | **Firebase Authentication** | Xác thực đăng nhập/đăng ký, hỗ trợ quên mật khẩu; phiên trên Web dùng `Persistence.SESSION`. |
 | **Dữ liệu Online Realtime** (`players/{uid}`, `leaderboard`, `matchmaking`, `rooms/{roomId}`, `directory`, `parties`, `invitations`, `friend_requests`, `friendships`) | **Firebase Realtime Database** (bảo vệ bởi [database.rules.json](database.rules.json)) | Đồng bộ hồ sơ đám mây (debounce `800ms`), BXH Top server, kết bạn, tổ đội và phòng PvP thời gian thực. |
 | **Cấu hình game tĩnh** (tướng, kỹ năng, trợ thủ, quái vật, 5 bản đồ) | Đóng gói chỉ đọc trong ứng dụng (`assets/data/*.json`) | Tách dữ liệu khỏi code engine (`GameAssetRegistry`), có fallback mặc định nếu JSON lỗi. |

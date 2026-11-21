@@ -56,7 +56,7 @@ void main() async {
   await GameSettingsService.instance.initialize();
 
   // Khởi chạy giao diện ngay lập tức để tránh lỗi ANR (Application Not Responding)
-  runApp(GoldRushApp(isSignedIn: isSignedIn));
+  runApp(BigWarApp(isSignedIn: isSignedIn));
 
   // Tải trước tài nguyên ảnh Sprite trong nền sau khi frame đầu tiên đã vẽ xong
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,9 +64,9 @@ void main() async {
   });
 }
 
-class GoldRushApp extends StatelessWidget {
+class BigWarApp extends StatelessWidget {
   final bool isSignedIn;
-  const GoldRushApp({super.key, this.isSignedIn = false});
+  const BigWarApp({super.key, this.isSignedIn = false});
 
   @override
   Widget build(BuildContext context) {

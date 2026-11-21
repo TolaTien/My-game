@@ -52,7 +52,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       final prefs = await SharedPreferences.getInstance();
-      final rawInvite = prefs.getString('gold_rush_shared_invite_GR2002');
+      final rawInvite = prefs.getString('big_war_shared_invite_GR2002');
       expect(rawInvite, isNotNull);
       final parsed = PartyInvitation.fromJson(
         jsonDecode(rawInvite!) as Map<String, dynamic>,

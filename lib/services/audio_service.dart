@@ -91,7 +91,7 @@ class AudioCallEvent {
       'AudioCallEvent(method: $method, target: $target, volume: $volume, loop: $loop)';
 }
 
-/// Abstract contract for the Gold Rush Audio Subsystem.
+/// Abstract contract for the Big-War Audio Subsystem.
 abstract class AudioService {
   static AudioService? _instance;
 

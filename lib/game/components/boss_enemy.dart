@@ -9,7 +9,7 @@ import 'enemy_zombie.dart';
 import 'pickup_item.dart';
 import '../../services/audio_service.dart';
 import '../ai/astar_pathfinder.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 
 enum BossState {
   chase,
@@ -41,7 +41,7 @@ class BossHpData {
 }
 
 class BossEnemy extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   final PlayerComponent player;
 
   static const double defaultMaxHp = 600.0;
@@ -569,7 +569,7 @@ class BossEnemy extends PositionComponent
 }
 
 class BossFlameProjectile extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   final Vector2 direction;
   final double speed;
   final double damage;
@@ -680,7 +680,7 @@ class GroundSlamTelegraph extends PositionComponent {
 }
 
 class BossVictoryPortal extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   double timer = 0.0;
   bool hasTriggered = false;
 
