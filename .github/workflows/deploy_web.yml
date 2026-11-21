@@ -64,24 +64,41 @@ jobs:
   deploy-firebase-hosting:
     name: Build & Deploy to Firebase Hosting
     runs-on: ubuntu-latest
-    if: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MY_GAME_EC4FA != '' }}"
     steps:
+      - name: Check Firebase Secret
+        id: check_secret
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MY_GAME_EC4FA }}
+        run: |
+          if [ -n "$FIREBASE_SECRET" ]; then
+            echo "has_secret=true" >> "$GITHUB_OUTPUT"
+            echo "Firebase secret found. Proceeding with deployment."
+          else
+            echo "has_secret=false" >> "$GITHUB_OUTPUT"
+            echo "Firebase secret FIREBASE_SERVICE_ACCOUNT_MY_GAME_EC4FA is not configured. Skipping deployment."
+          fi
+
       - name: Checkout repository
+        if: steps.check_secret.outputs.has_secret == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Flutter
+        if: steps.check_secret.outputs.has_secret == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
       - name: Install dependencies
+        if: steps.check_secret.outputs.has_secret == 'true'
         run: flutter pub get
 
       - name: Build Flutter Web for Firebase Hosting
+        if: steps.check_secret.outputs.has_secret == 'true'
         run: flutter build web --release --base-href "/"
 
       - name: Deploy to Firebase Hosting
+        if: steps.check_secret.outputs.has_secret == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
