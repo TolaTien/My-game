@@ -114,7 +114,17 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
-  double damageAbsorption = 0.0;
+  double _baseDamageAbsorption = 0.0;
+  double _companionDamageAbsorption = 0.0;
+  double temporaryPetDamageAbsorption = 0.0;
+  double get damageAbsorption => max(
+    max(_baseDamageAbsorption, _companionDamageAbsorption),
+    goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0,
+  );
+  set damageAbsorption(double value) => _baseDamageAbsorption = value;
+  set companionDamageAbsorption(double value) =>
+      _companionDamageAbsorption = value;
+  double get effectiveDamageAbsorption => damageAbsorption.clamp(0.0, .9);
   double goldenShieldTimer = 0.0;
   double get shieldHp => goldenShieldTimer > 0
       ? 50.0
@@ -151,9 +161,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         enabled: configured != null || !registry.isInitialized,
       );
     }, growable: false);
-    if (userHeroLevel > 1) {
-      applyUserHeroLevel(userHeroLevel);
-    }
+    applyUserHeroLevel(userHeroLevel);
     // Hitbox va chạm với quái và tường
     add(RectangleHitbox(size: Vector2(24, 28), position: Vector2(6, 10)));
   }
@@ -164,16 +172,16 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       StatGrowthFormula.minHeroLevel,
       StatGrowthFormula.maxHeroLevel,
     );
-    if (userHeroLevel <= 1) return;
     final scaled = StatGrowthFormula.computeStatsForLevel(
       heroId: heroId,
       level: userHeroLevel,
     );
-    maxHp = GameConstants.playerMaxHp + scaled.bonusHp;
+    maxHp = scaled.maxHp;
     currentHp = maxHp;
-    maxKi = GameConstants.playerMaxKi + scaled.bonusKi;
+    maxKi = scaled.maxKi;
     currentKi = maxKi;
-    damage = GameConstants.playerBaseDamage + scaled.bonusAttack;
+    damage = scaled.attackDamage;
+    speed = scaled.moveSpeed;
   }
 
   @override
@@ -229,6 +237,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       goldenShieldTimer -= dt;
       if (goldenShieldTimer <= 0) {
         goldenShieldTimer = 0.0;
+        temporaryPetDamageAbsorption = 0.0;
       }
     }
 
@@ -466,7 +475,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   void takeDamage(double dmg) {
     if (currentHp <= 0 || invulnerabilityTimer > 0 || dmg <= 0) return;
-    final barrierFactor = (1.0 - damageAbsorption.clamp(0.0, 0.9));
+    final barrierFactor = 1.0 - effectiveDamageAbsorption;
     var skillFactor = 1.0;
     for (final skill in skillRuntimes) {
       if (skill.effectRemaining > 0 && (skill.config.slot != 3 || isBerserk)) {

@@ -435,14 +435,16 @@ void main() {
     () async {
       final registry = GameAssetRegistry.forTesting();
       final customRaw = copy(heroJson['heroes'][0])..['id'] = 'custom';
-      registry.registerCustomHero(HeroAssetConfig.fromJson(customRaw));
+      final custom = HeroAssetConfig.fromJson(customRaw);
+      registry.registerCustomHero(custom);
+      final fallbackNova = registry.getHero('nova_blade');
       final broken = copy(skillJson);
       (broken['skills'] as List).removeAt(0);
       await registry.initialize(bundle: _CatalogBundle(heroJson, broken));
       expect(registry.isInitialized, isFalse);
       expect(registry.skills, isEmpty);
-      expect(registry.heroes.any((h) => h.id == 'nova_blade'), isFalse);
-      expect(registry.heroes.any((h) => h.id == 'custom'), isTrue);
+      expect(registry.getHero('nova_blade'), same(fallbackNova));
+      expect(registry.getHero('custom'), same(custom));
 
       await registry.initialize();
       expect(registry.isInitialized, isTrue);

@@ -83,9 +83,10 @@ void main() {
         'map_bang',
         'map_dao_bang_gia',
         'map_rung_cay',
+        'dien_tho_co_long',
+        'hoa_nguc_dung_nham',
       ];
       const seed = 'integration-room';
-      final seededId = registry.getMapFromSeed(seed).id;
       expect(
         registry.getMapForStage(1),
         same(GameAssetRegistry.defaultSanctumMap),
@@ -96,8 +97,15 @@ void main() {
         registry.availableMatchMaps.map((map) => map.id),
         unorderedEquals(mapIds),
       );
-      expect(registry.getMapFromSeed(seed).id, seededId);
-      expect(registry.getMapForStage(7).theme, 'ice_arena');
+      final peerRegistry = GameAssetRegistry.forTesting();
+      await peerRegistry.initialize();
+      final seededId = registry.getMapFromSeed(seed).id;
+      expect(mapIds, contains(seededId));
+      expect(peerRegistry.getMapFromSeed(seed).id, seededId);
+      for (var stage = 1; stage < mapIds.length; stage++) {
+        expect(registry.getMapForStage(stage).id, mapIds[stage]);
+      }
+      expect(registry.getMapForStage(7), same(GameAssetRegistry.defaultSanctumMap));
       final cache = SpriteImageCache.forTesting(rootBundle);
       for (final id in mapIds.skip(1)) {
         final map = registry.getMap(id)!;

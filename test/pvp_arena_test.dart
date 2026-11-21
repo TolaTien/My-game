@@ -279,9 +279,9 @@ void main() {
         targetPlayer: game.player,
       );
 
-      game.update(3.0); // Enter fighting
-      game.player.currentHp = 80;
-      game.bot.currentHp = 40;
+      game.update(1.5); // Enter fighting
+      game.player.currentHp = game.player.maxHp * .8;
+      game.bot.currentHp = game.bot.maxHp * .4;
 
       // Elapse 90 seconds
       game.update(90.1);

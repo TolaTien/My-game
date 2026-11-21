@@ -233,6 +233,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _cleanupFloorEntities() {
+    companion?.resetForFloor();
+    for (final projectile
+        in world.children.whereType<CompanionPlasmaProjectile>().toList()) {
+      projectile.removeFromParent();
+    }
     for (final projectile
         in world.children.whereType<HeroProjectile>().toList()) {
       projectile.removeFromParent();
@@ -338,14 +343,37 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnPickups() {
-    final pickupSpawns = [
-      (Vector2(160, 360), PickupType.healthPotion),
-      (Vector2(550, 180), PickupType.expGem),
-      (Vector2(750, 400), PickupType.expGem),
-      (Vector2(350, 420), PickupType.goldCoin),
-      (Vector2(900, 200), PickupType.goldCoin),
-      (Vector2(600, 550), PickupType.goldCoin),
-    ];
+    final List<(Vector2, PickupType)> pickupSpawns;
+    if (currentMapConfig.buffNodes.isNotEmpty) {
+      pickupSpawns = [];
+      for (var i = 0; i < currentMapConfig.buffNodes.length; i++) {
+        final node = currentMapConfig.buffNodes[i];
+        final position = Vector2(
+          (node[0] + 0.5) * 32.0,
+          (node[1] + 0.5) * 32.0,
+        );
+        final type = i == 0
+            ? PickupType.healthPotion
+            : (i.isOdd ? PickupType.goldCoin : PickupType.expGem);
+        pickupSpawns.add((position, type));
+      }
+      if (currentMapConfig.buffNodes.length >= 2) {
+        final node = currentMapConfig.buffNodes[1];
+        pickupSpawns.add((
+          Vector2((node[0] + 2.0) * 32.0, (node[1] + 0.5) * 32.0),
+          PickupType.goldCoin,
+        ));
+      }
+    } else {
+      pickupSpawns = [
+        (Vector2(160, 360), PickupType.healthPotion),
+        (Vector2(550, 180), PickupType.expGem),
+        (Vector2(750, 400), PickupType.expGem),
+        (Vector2(350, 420), PickupType.goldCoin),
+        (Vector2(900, 200), PickupType.goldCoin),
+        (Vector2(600, 550), PickupType.goldCoin),
+      ];
+    }
 
     for (final (pt, type) in pickupSpawns) {
       final item = PickupItem(position: pt, type: type);
@@ -715,8 +743,10 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     if (paused || isVictoryTriggered || isGameOverTriggered || !player.canAct) {
       return;
     }
+    final selectedCompanionId = activeProfile.selectedCompanionId;
+    if (selectedCompanionId == null || selectedCompanionId.isEmpty) return;
     companion ??= CompanionComponent(
-      companionId: activeProfile.selectedCompanionId ?? 'aegis_x9',
+      companionId: selectedCompanionId,
       player: player,
     );
     if (!companion!.isMounted && isLoaded) {

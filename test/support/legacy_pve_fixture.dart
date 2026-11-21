@@ -13,6 +13,13 @@ const legacyTestMap = MapAssetConfig(
   bossSpawn: [28, 11],
   monsterPortals: [],
   buffNodes: [],
+  obstacles: [
+    [8, 6],
+    [26, 6],
+    [8, 16],
+    [26, 16],
+    [17, 10],
+  ],
   tilesetImage: '',
   tiledMapFile: '',
 );

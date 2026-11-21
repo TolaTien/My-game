@@ -102,6 +102,7 @@ class CompanionComponent extends PositionComponent
   static const double specialSkillMaxCooldown = maxSpecialSkillCooldown;
   double specialSkillCooldown = 0.0;
   double overdriveTimer = 0.0;
+  bool _ownsActiveShield = false;
 
   // Quản lý trạng thái làm chậm của Frost Drone / Aegis-X9
   final Map<PositionComponent, double> _slowedEnemies = {};
@@ -121,9 +122,9 @@ class CompanionComponent extends PositionComponent
 
     // Kích hoạt khiên bảo vệ 30% cho Player nếu là Shield Drone
     if (type == CompanionType.shield) {
-      player.damageAbsorption = 0.30;
+      player.companionDamageAbsorption = 0.30;
     } else if (type == CompanionType.aegisX9) {
-      player.damageAbsorption = 0.20;
+      player.companionDamageAbsorption = 0.20;
     }
   }
 
@@ -131,9 +132,9 @@ class CompanionComponent extends PositionComponent
   void onMount() {
     super.onMount();
     if (type == CompanionType.shield) {
-      player.damageAbsorption = 0.30;
+      player.companionDamageAbsorption = 0.30;
     } else if (type == CompanionType.aegisX9) {
-      player.damageAbsorption = 0.20;
+      player.companionDamageAbsorption = 0.20;
     }
   }
 
@@ -157,10 +158,22 @@ class CompanionComponent extends PositionComponent
 
   /// Dọn dẹp trạng thái, hoàn trả tốc độ quái vật và hồi phục chỉ số khi unequip / exit
   void cleanup() {
+    _clearActiveShield();
+    lockedTarget = null;
     if (type == CompanionType.shield || type == CompanionType.aegisX9) {
-      player.damageAbsorption = 0.0;
+      player.companionDamageAbsorption = 0.0;
     }
     _restoreAllSlowedEnemies();
+  }
+
+  void resetForFloor() {
+    _clearActiveShield();
+    _restoreAllSlowedEnemies();
+    lockedTarget = null;
+    actionCooldown = 0;
+    specialSkillCooldown = 0;
+    overdriveTimer = 0;
+    position = player.position + Vector2(orbitRadius, 0);
   }
 
   void _restoreAllSlowedEnemies() {
@@ -180,15 +193,32 @@ class CompanionComponent extends PositionComponent
     _slowedEnemies.clear();
   }
 
+  bool _targetIsAlive(PositionComponent target) {
+    if (target is ZombieEnemy) return target.currentHp > 0;
+    if (target is SkeletonEnemy) return target.currentHp > 0;
+    if (target is BossEnemy) return !target.isDefeated && target.currentHp > 0;
+    return false;
+  }
+
+  void _clearActiveShield() {
+    if (!_ownsActiveShield) return;
+    player.temporaryPetDamageAbsorption = 0;
+    player.goldenShieldTimer = 0;
+    _ownsActiveShield = false;
+  }
+
   /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ: Trường Trọng Lực Hoàng Kim (Golden Overdrive)
   bool activateSpecialSkill() {
-    if (specialSkillCooldown > 0) return false;
+    if (specialSkillCooldown > 0 || !player.canAct) return false;
+    if (isMounted &&
+        (game.paused || game.isGameOverTriggered || game.isVictoryTriggered)) {
+      return false;
+    }
     specialSkillCooldown = maxSpecialSkillCooldown;
     overdriveTimer = 2.5;
     player.goldenShieldTimer = 4.0;
-    if (player.damageAbsorption < 0.25) {
-      player.damageAbsorption = 0.25;
-    }
+    player.temporaryPetDamageAbsorption = .25;
+    _ownsActiveShield = true;
 
     AudioService.instance.playSfx(SfxSound.skillSmash);
 
@@ -223,6 +253,14 @@ class CompanionComponent extends PositionComponent
     }
     if (overdriveTimer > 0) {
       overdriveTimer = max(0.0, overdriveTimer - dt);
+    }
+    if (!player.canAct ||
+        (isMounted &&
+            (game.paused ||
+                game.isGameOverTriggered ||
+                game.isVictoryTriggered))) {
+      lockedTarget = null;
+      return;
     }
 
     // 1. Quỹ đạo bay
@@ -377,9 +415,7 @@ class CompanionComponent extends PositionComponent
 
   // --- ARCHETYPE 2: SHIELD DRONE ---
   void _updateShieldDrone(double dt) {
-    if (player.damageAbsorption != 0.30) {
-      player.damageAbsorption = 0.30;
-    }
+    player.companionDamageAbsorption = 0.30;
   }
 
   // --- ARCHETYPE 3: FROST DRONE ---
@@ -470,13 +506,23 @@ class CompanionComponent extends PositionComponent
       );
     }
 
+    // World effects precede both sprite and cached procedural bodies.
+    if (type == CompanionType.shield) {
+      _renderShieldDomeAndTether(canvas, droneCenter, offsetToPlayer);
+    } else if (type == CompanionType.frost) {
+      _renderFrostDecal(canvas, droneCenter, offsetToPlayer);
+    } else if (lockedTarget != null &&
+        lockedTarget!.isMounted &&
+        _targetIsAlive(lockedTarget!)) {
+      if (type == CompanionType.aegisX9) {
+        _renderAegisLaser(canvas, droneCenter);
+      } else if (type == CompanionType.attack) {
+        _renderTargetingLaser(canvas, droneCenter);
+      }
+    }
+
     final compSprite = SpriteImageCache.instance.getCompanionImage(companionId);
     if (compSprite != null) {
-      if (type == CompanionType.shield) {
-        _renderShieldDomeAndTether(canvas, droneCenter, offsetToPlayer);
-      } else if (type == CompanionType.frost) {
-        _renderFrostDecal(canvas, droneCenter, offsetToPlayer);
-      }
       final srcRect = Rect.fromLTWH(
         0,
         0,
@@ -500,17 +546,6 @@ class CompanionComponent extends PositionComponent
     if (type == CompanionType.aegisX9) {
       _renderAegisX9(canvas, droneCenter);
       return;
-    }
-
-    // 1. Hiệu ứng Aura / World VFX
-    if (type == CompanionType.shield) {
-      _renderShieldDomeAndTether(canvas, droneCenter, offsetToPlayer);
-    } else if (type == CompanionType.frost) {
-      _renderFrostDecal(canvas, droneCenter, offsetToPlayer);
-    } else if (type == CompanionType.attack &&
-        lockedTarget != null &&
-        lockedTarget!.isMounted) {
-      _renderTargetingLaser(canvas, droneCenter);
     }
 
     // 2. Bóng đổ lơ lửng trên mặt đất
@@ -553,21 +588,6 @@ class CompanionComponent extends PositionComponent
         ..color = const Color(0x44FFD700)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
-
-    // 2. Tia laser vàng nhắm mục tiêu
-    if (lockedTarget != null && lockedTarget!.isMounted) {
-      final targetOffset = Offset(
-        lockedTarget!.position.x - position.x,
-        lockedTarget!.position.y - position.y,
-      );
-      canvas.drawLine(
-        center,
-        center + targetOffset,
-        Paint()
-          ..color = const Color(0x66FFD700)
-          ..strokeWidth = 1.2,
-      );
-    }
 
     // 3. Vòng Gyroscope kim loại bạc và xanh cyan xoay chéo góc nhau
     canvas.save();
@@ -785,6 +805,20 @@ class CompanionComponent extends PositionComponent
     canvas.rotate(bobbingTimer * 0.5);
     canvas.drawPicture(_frostRunesPicture!);
     canvas.restore();
+  }
+
+  void _renderAegisLaser(Canvas canvas, Offset center) {
+    final targetOffset = Offset(
+      lockedTarget!.position.x - position.x,
+      lockedTarget!.position.y - position.y,
+    );
+    canvas.drawLine(
+      center,
+      center + targetOffset,
+      Paint()
+        ..color = const Color(0x66FFD700)
+        ..strokeWidth = 1.2,
+    );
   }
 
   void _renderTargetingLaser(Canvas canvas, Offset droneCenter) {

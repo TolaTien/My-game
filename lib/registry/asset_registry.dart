@@ -407,6 +407,9 @@ class CompanionAssetConfig {
 }
 
 class MapAssetConfig {
+  static const defaultCols = 36;
+  static const defaultRows = 24;
+
   final String id;
   final int stage;
   final String name;
@@ -423,6 +426,7 @@ class MapAssetConfig {
   final String imageAsset;
   final String theme;
   final String description;
+  final List<List<int>> obstacles;
 
   const MapAssetConfig({
     required this.id,
@@ -441,7 +445,41 @@ class MapAssetConfig {
     this.imageAsset = '',
     this.theme = 'golden_sanctum',
     this.description = '',
+    this.obstacles = const [],
   });
+
+  int get widthTiles => cols > 0 ? cols : defaultCols;
+  int get heightTiles => rows > 0 ? rows : defaultRows;
+
+  /// The short form is a 2x2 pillar; the long form gives its width and height.
+  static List<List<int>> validatedObstacles(Object? raw, int cols, int rows) {
+    if (raw is! List) return const [];
+    final result = <List<int>>[];
+    for (final entry in raw) {
+      if (entry is! List ||
+          (entry.length != 2 && entry.length != 4) ||
+          entry.any((value) => value is! int)) {
+        continue;
+      }
+      final rect = entry.cast<int>();
+      final x = rect[0];
+      final y = rect[1];
+      final w = rect.length == 2 ? 2 : rect[2];
+      final h = rect.length == 2 ? 2 : rect[3];
+      if (x < 0 ||
+          y < 0 ||
+          x >= cols ||
+          y >= rows ||
+          w <= 0 ||
+          h <= 0 ||
+          w > cols - x ||
+          h > rows - y) {
+        continue;
+      }
+      result.add(List<int>.unmodifiable(rect));
+    }
+    return List<List<int>>.unmodifiable(result);
+  }
 
   factory MapAssetConfig.fromJson(Map<String, dynamic> json) {
     List<int> parseCoord(dynamic raw, List<int> fallback) {
@@ -460,16 +498,18 @@ class MapAssetConfig {
       return const [];
     }
 
+    final cols = (json['cols'] as num?)?.toInt() ?? defaultCols;
+    final rows = (json['rows'] as num?)?.toInt() ?? defaultRows;
     return MapAssetConfig(
       id: json['id'] as String? ?? 'sunken_golden_sanctum',
       stage: (json['stage'] as num?)?.toInt() ?? 1,
       name: json['name'] as String? ?? 'Phế Tích Hoàng Kim',
       mode: json['mode'] as String? ?? 'pve',
-      cols: (json['cols'] as num?)?.toInt() ?? 40,
-      rows: (json['rows'] as num?)?.toInt() ?? 28,
+      cols: cols,
+      rows: rows,
       tileSize: (json['tileSize'] as num?)?.toInt() ?? 32,
-      playerSpawn: parseCoord(json['playerSpawn'], const [20, 24]),
-      bossSpawn: parseCoord(json['bossSpawn'], const [20, 14]),
+      playerSpawn: parseCoord(json['playerSpawn'], const [12, 9]),
+      bossSpawn: parseCoord(json['bossSpawn'], const [28, 12]),
       monsterPortals: parseCoordList(json['monsterPortals']),
       buffNodes: parseCoordList(json['buffNodes']),
       tilesetImage: json['tilesetImage'] as String? ?? '',
@@ -478,8 +518,33 @@ class MapAssetConfig {
       theme:
           json['theme'] as String? ?? json['id'] as String? ?? 'golden_sanctum',
       description: json['description'] as String? ?? '',
+      obstacles: validatedObstacles(
+        json['obstacles'],
+        cols > 0 ? cols : defaultCols,
+        rows > 0 ? rows : defaultRows,
+      ),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'stage': stage,
+    'name': name,
+    'mode': mode,
+    'cols': cols,
+    'rows': rows,
+    'tileSize': tileSize,
+    'playerSpawn': playerSpawn,
+    'bossSpawn': bossSpawn,
+    'monsterPortals': monsterPortals,
+    'buffNodes': buffNodes,
+    if (obstacles.isNotEmpty) 'obstacles': obstacles,
+    'tilesetImage': tilesetImage,
+    'tiledMapFile': tiledMapFile,
+    'imageAsset': imageAsset,
+    'theme': theme,
+    'description': description,
+  };
 }
 
 class EnemyAssetConfig {
@@ -602,23 +667,20 @@ class GameAssetRegistry {
 
   MapAssetConfig? getMap(String id) => _maps[id];
 
-  List<MapAssetConfig> get availableMatchMaps => [
-    _maps[defaultSanctumMap.id] ?? defaultSanctumMap,
-    _maps[defaultFrostArenaMap.id] ?? defaultFrostArenaMap,
-    _maps[defaultFrostIslandMap.id] ?? defaultFrostIslandMap,
-    _maps[defaultForestMap.id] ?? defaultForestMap,
-  ];
+  List<MapAssetConfig> get availableMatchMaps => _maps.values.toList();
 
   MapAssetConfig getRandomMap({String? excludeId}) {
     final pool = availableMatchMaps
         .where((map) => map.id != excludeId)
         .toList();
-    return pool[Random().nextInt(pool.length)];
+    return pool.isEmpty
+        ? defaultSanctumMap
+        : pool[Random().nextInt(pool.length)];
   }
 
   MapAssetConfig getMapFromSeed(String seed) {
     final pool = availableMatchMaps..sort((a, b) => a.id.compareTo(b.id));
-    // Keep the original MAIN seed mapping for online room compatibility.
+    // Sort the shared catalog so clients with the same IDs agree on the map.
     var hash = 0x811c9dc5;
     for (final unit in seed.codeUnits) {
       hash ^= unit;
@@ -629,6 +691,8 @@ class GameAssetRegistry {
 
   MapAssetConfig getMapForStage(int stage) {
     for (final m in _maps.values) {
+      // The seeded Sanctum remains selectable without shadowing JSON stage 1.
+      if (identical(m, defaultSanctumMap)) continue;
       if ((m.mode == 'pve' || m.mode == 'all') && m.stage == stage) return m;
     }
     return _maps[defaultSanctumMap.id] ?? defaultSanctumMap;
@@ -767,13 +831,13 @@ class GameAssetRegistry {
         priceGold: 0,
         unlockedByDefault: true,
         baseStats: HeroBaseStatsConfig(
-          hp: 100,
+          hp: 340,
           ki: 100,
           attack: 25,
           speed: 150,
         ),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 14.0,
+          hpPerLevel: 24.0,
           kiPerLevel: 3.5,
           attackPerLevel: 2.2,
         ),
@@ -822,11 +886,16 @@ class GameAssetRegistry {
         classType: 'marksman',
         priceGold: 3000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 90, ki: 115, attack: 30, speed: 165),
+        baseStats: HeroBaseStatsConfig(
+          hp: 250,
+          ki: 115,
+          attack: 14,
+          speed: 165,
+        ),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 10.0,
+          hpPerLevel: 15.0,
           kiPerLevel: 4.2,
-          attackPerLevel: 3.1,
+          attackPerLevel: 1.3,
         ),
         skillIds: ['ranger_multishot', 'ranger_trap_roll', 'ranger_star_rain'],
         sprites: HeroSpriteConfig(
@@ -842,11 +911,11 @@ class GameAssetRegistry {
         classType: 'tank',
         priceGold: 4000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 145, ki: 95, attack: 22, speed: 140),
+        baseStats: HeroBaseStatsConfig(hp: 440, ki: 95, attack: 18, speed: 140),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 20.0,
+          hpPerLevel: 30.0,
           kiPerLevel: 3.0,
-          attackPerLevel: 1.8,
+          attackPerLevel: 1.6,
         ),
         skillIds: [
           'tanker_shield_bash',
@@ -866,11 +935,16 @@ class GameAssetRegistry {
         classType: 'assassin',
         priceGold: 6000,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 95, ki: 110, attack: 34, speed: 180),
+        baseStats: HeroBaseStatsConfig(
+          hp: 280,
+          ki: 110,
+          attack: 28,
+          speed: 180,
+        ),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 10.5,
+          hpPerLevel: 18.0,
           kiPerLevel: 4.0,
-          attackPerLevel: 3.3,
+          attackPerLevel: 2.6,
         ),
         skillIds: [
           'ninja_shuriken_dash',
@@ -890,11 +964,16 @@ class GameAssetRegistry {
         classType: 'mage',
         priceGold: 7500,
         unlockedByDefault: false,
-        baseStats: HeroBaseStatsConfig(hp: 95, ki: 140, attack: 31, speed: 155),
+        baseStats: HeroBaseStatsConfig(
+          hp: 260,
+          ki: 150,
+          attack: 15,
+          speed: 160,
+        ),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 11.0,
-          kiPerLevel: 5.5,
-          attackPerLevel: 2.9,
+          hpPerLevel: 16.0,
+          kiPerLevel: 6.0,
+          attackPerLevel: 1.4,
         ),
         skillIds: [
           'valeria_frost_lance',
@@ -915,15 +994,15 @@ class GameAssetRegistry {
         priceGold: 8500,
         unlockedByDefault: false,
         baseStats: HeroBaseStatsConfig(
-          hp: 115,
-          ki: 110,
-          attack: 33,
-          speed: 150,
+          hp: 450,
+          ki: 105,
+          attack: 20,
+          speed: 145,
         ),
         growthPerLevel: HeroGrowthConfig(
-          hpPerLevel: 13.5,
-          kiPerLevel: 3.8,
-          attackPerLevel: 3.0,
+          hpPerLevel: 32.0,
+          kiPerLevel: 3.5,
+          attackPerLevel: 1.8,
         ),
         skillIds: [
           'garrick_napalm_shot',
@@ -936,13 +1015,101 @@ class GameAssetRegistry {
           attackSheet: 'assets/images/heroes/garrick/garrick_attack.png',
         ),
       ),
+      const HeroAssetConfig(
+        id: 'nova_blade',
+        name: 'Nova Blade (NOVA-07) — Chiến Binh Neon',
+        role: 'Đấu Sĩ / Cơ Động',
+        classType: 'warrior',
+        priceGold: 1000,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(
+          hp: 350,
+          ki: 110,
+          attack: 26,
+          speed: 175,
+        ),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 25.0,
+          kiPerLevel: 4.2,
+          attackPerLevel: 2.4,
+        ),
+        skillIds: [
+          'nova_energy_slash',
+          'nova_shadow_dash',
+          'nova_quantum_burst',
+        ],
+        sprites: HeroSpriteConfig(
+          idleSheet: 'assets/images/heroes/nova_blade/nova_blade_portrait.png',
+          runSheet: 'assets/images/heroes/nova_blade/nova_blade_sheet.png',
+          attackSheet: 'assets/images/heroes/nova_blade/nova_blade_sheet.png',
+        ),
+      ),
+      const HeroAssetConfig(
+        id: 'shadow_01',
+        name: 'SHADOW-01 — Sát Thủ Hư Không',
+        role: 'Sát Thủ / Hư Không',
+        classType: 'assassin',
+        priceGold: 100,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(
+          hp: 280,
+          ki: 120,
+          attack: 28,
+          speed: 185,
+        ),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 18.0,
+          kiPerLevel: 4.5,
+          attackPerLevel: 2.6,
+        ),
+        skillIds: [
+          'shadow_plasma_shot',
+          'shadow_cyber_spin',
+          'shadow_phantom_dash',
+        ],
+        sprites: HeroSpriteConfig(
+          idleSheet: 'assets/images/heroes/shadow/shadow_01_portrait.png',
+          runSheet: 'assets/images/heroes/shadow/shadow_01_sheet.png',
+          attackSheet: 'assets/images/heroes/shadow/shadow_01_sheet.png',
+        ),
+      ),
+      const HeroAssetConfig(
+        id: 'ember_02',
+        name: 'EMBER-02 — Phù Thủy Hỏa Cầu',
+        role: 'Pháp Sư / Hỏa Lực',
+        classType: 'mage',
+        priceGold: 100,
+        unlockedByDefault: false,
+        baseStats: HeroBaseStatsConfig(
+          hp: 260,
+          ki: 145,
+          attack: 15,
+          speed: 160,
+        ),
+        growthPerLevel: HeroGrowthConfig(
+          hpPerLevel: 16.0,
+          kiPerLevel: 5.8,
+          attackPerLevel: 1.4,
+        ),
+        skillIds: ['ember_fireball', 'ember_flame_pillar', 'ember_supernova'],
+        sprites: HeroSpriteConfig(
+          idleSheet: 'assets/images/heroes/ember/ember_02_portrait.png',
+          runSheet: 'assets/images/heroes/ember/ember_02_sheet.png',
+          attackSheet: 'assets/images/heroes/ember/ember_02_sheet.png',
+        ),
+      ),
     ];
 
     for (final h in defaultHeroes) {
       _heroes[h.id] = h;
     }
 
-    for (final map in availableMatchMaps) {
+    for (final map in const [
+      defaultSanctumMap,
+      defaultFrostArenaMap,
+      defaultFrostIslandMap,
+      defaultForestMap,
+    ]) {
       _maps[map.id] = map;
     }
   }

@@ -53,6 +53,10 @@ class _AuthScreenState extends State<AuthScreen>
   String? _info;
 
   bool get _isRegister => _mode == _AuthMode.register;
+  bool get _canPlayOffline =>
+      !AuthService.instance.isAvailable &&
+      AuthService.instance.currentUser == null &&
+      PlayerStorage.activeUid == null;
 
   @override
   void initState() {
@@ -177,12 +181,7 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _playOffline() async {
-    if (_loading ||
-        AuthService.instance.isAvailable ||
-        AuthService.instance.currentUser != null ||
-        PlayerStorage.activeUid != null) {
-      return;
-    }
+    if (_loading || !_canPlayOffline) return;
     AudioService.instance.playSfx(SfxSound.uiClick);
     setState(() {
       _loading = true;
@@ -747,7 +746,7 @@ class _AuthScreenState extends State<AuthScreen>
 
                 // Link chuyển đổi chế độ ("Đăng ký" / "Đăng nhập") dưới nút chính
                 _buildFooterLinks(),
-                if (!online) ...[
+                if (_canPlayOffline) ...[
                   const SizedBox(height: 8),
                   Center(
                     child: OutlinedButton.icon(
@@ -982,17 +981,36 @@ class _AuthScreenState extends State<AuthScreen>
                         color: Color(0xFF200B02),
                       ),
                     )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _isRegister
-                              ? Icons.local_fire_department_rounded
-                              : Icons.sports_kabaddi_rounded,
-                          color: const Color(0xFF200B02),
-                          size: compact ? 15 : 20,
-                        ),
-                      ],
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isRegister
+                                ? Icons.local_fire_department_rounded
+                                : Icons.sports_kabaddi_rounded,
+                            color: disabled
+                                ? _goldBright
+                                : const Color(0xFF200B02),
+                            size: compact ? 15 : 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _isRegister ? 'TẠO TÀI KHOẢN' : 'ĐĂNG NHẬP',
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontFamily: _brandFontFamily,
+                              color: disabled
+                                  ? _goldBright
+                                  : const Color(0xFF200B02),
+                              fontSize: compact ? 13 : 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
             ),
           ),

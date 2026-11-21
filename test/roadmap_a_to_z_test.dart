@@ -151,7 +151,7 @@ void main() {
         expect(lv100George.maxKi, greaterThan(lv50George.maxKi));
         expect(lv100George.attackDamage, greaterThan(lv50George.attackDamage));
 
-        // Tanker gains more HP at Lv.100 than Ranger, while Ranger gains more Attack
+        // Main's class balance gives Tanker more HP and attack growth.
         final lv100Tanker = StatGrowthFormula.computeStatsForLevel(
           heroId: 'tanker',
           level: 100,
@@ -161,7 +161,8 @@ void main() {
           level: 100,
         );
         expect(lv100Tanker.bonusHp, greaterThan(lv100Ranger.bonusHp));
-        expect(lv100Ranger.bonusAttack, greaterThan(lv100Tanker.bonusAttack));
+        expect(lv100Tanker.bonusAttack, 205.0);
+        expect(lv100Ranger.bonusAttack, 167.0);
       },
     );
 
@@ -428,6 +429,24 @@ void main() {
           'Làm sao để tăng level 100 cho nhân vật?',
         );
         expect(replyLv, contains('100'));
+        final levelTopic = ChatAiAssistantService.faqTopics.singleWhere(
+          (topic) => topic.id == 'level_100',
+        );
+        expect(replyLv, levelTopic.answer);
+        expect(
+          ChatAiAssistantService.instance.generateReply(
+            'Lam sao de tang level 100 cho nhan vat?',
+          ),
+          levelTopic.answer,
+        );
+
+        final heroTopic = ChatAiAssistantService.faqTopics.singleWhere(
+          (topic) => topic.id == 'heroes_skills',
+        );
+        expect(
+          ChatAiAssistantService.instance.generateReply(heroTopic.prompt),
+          heroTopic.answer,
+        );
 
         final replyEco = ChatAiAssistantService.instance.generateReply(
           '1 xu đổi được bao nhiêu vàng?',
@@ -442,7 +461,17 @@ void main() {
         final replyAsset = ChatAiAssistantService.instance.generateReply(
           'Làm sao thêm file nhân vật map mới vào assets?',
         );
+        final assetTopic = ChatAiAssistantService.faqTopics.singleWhere(
+          (topic) => topic.id == 'custom_assets',
+        );
+        expect(replyAsset, assetTopic.answer);
         expect(replyAsset, contains('assets/data/'));
+        expect(
+          ChatAiAssistantService.instance.generateReply(
+            'Lam sao them file nhan vat map moi vao assets?',
+          ),
+          assetTopic.answer,
+        );
       },
     );
   });

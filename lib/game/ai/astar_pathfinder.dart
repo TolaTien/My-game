@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../core/constants.dart';
+import '../../registry/asset_registry.dart';
 
 /// Zero-dependency Binary Min-Heap Priority Queue for A* Search.
 class MinHeap<T extends Comparable<dynamic>> {
@@ -118,12 +119,61 @@ class AStarPathfinder {
     return Vector2((col + 0.5) * tileSize, (row + 0.5) * tileSize);
   }
 
-  /// Builds the canonical 36x24 dungeon walkable matrix.
-  /// Matches perimeter walls and the obstacles corresponding to each mapId from DungeonMapComponent.
+  /// Resolves the same tile rectangles used by navigation and wall colliders.
+  static List<List<int>> dungeonObstacles({
+    required int width,
+    required int height,
+    required String mapId,
+    List<List<int>> obstacles = const [],
+  }) {
+    final configured = MapAssetConfig.validatedObstacles(
+      obstacles,
+      width,
+      height,
+    );
+    if (configured.isNotEmpty) return configured;
+
+    const arenaPillars = [
+      [8, 6],
+      [8, 16],
+      [26, 6],
+      [26, 16],
+    ];
+    final legacy = switch (mapId) {
+      'map_dao_bang_gia' => const [
+        [6, 6],
+        [29, 6],
+        [7, 15],
+        [28, 15],
+        [1, 9, 5, 4],
+        [30, 9, 5, 4],
+        [1, 1, 3, 2],
+        [32, 1, 3, 2],
+        [1, 20, 4, 3],
+        [31, 20, 4, 3],
+      ],
+      'map_rung_cay' => const [
+        [12, 5],
+        [24, 5],
+        [10, 17],
+        [28, 11],
+      ],
+      'map_bang' => arenaPillars,
+      'sunken_golden_sanctum' => const [
+        ...arenaPillars,
+        [17, 10],
+      ],
+      _ => const <List<int>>[],
+    };
+    return MapAssetConfig.validatedObstacles(legacy, width, height);
+  }
+
+  /// Builds a column-major dungeon grid matching perimeter walls and obstacles.
   static List<List<bool>> buildDungeonWalkableGrid({
-    int width = 36,
-    int height = 24,
+    int width = MapAssetConfig.defaultCols,
+    int height = MapAssetConfig.defaultRows,
     String mapId = 'sunken_golden_sanctum',
+    List<List<int>> obstacles = const [],
   }) {
     if (width <= 0 || height <= 0) return [];
     final grid = List.generate(width, (_) => List.filled(height, true));
@@ -138,58 +188,21 @@ class AStarPathfinder {
       grid[width - 1][row] = false;
     }
 
-    void block2x2(int pCol, int pRow) {
-      if (pCol >= 0 && pCol + 1 < width && pRow >= 0 && pRow + 1 < height) {
-        grid[pCol][pRow] = false;
-        grid[pCol + 1][pRow] = false;
-        grid[pCol][pRow + 1] = false;
-        grid[pCol + 1][pRow + 1] = false;
-      }
-    }
-
-    void blockArea(int c1, int c2, int r1, int r2) {
-      for (int c = c1; c <= c2; c++) {
-        for (int r = r1; r <= r2; r++) {
-          if (c >= 0 && c < width && r >= 0 && r < height) {
-            grid[c][r] = false;
-          }
+    for (final rect in dungeonObstacles(
+      width: width,
+      height: height,
+      mapId: mapId,
+      obstacles: obstacles,
+    )) {
+      final x = rect[0];
+      final y = rect[1];
+      final w = rect.length == 2 ? 2 : rect[2];
+      final h = rect.length == 2 ? 2 : rect[3];
+      for (var c = x; c < x + w; c++) {
+        for (var r = y; r < y + h; r++) {
+          grid[c][r] = false;
         }
       }
-    }
-
-    if (mapId == 'map_dao_bang_gia') {
-      // 4 tháp khối băng tinh thể khớp hoàn hảo tranh nền Đảo Băng Tuyết
-      block2x2(6, 6);
-      block2x2(29, 6);
-      block2x2(7, 15);
-      block2x2(28, 15);
-
-      // Các vùng nước biển sâu quanh đảo (không thể đi qua)
-      blockArea(1, 5, 9, 12);
-      blockArea(30, 34, 9, 12);
-      blockArea(1, 3, 1, 2);
-      blockArea(32, 34, 1, 2);
-      blockArea(1, 4, 20, 22);
-      blockArea(31, 34, 20, 22);
-    } else if (mapId == 'map_rung_cay') {
-      // Chướng ngại vật rừng cây cổ thụ và tảng đá phủ rêu
-      block2x2(12, 5);
-      block2x2(24, 5);
-      block2x2(10, 17);
-      block2x2(28, 11);
-    } else if (mapId == 'map_bang') {
-      // 4 trụ đấu trường băng giá đối xứng 4 góc
-      block2x2(8, 6);
-      block2x2(8, 16);
-      block2x2(26, 6);
-      block2x2(26, 16);
-    } else {
-      // Thần Điện Hoàng Kim (mặc định)
-      block2x2(8, 6);
-      block2x2(8, 16);
-      block2x2(26, 6);
-      block2x2(26, 16);
-      block2x2(17, 10);
     }
 
     return grid;

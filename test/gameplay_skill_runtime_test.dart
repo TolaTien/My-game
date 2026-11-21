@@ -145,10 +145,11 @@ void main() {
       expect(find.text('55 Ki'), findsOneWidget);
       expect(find.text('90 Ki'), findsOneWidget);
       expect(find.byTooltip(game.player.skillConfig(1).name), findsOneWidget);
+      final expectedKi = game.player.maxKi - 30;
       await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
-      expect(game.player.currentKi, 70);
+      expect(game.player.currentKi, expectedKi);
       await tester.tap(find.byKey(const Key('pve_skill_1')));
-      expect(game.player.currentKi, 70);
+      expect(game.player.currentKi, expectedKi);
       expect(game.player.skill1VisualCd, 5);
       game.player.update(5.001);
       game.player.currentKi = 30;

@@ -226,7 +226,6 @@ void main() {
             isNotNull,
             reason: '$hero:$slot must use its preserved skill art',
           );
-          if (clip == null) continue;
           expect(
             game.world.children.any(
               (child) =>

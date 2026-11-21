@@ -328,7 +328,7 @@ void main() {
 
     test('Arrow deals 10 damage to player on collision and despawns', () {
       final player = PlayerComponent(position: Vector2(50, 50));
-      expect(player.currentHp, 100.0);
+      expect(player.currentHp, player.maxHp);
 
       final arrow = ArrowProjectile(
         position: Vector2(50, 50),
@@ -339,7 +339,7 @@ void main() {
       // Simulate collision
       arrow.onCollision({}, player);
 
-      expect(player.currentHp, 90.0,
+      expect(player.currentHp, player.maxHp - 10,
           reason: 'Arrow collision must deal exactly 10 physical damage');
     });
 

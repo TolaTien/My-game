@@ -2,7 +2,6 @@ import 'package:flame/game.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_game/core/constants.dart';
 import 'package:my_game/core/pve_balance.dart';
 import 'package:my_game/core/stat_growth_formula.dart';
 import 'package:my_game/game/components/player.dart';
@@ -135,28 +134,25 @@ void main() {
             heroId: hero.id,
             userHeroLevel: level,
           );
-          expect(player.maxHp, GameConstants.playerMaxHp + scaled.bonusHp);
-          expect(player.maxKi, GameConstants.playerMaxKi + scaled.bonusKi);
-          expect(
-            player.effectiveDamage,
-            GameConstants.playerBaseDamage + scaled.bonusAttack,
-          );
-          expect(player.effectiveSpeed, GameConstants.playerBaseSpeed);
+          expect(player.maxHp, scaled.maxHp, reason: '${hero.id} level $level');
+          expect(player.maxKi, scaled.maxKi, reason: '${hero.id} level $level');
+          expect(player.effectiveDamage, scaled.attackDamage, reason: '${hero.id} level $level');
+          expect(player.effectiveSpeed, scaled.moveSpeed, reason: '${hero.id} level $level');
         }
       }
       final markdown = report.buildGameplayBalanceReport();
       expect(
         markdown,
         contains(
-          '| george | 1 | 1 | 100 | 100 | 20 | '
-          '3 / 3 / 30 | 10 | 10 |',
+           '| george | 1 | 1 | 340 | 100 | 25 | '
+           '3 / 2 / 24 | 34 | 34 |',
         ),
       );
       expect(
         markdown,
         contains(
-          '| george | 1 | 10 | 100 | 100 | 20 | '
-          '9 / 7 / 82 | 3 | 4 |',
+           '| george | 1 | 10 | 340 | 100 | 25 | '
+           '7 / 6 / 65 | 12 | 13 |',
         ),
       );
       for (final hero in GameAssetRegistry.instance.heroes) {

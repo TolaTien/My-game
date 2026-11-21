@@ -88,44 +88,52 @@ void main() {
   });
 
   group('Shield Drone Damage Absorption Barrier', () {
-    test('Shield drone applies 30% damage reduction on George', () {
+    test('Shield drone applies 30% damage reduction on George', () async {
       final player = PlayerComponent(position: Vector2(200, 200));
-      expect(player.currentHp, 100.0);
+      expect(player.currentHp, player.maxHp);
       expect(player.damageAbsorption, 0.0);
 
       // Without shield: 20 incoming damage deals 20 damage
       player.takeDamage(20.0);
-      expect(player.currentHp, 80.0);
+      expect(player.currentHp, player.maxHp - 20);
 
       // Reset HP and equip Shield Drone
-      player.currentHp = 100.0;
-      player.damageAbsorption = 0.30;
+      player.currentHp = player.maxHp;
+      final drone = CompanionComponent(
+        companionId: 'companion_defense',
+        player: player,
+      );
+      await drone.onLoad();
 
       // With 30% barrier: 20 incoming damage deals 20 * (1 - 0.3) = 14 damage
       player.takeDamage(20.0);
-      expect(player.currentHp, 86.0,
+      expect(player.currentHp, player.maxHp - 14,
           reason: '30% shield barrier must reduce 20 dmg to 14 effective dmg');
     });
 
-    test('Shield barrier stacks multiplicatively with Berserk Fury buff', () {
+    test('Shield barrier stacks multiplicatively with Berserk Fury buff', () async {
       final player = PlayerComponent(position: Vector2(200, 200));
-      player.damageAbsorption = 0.30;
+      final drone = CompanionComponent(
+        companionId: 'companion_defense',
+        player: player,
+      );
+      await drone.onLoad();
       player.isBerserk = true; // -40% damage (0.6x factor)
 
       // Effective damage = 20 * 0.70 * 0.60 = 8.4 damage
       player.takeDamage(20.0);
-      expect(player.currentHp, closeTo(91.6, 0.001),
+      expect(player.currentHp, closeTo(player.maxHp - 8.4, 0.001),
           reason: '30% barrier and Berserk 40% reduction stack cleanly to 8.4 dmg');
     });
 
-    test('CompanionComponent cleanup resets player.damageAbsorption to 0.0', () {
+    test('CompanionComponent cleanup resets player.damageAbsorption to 0.0', () async {
       final player = PlayerComponent(position: Vector2(200, 200));
       final drone = CompanionComponent(
         companionId: 'companion_defense',
         player: player,
       );
 
-      player.damageAbsorption = 0.30;
+      await drone.onLoad();
       expect(player.damageAbsorption, 0.30);
 
       drone.cleanup();

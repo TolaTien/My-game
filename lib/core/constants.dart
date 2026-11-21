@@ -4,10 +4,10 @@ class GameConstants {
   static const double tileSize = 32.0;
 
   // George Stats
-  static const double playerBaseSpeed = 160.0;
-  static const double playerMaxHp = 100.0;
+  static const double playerBaseSpeed = 150.0;
+  static const double playerMaxHp = 340.0;
   static const double playerMaxKi = 100.0;
-  static const double playerBaseDamage = 20.0;
+  static const double playerBaseDamage = 25.0;
 
   // Economy
   static const int goldPerCoinPickup = 1000;

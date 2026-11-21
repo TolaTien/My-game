@@ -12,6 +12,8 @@ import 'package:my_game/game/gold_rush_game.dart';
 import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/core/constants.dart';
 
+import 'support/legacy_pve_fixture.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -374,7 +376,10 @@ void main() {
     testWidgets(
       'In-Game World Integration with GoldRushGame: Minion Spawns and Defeat Loot Ring',
       (tester) async {
-        final game = GoldRushGame(playerProfile: const PlayerProfile());
+        final game = GoldRushGame(
+          playerProfile: const PlayerProfile(),
+          selectedMapConfig: legacyTestMap,
+        );
         await tester.pumpWidget(GameWidget(game: game));
         await tester.pump();
 
@@ -476,7 +481,7 @@ void main() {
   });
 
   group('CompanionComponent Equipping, Switching & Damage Absorption Arithmetic', () {
-    test('Toggle companion switching updates player damage absorption correctly', () {
+    test('Toggle companion switching updates player damage absorption correctly', () async {
       final player = PlayerComponent(position: Vector2(200, 200));
 
       // 1. Equip Attack Drone
@@ -493,8 +498,7 @@ void main() {
         companionId: 'companion_defense',
         player: player,
       );
-      // In onMount / onLoad, Shield Drone sets player.damageAbsorption to 0.30
-      player.damageAbsorption = 0.30;
+      await shieldDrone.onLoad();
       expect(shieldDrone.type, CompanionType.shield);
       expect(player.damageAbsorption, 0.30);
 

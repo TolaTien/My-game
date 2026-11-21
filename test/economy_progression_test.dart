@@ -172,12 +172,12 @@ void main() {
       expect(player.level, 1);
       expect(player.currentExp, 0);
       expect(player.expToNextLevel, 100);
-      expect(player.maxHp, 100.0);
-      expect(player.currentHp, 100.0);
+      expect(player.maxHp, 340.0);
+      expect(player.currentHp, 340.0);
       expect(player.maxKi, 100.0);
       expect(player.currentKi, 100.0);
-      expect(player.damage, 20.0);
-      expect(player.speed, 160.0);
+      expect(player.damage, 25.0);
+      expect(player.speed, 150.0);
     });
 
     test('Exponential EXP requirement formula EXP(N+1) = (EXP(N) * 1.3).toInt()',
@@ -210,20 +210,20 @@ void main() {
       player.gainExp(100);
 
       expect(player.level, 2);
-      expect(player.maxHp, 115.0, reason: 'Max HP must increase by +15');
-      expect(player.currentHp, 115.0,
+      expect(player.maxHp, 355.0, reason: 'Max HP must increase by +15');
+      expect(player.currentHp, 355.0,
           reason: 'Level up must fully restore HP to new max');
       expect(player.maxKi, 110.0, reason: 'Max Ki must increase by +10');
       expect(player.currentKi, 110.0,
           reason: 'Level up must fully restore Ki to new max');
-      expect(player.damage, 25.0, reason: 'Base damage must increase by +5');
+      expect(player.damage, 30.0, reason: 'Base damage must increase by +5');
 
       // Level 2 -> Level 3
       player.gainExp(130);
       expect(player.level, 3);
-      expect(player.maxHp, 130.0);
+      expect(player.maxHp, 370.0);
       expect(player.maxKi, 120.0);
-      expect(player.damage, 30.0);
+      expect(player.damage, 35.0);
     });
 
     test('Exact stat cap values at Level 15', () {
@@ -234,14 +234,14 @@ void main() {
       player.gainExp(50000);
 
       expect(player.level, 15);
-      // Math: 100 + (14 * 15) = 310 Max HP
-      expect(player.maxHp, 310.0);
-      expect(player.currentHp, 310.0);
+      // Math: 340 + (14 * 15) = 550 Max HP
+      expect(player.maxHp, 550.0);
+      expect(player.currentHp, 550.0);
       // Math: 100 + (14 * 10) = 240 Max Ki
       expect(player.maxKi, 240.0);
       expect(player.currentKi, 240.0);
-      // Math: 20 + (14 * 5) = 90 Base Damage
-      expect(player.damage, 90.0);
+      // Math: 25 + (14 * 5) = 95 Base Damage
+      expect(player.damage, 95.0);
     });
   });
 
@@ -254,16 +254,15 @@ void main() {
       player.heal(25.0);
       expect(player.currentHp, 75.0);
 
-      // Case 2: Near max HP heal clamped to maxHp (90 -> 100, not 115)
-      player.currentHp = 90.0;
+      // Case 2: Near max HP heal clamped to maxHp
+      player.currentHp = player.maxHp - 10;
       player.heal(25.0);
-      expect(player.currentHp, 100.0,
-          reason: 'Healing beyond maxHp must be clamped to 100.0');
+      expect(player.currentHp, player.maxHp);
 
       // Case 3: Full HP heal remains at maxHp
-      player.currentHp = 100.0;
+      player.currentHp = player.maxHp;
       player.heal(25.0);
-      expect(player.currentHp, 100.0);
+      expect(player.currentHp, player.maxHp);
     });
 
     test('EXP Gem magnet attraction distance threshold (70px boundary)', () {

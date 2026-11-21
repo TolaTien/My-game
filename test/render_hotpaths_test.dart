@@ -268,7 +268,7 @@ void main() {
       game.player.currentHp = 81;
       game.onPlayerStatsChanged?.call();
       await tester.pump();
-      expect(find.text('81/100'), findsOneWidget);
+      expect(find.text('81/${game.player.maxHp.toInt()}'), findsOneWidget);
       expect(identical(tester.widget(find.text('HP')), hp), isFalse);
       expect(
         identical(tester.widget(find.byType(VirtualJoystick)), joystick),
@@ -353,7 +353,7 @@ void main() {
     signal.value = true;
     await tester.pump();
     await tester.pump();
-    expect(find.text('77/100'), findsOneWidget);
+    expect(find.text('77/${game.player.maxHp.toInt()}'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

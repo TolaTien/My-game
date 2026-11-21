@@ -35,7 +35,9 @@ void main() {
     await tester.tap(find.byKey(const Key('auth_play_offline')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
     expect(enteredGame, isTrue);
     expect(PlayerStorage.activeUid, isNull);
     expect(PlayerStorage.currentProfile.gold, 4321);
@@ -72,4 +74,36 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Big-War submit labels fit in 640x320 landscape', (tester) async {
+    const surfaceSize = Size(640, 320);
+    await tester.binding.setSurfaceSize(surfaceSize);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MaterialApp(home: AuthScreen()));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final submit = find.byType(ElevatedButton);
+    Future<void> expectVisibleLabel(String text) async {
+      final label = find.descendant(of: submit, matching: find.text(text));
+      expect(label, findsOneWidget);
+      await tester.ensureVisible(submit);
+      await tester.pump();
+
+      final labelBounds = tester.getRect(label);
+      expect(labelBounds.isEmpty, isFalse);
+      expect(tester.getRect(submit).intersect(labelBounds), labelBounds);
+      expect((Offset.zero & surfaceSize).intersect(labelBounds), labelBounds);
+      expect(tester.takeException(), isNull);
+    }
+
+    await expectVisibleLabel('ĐĂNG NHẬP');
+    final switchToRegister = find.text('Chưa có tài khoản? Đăng ký ngay');
+    await tester.ensureVisible(switchToRegister);
+    await tester.pump();
+    await tester.tap(switchToRegister);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await expectVisibleLabel('TẠO TÀI KHOẢN');
+  });
 }

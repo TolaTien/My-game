@@ -363,9 +363,9 @@ void main() {
     test('Progression cap: Gaining 1,000,000 EXP halts at Level 15 and strictly clamps stats', () {
       final player = PlayerComponent(position: Vector2.zero());
       expect(player.level, equals(1));
-      expect(player.maxHp, equals(100.0));
+      expect(player.maxHp, equals(340.0));
       expect(player.maxKi, equals(100.0));
-      expect(player.damage, equals(20.0));
+      expect(player.damage, equals(25.0));
 
       // Massive EXP injection: 1,000,000 EXP
       player.gainExp(1000000);
@@ -378,13 +378,13 @@ void main() {
       );
 
       // 14 Level-ups: +15 HP, +10 Ki, +5 Dmg per level
-      // Max HP: 100 + 14 * 15 = 310
+      // Max HP: 340 + 14 * 15 = 550
       // Max Ki: 100 + 14 * 10 = 240
-      // Damage: 20 + 14 * 5 = 90
+      // Damage: 25 + 14 * 5 = 95
       expect(
         player.maxHp,
-        equals(310.0),
-        reason: 'Level 15 Max HP must be 310.0',
+        equals(550.0),
+        reason: 'Level 15 Max HP must be 550.0',
       );
       expect(
         player.maxKi,
@@ -393,10 +393,10 @@ void main() {
       );
       expect(
         player.damage,
-        equals(90.0),
-        reason: 'Level 15 Damage must be 90.0',
+        equals(95.0),
+        reason: 'Level 15 Damage must be 95.0',
       );
-      expect(player.currentHp, equals(310.0));
+      expect(player.currentHp, equals(550.0));
       expect(player.currentKi, equals(240.0));
 
       // Secondary massive EXP injection at max cap: another 5,000,000 EXP
@@ -406,44 +406,31 @@ void main() {
         equals(15),
         reason: 'Level must not increment past 15',
       );
-      expect(player.maxHp, equals(310.0));
+      expect(player.maxHp, equals(550.0));
       expect(player.maxKi, equals(240.0));
-      expect(player.damage, equals(90.0));
+      expect(player.damage, equals(95.0));
     });
 
-    test('Health potion overheal: drinking +25 HP potion at 95/100 HP clamps strictly to 100 HP', () {
+    test('Health potion overheal: drinking +25 HP near full clamps to max HP', () {
       final player = PlayerComponent(position: Vector2.zero());
-      expect(player.maxHp, equals(100.0));
 
-      // Case 1: 95 HP + 25 heal -> 100 HP (not 120 HP)
-      player.currentHp = 95.0;
+      player.currentHp = player.maxHp - 5;
       player.heal(25.0);
-      expect(
-        player.currentHp,
-        equals(100.0),
-        reason: 'Must clamp to maxHp 100.0',
-      );
+      expect(player.currentHp, player.maxHp);
 
-      // Case 2: 99.9 HP + 25 heal -> 100 HP
-      player.currentHp = 99.9;
+      player.currentHp = player.maxHp - .1;
       player.heal(25.0);
-      expect(player.currentHp, equals(100.0));
+      expect(player.currentHp, player.maxHp);
 
-      // Case 3: Already at full HP (100.0) + 25 heal -> 100 HP
-      player.currentHp = 100.0;
+      player.currentHp = player.maxHp;
       player.heal(25.0);
-      expect(player.currentHp, equals(100.0));
+      expect(player.currentHp, player.maxHp);
 
-      // Case 4: Level 15 player (maxHp = 310.0) at 300 HP + 25 heal -> 310 HP
-      player.level = 15;
-      player.maxHp = 310.0;
-      player.currentHp = 300.0;
+      player.gainExp(1000000);
+      expect(player.level, 15);
+      player.currentHp = player.maxHp - 10;
       player.heal(25.0);
-      expect(
-        player.currentHp,
-        equals(310.0),
-        reason: 'Must clamp to Level 15 maxHp 310.0',
-      );
+      expect(player.currentHp, player.maxHp);
     });
 
     test('Immutable 1:1000 exchange rate: 1 coin collected in dungeon yields 1,000 gold', () {
@@ -490,9 +477,9 @@ void main() {
       player.heal(0.0);
       expect(player.currentHp, equals(50.0));
 
-      // Massive heal (10,000 HP) strictly clamps to maxHp (100.0)
+      // Massive heal (10,000 HP) strictly clamps to maxHp.
       player.heal(10000.0);
-      expect(player.currentHp, equals(100.0));
+      expect(player.currentHp, player.maxHp);
     });
   });
 
