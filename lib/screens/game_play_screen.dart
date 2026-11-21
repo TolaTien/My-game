@@ -58,7 +58,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
       }
 
       // Thưởng Vàng vượt ải thành công
-      final floorGoldReward = 500 * _game.currentFloor;
+      final floorGoldReward = 200 * _game.currentFloor;
       await PlayerStorage.addGold(floorGoldReward);
 
       final levelUpResult = await PlayerStorage.addHeroExpAfterMatch(

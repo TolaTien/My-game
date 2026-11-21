@@ -11,7 +11,7 @@ class GameConstants {
 
   // Economy
   static const int goldPerCoinPickup = 1000;
-  static const int heroUnlockPrice = 100;
+  static const int heroUnlockPrice = 5000;
 }
 
 class GameColors {

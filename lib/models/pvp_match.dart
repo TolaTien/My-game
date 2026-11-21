@@ -17,7 +17,7 @@ enum PvpGameMode {
     title: '1V1 ĐẤU ĐƠN',
     shortLabel: '1v1',
     subtitle: 'Solo Rank Bo3 truyền thống',
-    winGoldReward: 1500,
+    winGoldReward: 200,
   ),
   duo2v2(
     teamSize: 2,
@@ -25,7 +25,7 @@ enum PvpGameMode {
     title: '2V2 SONG ĐẤU',
     shortLabel: '2v2',
     subtitle: 'Tổ đội 2 đấu 2 hiệp đồng tác chiến',
-    winGoldReward: 2200,
+    winGoldReward: 350,
   ),
   squad4v4(
     teamSize: 4,
@@ -33,7 +33,7 @@ enum PvpGameMode {
     title: '4V4 QUÂN ĐOÀN',
     shortLabel: '4v4',
     subtitle: 'Đại chiến 4 đấu 4 hỗn chiến đỉnh cao',
-    winGoldReward: 3000,
+    winGoldReward: 500,
   );
 
   final int teamSize;

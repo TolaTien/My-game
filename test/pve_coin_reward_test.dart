@@ -74,5 +74,11 @@ void main() {
       expect(PlayerStorage.currentProfile.xu, equals(initialXu - 1));
       expect(PlayerStorage.currentProfile.gold, equals(initialGold + 1000));
     });
+
+    test('Initial balanced starting economy', () {
+      final profile = PlayerStorage.currentProfile;
+      expect(profile.gold, equals(500));
+      expect(profile.xu, equals(1));
+    });
   });
 }

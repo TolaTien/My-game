@@ -369,17 +369,20 @@ class BossEnemy extends PositionComponent
 
     if (!isMounted) return;
 
-    // Defeat Loot Cascade: 12 Gold Coins (12,000 Gold) and 3 Health Potions
-    const int totalItems = 15;
-    const double radius = 68.0;
+    // Defeat Loot Cascade: 2-3 Xu (2,000 - 3,000 Vàng), Bình Máu và Ngọc EXP
+    final drops = <PickupType>[
+      PickupType.goldCoin,
+      PickupType.healthPotion,
+      PickupType.goldCoin,
+      PickupType.expGem,
+      if (isEnraged) PickupType.goldCoin,
+    ];
+    final totalItems = drops.length;
+    const double radius = 54.0;
     for (int i = 0; i < totalItems; i++) {
       final angle = i * (2 * pi / totalItems);
       final itemPos = position + Vector2(cos(angle) * radius, sin(angle) * radius);
-      final PickupType type = (i % 5 == 0)
-          ? PickupType.healthPotion
-          : PickupType.goldCoin;
-
-      final pickup = PickupItem(position: itemPos, type: type);
+      final pickup = PickupItem(position: itemPos, type: drops[i]);
       game.pickups.add(pickup);
       game.world.add(pickup);
     }
