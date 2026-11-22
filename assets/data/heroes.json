@@ -140,14 +140,14 @@
       },
       "skillIds": ["valeria_frost_fire_slash", "valeria_elemental_vortex", "valeria_ice_meteor"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "portrait": "assets/images/heroes/valeria_portrait.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/valeria/idle.png",
+        "runSheet": "assets/images/heroes/valeria/run.png",
+        "attackSheet": "assets/images/heroes/valeria/attack.png",
+        "portrait": "assets/images/heroes/valeria/portrait.png",
         "skill1Sheet": null,
-        "useProceduralFallback": true
+        "useProceduralFallback": false
       }
     },
     {
@@ -170,12 +170,13 @@
       },
       "skillIds": ["garrick_landslide", "garrick_golden_aegis", "garrick_earth_shatter"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "useProceduralFallback": true
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/garrick/idle.png",
+        "runSheet": "assets/images/heroes/garrick/run.png",
+        "attackSheet": "assets/images/heroes/garrick/attack.png",
+        "portrait": "assets/images/heroes/garrick/portrait.png",
+        "useProceduralFallback": false
       }
     },
     {
@@ -198,13 +199,13 @@
       },
       "skillIds": ["ranger_multishot", "ranger_trap_roll", "ranger_star_rain"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "portrait": "assets/images/heroes/ranger_portrait.png",
-        "useProceduralFallback": true
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/ranger/idle.png",
+        "runSheet": "assets/images/heroes/ranger/run.png",
+        "attackSheet": "assets/images/heroes/ranger/attack.png",
+        "portrait": "assets/images/heroes/ranger/portrait.png",
+        "useProceduralFallback": false
       }
     },
     {
@@ -227,13 +228,13 @@
       },
       "skillIds": ["tanker_shield_bash", "tanker_iron_fortress", "tanker_earthquake"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "portrait": "assets/images/heroes/tanker_portrait.png",
-        "useProceduralFallback": true
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/tanker/idle.png",
+        "runSheet": "assets/images/heroes/tanker/run.png",
+        "attackSheet": "assets/images/heroes/tanker/attack.png",
+        "portrait": "assets/images/heroes/tanker/portrait.png",
+        "useProceduralFallback": false
       }
     },
     {

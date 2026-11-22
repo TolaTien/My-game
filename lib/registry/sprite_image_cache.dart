@@ -92,18 +92,17 @@ class SpriteImageCache {
     'shadow_attack': _shadowAttackFrames,
   };
 
-  static const Set<String> proceduralHeroIds = {
-    'ranger',
-    'tanker',
-    'valeria',
-    'garrick',
-  };
+  static const Set<String> proceduralHeroIds = {};
 
-  /// Các tướng sử dụng bộ spritesheet 4-frame ngang (1024x256: idle.png, run.png, attack.png)
-  /// do Gemini tạo và cắt tự động qua `tool/slice_hero_sheet.py`.
+  /// Các tướng sử dụng bộ spritesheet 4-frame ngang (idle/attack: 1024x256)
+  /// và spritesheet chạy 4 hướng (run: 1024x1024 — Down/Up/Left/Right).
   static const Set<String> stripAnimatedHeroIds = {
     'george',
+    'ranger',
+    'tanker',
     'ninja',
+    'valeria',
+    'garrick',
   };
 
   static bool isProceduralHero(String heroId) =>
@@ -114,7 +113,11 @@ class SpriteImageCache {
 
   static const Map<String, String> heroPortraitPaths = {
     'george': 'assets/images/heroes/george/portrait.png',
+    'ranger': 'assets/images/heroes/ranger/portrait.png',
+    'tanker': 'assets/images/heroes/tanker/portrait.png',
     'ninja': 'assets/images/heroes/ninja/portrait.png',
+    'valeria': 'assets/images/heroes/valeria/portrait.png',
+    'garrick': 'assets/images/heroes/garrick/portrait.png',
     'nova_blade': 'assets/images/heroes/nova/nova_portrait.png',
     'nova': 'assets/images/heroes/nova/nova_portrait.png',
     'shadow_01': 'assets/images/heroes/shadow_01_portrait.png',
@@ -125,7 +128,11 @@ class SpriteImageCache {
 
   static const Map<String, String> heroIdlePaths = {
     'george': 'assets/images/heroes/george/idle.png',
+    'ranger': 'assets/images/heroes/ranger/idle.png',
+    'tanker': 'assets/images/heroes/tanker/idle.png',
     'ninja': 'assets/images/heroes/ninja/idle.png',
+    'valeria': 'assets/images/heroes/valeria/idle.png',
+    'garrick': 'assets/images/heroes/garrick/idle.png',
     'nova_blade': 'assets/images/heroes/nova/nova.png',
     'nova': 'assets/images/heroes/nova/nova.png',
     'ember_02': 'assets/images/heroes/ember/Ember-idle.png',
@@ -135,7 +142,11 @@ class SpriteImageCache {
   };
   static const Map<String, String> heroRunPaths = {
     'george': 'assets/images/heroes/george/run.png',
+    'ranger': 'assets/images/heroes/ranger/run.png',
+    'tanker': 'assets/images/heroes/tanker/run.png',
     'ninja': 'assets/images/heroes/ninja/run.png',
+    'valeria': 'assets/images/heroes/valeria/run.png',
+    'garrick': 'assets/images/heroes/garrick/run.png',
     'nova_blade': 'assets/images/heroes/nova/nova-run.png',
     'nova': 'assets/images/heroes/nova/nova-run.png',
     'ember_02': 'assets/images/heroes/ember/ember-run.png',
@@ -146,7 +157,11 @@ class SpriteImageCache {
 
   static const Map<String, String> heroAttackPaths = {
     'george': 'assets/images/heroes/george/attack.png',
+    'ranger': 'assets/images/heroes/ranger/attack.png',
+    'tanker': 'assets/images/heroes/tanker/attack.png',
     'ninja': 'assets/images/heroes/ninja/attack.png',
+    'valeria': 'assets/images/heroes/valeria/attack.png',
+    'garrick': 'assets/images/heroes/garrick/attack.png',
     'nova_blade': 'assets/images/heroes/nova/nova-attack.png',
     'nova': 'assets/images/heroes/nova/nova-attack.png',
     'ember_02': 'assets/images/heroes/ember/Ember-attack.png',

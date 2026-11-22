@@ -540,9 +540,10 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     final isMoving = !moveDirection.isZero();
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
     final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
+    final bool stripMultiDirRun = isStripHero && isMoving && !isAttacking;
 
     canvas.save();
-    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun) {
+    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun && !stripMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
@@ -628,20 +629,37 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
                   SpriteImageCache.instance.getHeroIdleImage(heroId))
               : SpriteImageCache.instance.getHeroIdleImage(heroId));
       if (strip != null && strip.width >= 512) {
-        final frameCount = max(1, (strip.width / strip.height).round());
+        final bool is4DirRunSheet =
+            !isAttacking && isMoving && strip.height >= 1000;
+        final int cols = is4DirRunSheet
+            ? 4
+            : max(1, (strip.width / strip.height).round());
+        final int row;
+        if (is4DirRunSheet) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          if (my.abs() > mx.abs()) {
+            row = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else {
+            row = mx < 0 ? 2 : 3; // 2: Left, 3: Right
+          }
+        } else {
+          row = 0;
+        }
+
         final int col;
         if (isAttacking) {
           final progress =
               (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
-          col = (progress * frameCount).floor().clamp(0, frameCount - 1);
+          col = (progress * cols).floor().clamp(0, cols - 1);
         } else if (isMoving) {
-          col = (animTime * 10.5).floor() % frameCount;
+          col = (animTime * 10.5).floor() % cols;
         } else {
-          col = (animTime * 5.5).floor() % frameCount;
+          col = (animTime * 5.5).floor() % cols;
         }
-        final cellW = strip.width / frameCount;
-        final cellH = strip.height.toDouble();
-        final srcRect = Rect.fromLTWH(col * cellW, 0, cellW, cellH);
+        final cellW = strip.width / cols;
+        final cellH = is4DirRunSheet ? strip.height / 4.0 : strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
 
         const dstW = 54.0;
         const dstH = 54.0;
@@ -1604,7 +1622,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = orbColor,
           );
         }
-      } else if (heroId == 'garrick' || heroId == 'tanker') {
+      } else if (heroId == 'garrick') {
         // Garrick Skill 2: Hộ Thể Hoàng Kim (Giáp đá vàng kim rực rỡ + 6 khiên đá xoay)
         canvas.drawCircle(
           center,
@@ -1656,41 +1674,141 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = const Color(0xFFFFEA00),
           );
         }
-      } else {
-        // Nova Blade / Shadow-01 / George: 4 Thanh Kiếm Ánh Sáng xoay 360 độ + Đuôi sáng
+      } else if (heroId == 'ranger') {
+        // Lyra Skill 2: Nhào Lộn Bẫy Gai (Vòng gai lục bảo & 6 gai nhọn phát sáng)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
         canvas.drawCircle(
           center,
-          45,
+          44,
           Paint()
-            ..color = secondary.withValues(alpha: 0.45)
+            ..color = const Color(0xFF00E676).withValues(alpha: alpha * 0.55)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.2,
+            ..strokeWidth = 3.0,
         );
-
+        for (int i = 0; i < 6; i++) {
+          final a = i * (pi / 3) + animTime * 3.0;
+          final p1 = Offset(center.dx + cos(a) * 34, center.dy + sin(a) * 34);
+          final p2 = Offset(center.dx + cos(a) * 52, center.dy + sin(a) * 52);
+          canvas.drawLine(
+            p1,
+            p2,
+            Paint()
+              ..color = const Color(0xFFEEFF41).withValues(alpha: alpha)
+              ..strokeWidth = 3.2
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else if (heroId == 'tanker') {
+        // Braum Skill 2: Pháo Đài Sắt (Mái vòm thép xanh lam + 4 khiên thép xoay)
+        canvas.drawCircle(
+          center,
+          44,
+          Paint()..color = const Color(0x2A00B0FF),
+        );
+        canvas.drawCircle(
+          center,
+          44,
+          Paint()
+            ..color = const Color(0xFF40C4FF)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3.2,
+        );
         for (int i = 0; i < 4; i++) {
-          final angle = animTime * 6.5 + i * (pi / 2);
-          final bx = center.dx + cos(angle) * 45;
-          final by = center.dy + sin(angle) * 45;
-
-          canvas.save();
-          canvas.translate(bx, by);
-          canvas.rotate(angle + pi / 2);
-          // Chuôi kiếm
-          canvas.drawRect(
-            const Rect.fromLTWH(-12, -1.5, 5, 3),
-            Paint()..color = const Color(0xFFFFD700),
+          final a = animTime * 4.0 + i * (pi / 2);
+          final sx = center.dx + cos(a) * 44;
+          final sy = center.dy + sin(a) * 44;
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: Offset(sx, sy), width: 10, height: 14),
+              const Radius.circular(3),
+            ),
+            Paint()..color = const Color(0xFF00B0FF),
           );
-          // Lưỡi kiếm phát sáng
-          final swordPath = Path()
-            ..moveTo(-7, -3)
-            ..lineTo(14, 0)
-            ..lineTo(-7, 3)
-            ..close();
-          canvas.drawPath(
-            swordPath,
-            Paint()..color = i.isEven ? primary : secondary,
+        }
+      } else if (heroId == 'ninja') {
+        // Hayate Skill 2: Khói Ẩn Thân (Vòng khói tím-đỏ huyền ảo xoay quanh)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        for (int i = 0; i < 6; i++) {
+          final a = animTime * 4.5 + i * (pi / 3);
+          final cx = center.dx + cos(a) * 36;
+          final cy = center.dy + sin(a) * 36;
+          canvas.drawCircle(
+            Offset(cx, cy),
+            9.0,
+            Paint()
+              ..color = (i.isEven ? const Color(0xFF8E24AA) : const Color(0xFFE91E63))
+                  .withValues(alpha: alpha * 0.45),
           );
-          canvas.restore();
+        }
+      } else if (heroId == 'nova_blade' || heroId == 'nova') {
+        // Nova Blade Skill 2: Shadow Dash (Dải plasma tím-cyan cao tốc)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          center,
+          42,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.6)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        for (int i = 0; i < 3; i++) {
+          final a = animTime * 9.0 + i * (2 * pi / 3);
+          canvas.drawArc(
+            Rect.fromCenter(center: center, width: 76, height: 76),
+            a,
+            0.85,
+            false,
+            Paint()
+              ..color = const Color(0xFFE040FB).withValues(alpha: alpha * 0.85)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3.5
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else if (heroId == 'shadow_01' || heroId == 'shadow') {
+        // Shadow-01 Skill 2: Cyber Spin (Lốc xoáy lưỡi hái hư không 360°)
+        canvas.drawCircle(
+          center,
+          46,
+          Paint()
+            ..color = const Color(0xFFE040FB).withValues(alpha: 0.45)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        for (int i = 0; i < 4; i++) {
+          final a = animTime * 8.5 + i * (pi / 2);
+          canvas.drawArc(
+            Rect.fromCenter(center: center, width: 88, height: 88),
+            a,
+            0.95,
+            false,
+            Paint()
+              ..color = i.isEven ? const Color(0xFFE040FB) : const Color(0xFF00E5FF)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4.2
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else {
+        // George Skill 2: Nện Đất Chấn Động (Sóng chấn động nứt đất vàng-cam)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          center,
+          48 * (1.15 - alpha * 0.2),
+          Paint()
+            ..color = const Color(0xFFFF9800).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4.0,
+        );
+        for (int i = 0; i < 6; i++) {
+          final a = i * (pi / 3);
+          canvas.drawLine(
+            center + Offset(cos(a) * 14, sin(a) * 14),
+            center + Offset(cos(a) * 46, sin(a) * 46),
+            Paint()
+              ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.85)
+              ..strokeWidth = 2.5,
+          );
         }
       }
     }

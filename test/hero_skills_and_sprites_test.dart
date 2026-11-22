@@ -19,6 +19,15 @@ void main() {
     'ember_02',
   ];
 
+  const fourDirHeroIds = [
+    'george',
+    'ranger',
+    'tanker',
+    'ninja',
+    'valeria',
+    'garrick',
+  ];
+
   test('All 9 heroes have unique skill names across all 27 skills', () {
     final seenNames = <String>{};
     for (final heroId in allHeroIds) {
@@ -37,8 +46,8 @@ void main() {
     expect(seenNames.length, equals(27));
   });
 
-  test('George and Ninja Gemini sprite strips exist and are registered', () {
-    for (final heroId in ['george', 'ninja']) {
+  test('All 6 non-Nova/Ember/Shadow heroes have 4-dir run & animation strips', () {
+    for (final heroId in fourDirHeroIds) {
       expect(SpriteImageCache.isStripAnimatedHero(heroId), isTrue);
       expect(SpriteImageCache.isProceduralHero(heroId), isFalse);
       for (final file in ['idle.png', 'run.png', 'attack.png', 'portrait.png']) {
@@ -49,7 +58,7 @@ void main() {
     }
   });
 
-  test('Hero skills execute distinct hero-specific mechanics', () {
+  test('Hero skills execute distinct hero-specific mechanics across all heroes', () {
     // 1. Ranger Skill 1 spawns 5 arrows
     final ranger = PlayerComponent(position: Vector2(200, 200), heroId: 'ranger');
     final rangerWorld = Component();
@@ -58,8 +67,8 @@ void main() {
       player: ranger,
       world: rangerWorld,
       targets: const [],
-      onDamageText: (_, __, ___) {},
-      onBannerText: (_, __) {},
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
     );
     expect(rangerWorld.children.whereType<HeroProjectile>().length, equals(5));
 
@@ -71,8 +80,8 @@ void main() {
       player: tanker,
       world: Component(),
       targets: const [],
-      onDamageText: (_, __, ___) {},
-      onBannerText: (_, __) {},
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
     );
     expect(tanker.ironShieldTimer, greaterThan(0));
     expect(tanker.damageAbsorption, greaterThanOrEqualTo(0.65));
@@ -86,15 +95,65 @@ void main() {
       player: ninja,
       world: ninjaWorld,
       targets: const [],
-      onDamageText: (_, __, ___) {},
-      onBannerText: (_, __) {},
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
     );
     expect(ninja.position.x, greaterThan(250));
     final shurikens = ninjaWorld.children.whereType<HeroProjectile>().toList();
     expect(shurikens.length, equals(3));
-    expect(shurikens.every((p) => p.type == HeroProjectileType.shuriken && p.piercing), isTrue);
+    expect(
+      shurikens.every((p) => p.type == HeroProjectileType.shuriken && p.piercing),
+      isTrue,
+    );
 
-    // 4. Ember Skill 3 fires 8 radial fireballs
+    // 4. Valeria Skill 1 fires paired Frost Orb + Fireball
+    final valeria = PlayerComponent(position: Vector2(200, 200), heroId: 'valeria');
+    final valeriaWorld = Component();
+    HeroSkillSystem.executeSkill(
+      slot: 1,
+      player: valeria,
+      world: valeriaWorld,
+      targets: const [],
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
+    );
+    final valeriaProjs = valeriaWorld.children.whereType<HeroProjectile>().toList();
+    expect(valeriaProjs.length, equals(2));
+    expect(valeriaProjs.any((p) => p.type == HeroProjectileType.frostOrb), isTrue);
+    expect(valeriaProjs.any((p) => p.type == HeroProjectileType.fireball), isTrue);
+
+    // 5. Garrick Skill 2 activates Golden Aegis shield + heal
+    final garrick = PlayerComponent(position: Vector2(200, 200), heroId: 'garrick');
+    garrick.currentHp = garrick.maxHp * 0.6;
+    HeroSkillSystem.executeSkill(
+      slot: 2,
+      player: garrick,
+      world: Component(),
+      targets: const [],
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
+    );
+    expect(garrick.ironShieldTimer, greaterThan(0));
+    expect(garrick.damageAbsorption, greaterThanOrEqualTo(0.55));
+    expect(garrick.currentHp, greaterThan(garrick.maxHp * 0.6));
+
+    // 6. Nova Blade Skill 1 fires piercing Cyan Energy Wave
+    final nova = PlayerComponent(position: Vector2(200, 200), heroId: 'nova_blade');
+    final novaWorld = Component();
+    HeroSkillSystem.executeSkill(
+      slot: 1,
+      player: nova,
+      world: novaWorld,
+      targets: const [],
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
+    );
+    final waves = novaWorld.children.whereType<HeroProjectile>().toList();
+    expect(waves.length, equals(1));
+    expect(waves.first.type, equals(HeroProjectileType.energyWave));
+    expect(waves.first.piercing, isTrue);
+
+    // 7. Ember Skill 3 fires 8 radial fireballs
     final ember = PlayerComponent(position: Vector2(200, 200), heroId: 'ember_02');
     final emberWorld = Component();
     HeroSkillSystem.executeSkill(
@@ -102,8 +161,8 @@ void main() {
       player: ember,
       world: emberWorld,
       targets: const [],
-      onDamageText: (_, __, ___) {},
-      onBannerText: (_, __) {},
+      onDamageText: (_, _, _) {},
+      onBannerText: (_, _) {},
     );
     expect(emberWorld.children.whereType<HeroProjectile>().length, equals(8));
   });

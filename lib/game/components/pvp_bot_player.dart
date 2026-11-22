@@ -379,35 +379,118 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     _damageTargetsInRange(damage, 55);
   }
 
+  Vector2 _resolveBotAimDirection() {
+    if (primaryTarget != null && primaryTarget!.position != position) {
+      final dir = (primaryTarget!.position - position).normalized();
+      if (dir.x.abs() > 0.05) isFacingRight = dir.x > 0;
+      return dir;
+    }
+    return Vector2(isFacingRight ? 1.0 : -1.0, 0.0);
+  }
+
+  Vector2 _rotateDir(Vector2 v, double radians) {
+    final c = cos(radians);
+    final s = sin(radians);
+    return Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
+  }
+
+  void _spawnBotProjectile(
+    Vector2 dir,
+    HeroProjectileType type,
+    double dmg, {
+    bool piercing = false,
+    double splashRadius = 0.0,
+  }) {
+    if (parent == null || !isMounted) return;
+    parent!.add(HeroProjectile(
+      position: position.clone() + dir * 10,
+      direction: dir,
+      damage: dmg,
+      type: type,
+      isFromPlayer: opponentInfo.isAlly,
+      piercing: piercing,
+      splashRadius: splashRadius,
+      onHit: (target, hitPos) => _spawnCombatText(hitPos, dmg, isCrit: true),
+    ));
+  }
+
   void executeSkill1({bool force = false}) {
     if (currentHp <= 0) return;
-    if (!force && currentKi < 25) return;
-    currentKi = max(0, currentKi - 25);
+    if (!force && currentKi < 20) return;
+    currentKi = max(0, currentKi - 20);
     isAttacking = true;
-    attackTimer = -0.3;
-    _damageTargetsInRange(damage * 1.8, 85, isCrit: true);
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    final aim = _resolveBotAimDirection();
+
+    if (id == 'ranger') {
+      for (final deg in [-20.0, 0.0, 20.0]) {
+        _spawnBotProjectile(_rotateDir(aim, deg * pi / 180), HeroProjectileType.arrow, damage * 1.15);
+      }
+    } else if (id == 'ninja') {
+      for (final deg in [-15.0, 0.0, 15.0]) {
+        _spawnBotProjectile(_rotateDir(aim, deg * pi / 180), HeroProjectileType.shuriken, damage * 1.25, piercing: true);
+      }
+    } else if (id == 'nova_blade' || id == 'nova') {
+      _spawnBotProjectile(aim, HeroProjectileType.energyWave, damage * 1.65, piercing: true);
+    } else if (id == 'shadow_01' || id == 'shadow') {
+      for (final deg in [-12.0, 0.0, 12.0]) {
+        _spawnBotProjectile(_rotateDir(aim, deg * pi / 180), HeroProjectileType.voidBlade, damage * 1.25);
+      }
+    } else if (id == 'ember_02' || id == 'ember') {
+      for (final deg in [-16.0, 0.0, 16.0]) {
+        _spawnBotProjectile(_rotateDir(aim, deg * pi / 180), HeroProjectileType.fireball, damage * 1.35, splashRadius: 40);
+      }
+    } else if (id == 'valeria') {
+      _spawnBotProjectile(aim, HeroProjectileType.frostOrb, damage * 1.4, piercing: true);
+      _spawnBotProjectile(aim, HeroProjectileType.fireball, damage * 1.4, splashRadius: 40);
+    } else {
+      _damageTargetsInRange(damage * 1.85, 95, isCrit: true);
+    }
     onStatsChanged?.call();
   }
 
   void executeSkill2({bool force = false}) {
     if (currentHp <= 0) return;
-    if (!force && currentKi < 35) return;
-    currentKi = max(0, currentKi - 35);
-    _damageTargetsInRange(damage * 2.5, 110, isCrit: true);
+    if (!force && currentKi < 30) return;
+    currentKi = max(0, currentKi - 30);
+    isAttacking = true;
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    if (id == 'tanker' || id == 'garrick') {
+      currentHp = min(maxHp, currentHp + maxHp * 0.10);
+      _damageTargetsInRange(damage * 1.6, 115, isCrit: true);
+    } else {
+      _damageTargetsInRange(damage * 2.2, 115, isCrit: true);
+    }
     onStatsChanged?.call();
   }
 
   void executeSkill3({bool force = false}) {
     if (currentHp <= 0) return;
-    if (!force && (currentKi < 40 || isBerserk)) return;
-    currentKi = max(0, currentKi - 40);
-    isBerserk = true;
-    berserkTimer = 8.0;
-    if (opponentInfo.heroId != 'george' &&
-        opponentInfo.heroId != 'ranger' &&
-        opponentInfo.heroId != 'tanker' &&
-        opponentInfo.heroId != 'ninja') {
-      _damageTargetsInRange(damage * 2.2, 140, isCrit: true);
+    if (!force && (currentKi < 45 || isBerserk)) return;
+    currentKi = max(0, currentKi - 45);
+    isAttacking = true;
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    final aim = _resolveBotAimDirection();
+    if (id == 'george') {
+      isBerserk = true;
+      berserkTimer = 6.0;
+      _damageTargetsInRange(damage * 2.1, 145, isCrit: true);
+    } else if (id == 'ranger') {
+      for (int i = 0; i < 6; i++) {
+        final spread = (i - 2.5) * 14.0 * pi / 180.0;
+        _spawnBotProjectile(_rotateDir(aim, spread), HeroProjectileType.starArrow, damage * 1.15, piercing: true);
+      }
+    } else if (id == 'ember_02' || id == 'ember') {
+      _damageTargetsInRange(damage * 2.4, 160, isCrit: true);
+      for (int i = 0; i < 6; i++) {
+        final a = i * (pi / 3);
+        _spawnBotProjectile(Vector2(cos(a), sin(a)), HeroProjectileType.fireball, damage * 1.15);
+      }
+    } else {
+      _damageTargetsInRange(damage * 2.8, 165, isCrit: true);
     }
     onStatsChanged?.call();
   }
@@ -484,13 +567,14 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
         !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
     final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
+    final bool stripMultiDirRun = isStripHero && isMoving && !isAttacking;
 
     canvas.save();
     if (currentHp <= 0) {
       // Mờ đi khi bị hạ gục trong 2v2 / 4v4
       canvas.translate(0, 6);
     }
-    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun) {
+    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun && !stripMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
@@ -519,20 +603,36 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
                   SpriteImageCache.instance.getHeroIdleImage(heroId))
               : SpriteImageCache.instance.getHeroIdleImage(heroId));
       if (strip != null && strip.width >= 512) {
-        final frameCount = max(1, (strip.width / strip.height).round());
+        final bool is4DirRunSheet =
+            !isAttacking && isMoving && strip.height >= 1000;
+        final int cols = is4DirRunSheet
+            ? 4
+            : max(1, (strip.width / strip.height).round());
+        final int row;
+        if (is4DirRunSheet) {
+          final mx = !moveDirection.isZero() ? moveDirection.x : targetVelocity.x;
+          final my = !moveDirection.isZero() ? moveDirection.y : targetVelocity.y;
+          if (my.abs() > mx.abs()) {
+            row = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else {
+            row = mx < 0 ? 2 : 3; // 2: Left, 3: Right
+          }
+        } else {
+          row = 0;
+        }
         final int col;
         if (isAttacking) {
           final progress =
               (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
-          col = (progress * frameCount).floor().clamp(0, frameCount - 1);
+          col = (progress * cols).floor().clamp(0, cols - 1);
         } else if (isMoving) {
-          col = (animTime * 10.5).floor() % frameCount;
+          col = (animTime * 10.5).floor() % cols;
         } else {
-          col = (animTime * 5.5).floor() % frameCount;
+          col = (animTime * 5.5).floor() % cols;
         }
-        final cellW = strip.width / frameCount;
-        final cellH = strip.height.toDouble();
-        final srcRect = Rect.fromLTWH(col * cellW, 0, cellW, cellH);
+        final cellW = strip.width / cols;
+        final cellH = is4DirRunSheet ? strip.height / 4.0 : strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
 
         const dstW = 54.0;
         const dstH = 54.0;

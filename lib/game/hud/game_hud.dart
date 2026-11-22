@@ -6,7 +6,6 @@ import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
 import '../../screens/settings_dialog.dart';
 import '../combat/hero_skill_system.dart';
-import '../components/player.dart';
 import '../big_war_game.dart';
 import 'boss_bar_overlay.dart';
 import 'virtual_joystick.dart';

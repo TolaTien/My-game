@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../core/game_keyboard_controller.dart';
 import '../game/combat/hero_skill_system.dart';
-import '../game/components/player.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
 import '../models/friend_party_models.dart';

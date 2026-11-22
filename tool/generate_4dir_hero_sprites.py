@@ -369,11 +369,11 @@ def render_frame(p: HeroPalette, direction: str, action: str, frame: int) -> Ima
         right_img = render_frame(p, "right", action, frame)
         return right_img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
-    grid = Image.new("RGBA", (56, 56), (0, 0, 0, 0))
+    grid = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(grid)
 
-    cx = 26
-    base_y = 48
+    cx = 28 if action == "attack" else 31
+    base_y = 56
 
     # Animation offsets
     if action == "idle":
@@ -502,11 +502,8 @@ def render_frame(p: HeroPalette, direction: str, action: str, frame: int) -> Ima
 
     outlined = add_pixel_outline(grid)
 
-    # Upscale 4x nearest-neighbor (56x56 -> 224x224) and center on 256x256 with feet aligned at y=236
-    scaled = outlined.resize((224, 224), Image.Resampling.NEAREST)
-    cell = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-    # Feet in 56x56 are at y=48 -> in 224x224 at y=192 -> paste_y = 236 - 192 = 44
-    cell.paste(scaled, (16, 32), scaled)
+    # Upscale 4x nearest-neighbor (64x64 -> 256x256) with feet aligned at y=224..236
+    cell = outlined.resize((256, 256), Image.Resampling.NEAREST)
     return cell
 
 

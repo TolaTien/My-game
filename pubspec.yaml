@@ -33,7 +33,11 @@ flutter:
     - assets/images/companions/
     - assets/images/heroes/
     - assets/images/heroes/george/
+    - assets/images/heroes/ranger/
+    - assets/images/heroes/tanker/
     - assets/images/heroes/ninja/
+    - assets/images/heroes/valeria/
+    - assets/images/heroes/garrick/
     - assets/images/heroes/nova/
     - assets/images/heroes/ember/
     - assets/images/heroes/shadow/
