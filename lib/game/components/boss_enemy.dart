@@ -529,18 +529,19 @@ class BossEnemy extends PositionComponent
       shadowPaint,
     );
 
-    // 2. Phase 2 Enraged Fire Aura
+    // 2. Phase 2 Enraged Fire Aura (vòng đồng tâm nhẹ GPU, tránh MaskFilter.blur)
     if (isEnraged) {
       final auraPulse = sin(auraTimer * 6.0) * 4.0;
-      final outerAura = Paint()
-        ..color = const Color(0x33FF3D00)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 34 + auraPulse, outerAura);
-
-      final innerAura = Paint()
-        ..color = const Color(0x44FF9100)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 26 + auraPulse * 0.5, innerAura);
+      canvas.drawCircle(
+        Offset(size.x / 2, size.y / 2),
+        36 + auraPulse,
+        Paint()..color = const Color(0x28FF3D00),
+      );
+      canvas.drawCircle(
+        Offset(size.x / 2, size.y / 2),
+        26 + auraPulse * 0.5,
+        Paint()..color = const Color(0x3CFF9100),
+      );
     }
 
     canvas.save();
@@ -721,10 +722,7 @@ class BossFlameProjectile extends PositionComponent
   void render(Canvas canvas) {
     super.render(canvas);
     final center = Offset(size.x / 2, size.y / 2);
-    final outerGlow = Paint()
-      ..color = const Color(0x66FF3D00)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawCircle(center, 7, outerGlow);
+    canvas.drawCircle(center, 8.5, Paint()..color = const Color(0x44FF3D00));
 
     final flamePaint = Paint()..color = const Color(0xFFFF5722);
     canvas.drawCircle(center, 5.5, flamePaint);

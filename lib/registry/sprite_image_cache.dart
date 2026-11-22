@@ -472,7 +472,9 @@ class SpriteImageCache {
   }
 
   Future<void> preloadAll() async {
-    // 1. Tải ảnh đại diện tướng và thú cưng trước
+    // Tối ưu RAM cho máy cấu hình yếu: chỉ tải trước ảnh chân dung tướng và thú cưng.
+    // Các spritesheet lớn (run/attack/sequence/map) sẽ được nạp theo nhu cầu (lazy-load)
+    // khi người chơi chọn tướng hoặc vào đúng bản đồ đó.
     final priorityFutures = <Future<void>>[];
     heroPortraitPaths.forEach((id, path) {
       if (!_heroImages.containsKey(id)) {
@@ -486,67 +488,7 @@ class SpriteImageCache {
         priorityFutures.add(_loadIntoCache(path, (img) => _companionImages[id] = img));
       }
     });
-    mapImagePaths.forEach((id, path) {
-      if (!_mapImages.containsKey(id) && !_mapImages.containsKey(path)) {
-        _loadingKeys.add('map_$id');
-        priorityFutures.add(_loadIntoCache(path, (img) {
-          _mapImages[id] = img;
-          _mapImages[path] = img;
-        }));
-      }
-    });
     await Future.wait(priorityFutures);
-
-    // Nhường event loop cho Flutter vẽ mượt frame
-    await Future<void>.delayed(Duration.zero);
-
-    // 2. Tải ảnh kỹ năng, idle, run, attack
-    final secondaryFutures = <Future<void>>[];
-    heroIdlePaths.forEach((id, path) {
-      if (!_heroIdleImages.containsKey(id)) {
-        _loadingKeys.add('idle_$id');
-        secondaryFutures.add(_loadIntoCache(path, (img) => _heroIdleImages[id] = img));
-      }
-    });
-    heroRunPaths.forEach((id, path) {
-      if (!_heroRunImages.containsKey(id)) {
-        _loadingKeys.add('run_$id');
-        secondaryFutures.add(_loadIntoCache(path, (img) => _heroRunImages[id] = img));
-      }
-    });
-    heroAttackPaths.forEach((id, path) {
-      if (!_heroAttackImages.containsKey(id)) {
-        _loadingKeys.add('atk_$id');
-        secondaryFutures.add(_loadIntoCache(path, (img) => _heroAttackImages[id] = img));
-      }
-    });
-    skillEffectPaths.forEach((key, path) {
-      if (!_skillImages.containsKey(key)) {
-        _loadingKeys.add('skill_$key');
-        secondaryFutures.add(_loadIntoCache(path, (img) => _skillImages[key] = img));
-      }
-    });
-    companionSkillSheetPaths.forEach((id, path) {
-      if (!_companionSkillSheets.containsKey(id)) {
-        _loadingKeys.add('comp_skill_$id');
-        secondaryFutures.add(
-          _loadIntoCache(path, (img) => _companionSkillSheets[id] = img),
-        );
-      }
-    });
-    await Future.wait(secondaryFutures);
-
-    // Nhường event loop
-    await Future<void>.delayed(Duration.zero);
-
-    // 3. Tải các frame chuỗi (Sequence) lần lượt để tránh nghẽn luồng UI
-    for (final entry in heroSequencePaths.entries) {
-      if (!_frameSequences.containsKey(entry.key)) {
-        _loadingKeys.add('seq_${entry.key}');
-        await _loadSequenceIntoCache(entry.key, entry.value);
-        await Future<void>.delayed(Duration.zero);
-      }
-    }
   }
 
   Future<void> _loadIntoCache(

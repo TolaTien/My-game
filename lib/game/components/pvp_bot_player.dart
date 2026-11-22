@@ -188,10 +188,13 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
 
     animTime += dt;
 
-    // Hồi Ki (+5 Ki/s)
+    // Hồi Ki (+5 Ki/s — chỉ báo UI khi Ki nguyên đổi để không gọi setState 60 lần/giây)
     if (currentKi < maxKi) {
+      final prevIntKi = currentKi.toInt();
       currentKi = min(maxKi, currentKi + 5 * dt);
-      onStatsChanged?.call();
+      if (currentKi.toInt() != prevIntKi || currentKi >= maxKi) {
+        onStatsChanged?.call();
+      }
     }
 
     // Cuồng nộ timer
@@ -579,12 +582,11 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.translate(-size.x, 0);
     }
 
-    // Hiệu ứng Cuồng nộ nếu có
+    // Hiệu ứng Cuồng nộ nếu có (nhẹ GPU, không dùng MaskFilter.blur)
     if (isBerserk && currentHp > 0) {
-      final aura = Paint()
-        ..color = const Color(0x669C27B0)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 26, aura);
+      final centerPt = Offset(size.x / 2, size.y / 2);
+      canvas.drawCircle(centerPt, 30, Paint()..color = const Color(0x289C27B0));
+      canvas.drawCircle(centerPt, 24, Paint()..color = const Color(0x449C27B0));
     }
 
     // 1. Bóng đổ

@@ -210,10 +210,13 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     super.update(dt);
     animTime += dt;
 
-    // Hồi phục Ki theo thời gian
+    // Hồi phục Ki theo thời gian (throttle cập nhật HUD ~8Hz thay vì 60Hz để tránh lag trên máy yếu)
     if (currentKi < maxKi) {
+      final prevIntKi = currentKi.toInt();
       currentKi = min(maxKi, currentKi + 5 * dt);
-      onStatsChanged?.call();
+      if (currentKi.toInt() != prevIntKi || currentKi >= maxKi) {
+        onStatsChanged?.call();
+      }
     }
 
     // Giảm các timer hiệu ứng visual & HUD cooldown
@@ -560,13 +563,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.translate(-size.x / 2, -size.y / 2);
     }
 
-    // Hiệu ứng hào quang Cuồng Nộ / Pháo Đài Sắt / Ẩn Thân
+    // Hiệu ứng hào quang Cuồng Nộ / Pháo Đài Sắt / Ẩn Thân (vẽ 2 vòng bán trong suốt nhẹ GPU thay cho MaskFilter.blur)
     if (isBerserk) {
-      final auraColor = _heroPrimaryColor.withValues(alpha: 0.42);
-      final auraPaint = Paint()
-        ..color = auraColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 26, auraPaint);
+      final centerPt = Offset(size.x / 2, size.y / 2);
+      canvas.drawCircle(centerPt, 30, Paint()..color = _heroPrimaryColor.withValues(alpha: 0.16));
+      canvas.drawCircle(centerPt, 24, Paint()..color = _heroPrimaryColor.withValues(alpha: 0.30));
     }
     if (ironShieldTimer > 0) {
       canvas.drawCircle(
@@ -586,10 +587,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     if (stealthTimer > 0) {
       canvas.drawCircle(
         Offset(size.x / 2, size.y / 2),
-        22,
-        Paint()
-          ..color = const Color(0xFF8E24AA).withValues(alpha: 0.28)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        24,
+        Paint()..color = const Color(0xFF8E24AA).withValues(alpha: 0.22),
       );
     }
 
@@ -957,10 +956,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         final castAlpha = (1.0 - (attackTimer.clamp(0.0, 0.25) / 0.25)).clamp(0.0, 1.0);
         canvas.drawCircle(
           Offset(size.x / 2 + 16, size.y / 2 - 2),
-          10 * (1.2 - castAlpha * 0.4),
-          Paint()
-            ..color = slashColor.withValues(alpha: castAlpha * 0.55)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          11 * (1.2 - castAlpha * 0.4),
+          Paint()..color = slashColor.withValues(alpha: castAlpha * 0.35),
         );
         canvas.drawCircle(
           Offset(size.x / 2 + 16, size.y / 2 - 2),

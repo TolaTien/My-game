@@ -139,9 +139,10 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
     if (_hasHit || parent == null) return;
 
     final hitBonus = type == HeroProjectileType.energyWave ? 12.0 : 0.0;
-    final targets = parent!.children.whereType<PositionComponent>().toList();
-    for (final target in targets) {
-      if (target == this || _hitTargets.contains(target)) continue;
+    for (final target in parent!.children) {
+      if (target == this || target is! PositionComponent || _hitTargets.contains(target)) {
+        continue;
+      }
 
       if (isFromPlayer) {
         if (target is ZombieEnemy && target.isMounted && target.currentHp > 0) {
@@ -303,10 +304,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
 
     canvas.drawCircle(
       Offset(cx, cy),
-      8,
-      Paint()
-        ..color = const Color(0xFF00E676).withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      10,
+      Paint()..color = const Color(0xFF00E676).withValues(alpha: 0.28),
     );
     canvas.drawLine(
       Offset(cx - 9, cy),
@@ -337,10 +336,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
     final cy = size.y / 2;
     canvas.drawCircle(
       Offset(cx, cy),
-      10,
-      Paint()
-        ..color = const Color(0xFFFFD700).withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+      12,
+      Paint()..color = const Color(0xFFFFD700).withValues(alpha: 0.32),
     );
     canvas.drawLine(
       Offset(cx - 12, cy),
@@ -365,10 +362,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
 
     canvas.drawCircle(
       Offset(cx, cy),
-      10 + pulse,
-      Paint()
-        ..color = const Color(0xFFFF3D00).withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      12 + pulse,
+      Paint()..color = const Color(0xFFFF3D00).withValues(alpha: 0.28),
     );
     final flameTrail = Path()
       ..moveTo(cx + 4, cy - 5)
@@ -399,10 +394,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
 
     canvas.drawCircle(
       Offset(cx, cy),
-      9,
-      Paint()
-        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      11,
+      Paint()..color = const Color(0xFF00E5FF).withValues(alpha: 0.30),
     );
     final iceTrail = Path()
       ..moveTo(cx + 2, cy - 4)
@@ -434,10 +427,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
 
     canvas.drawCircle(
       Offset(cx, cy),
-      9,
-      Paint()
-        ..color = const Color(0xFFE040FB).withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      11,
+      Paint()..color = const Color(0xFFE040FB).withValues(alpha: 0.28),
     );
     canvas.save();
     canvas.translate(cx, cy);
@@ -468,11 +459,10 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
       pi * 0.9,
       false,
       Paint()
-        ..color = const Color(0xFF18FFFF).withValues(alpha: 0.5)
+        ..color = const Color(0xFF18FFFF).withValues(alpha: 0.30)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 9.0
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..strokeWidth = 10.0
+        ..strokeCap = StrokeCap.round,
     );
     canvas.drawArc(
       rect,
@@ -503,10 +493,8 @@ class HeroProjectile extends PositionComponent with CollisionCallbacks {
     final cy = size.y / 2;
     canvas.drawCircle(
       Offset(cx, cy),
-      8,
-      Paint()
-        ..color = const Color(0xFFD500F9).withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      10,
+      Paint()..color = const Color(0xFFD500F9).withValues(alpha: 0.32),
     );
     final dagger = Path()
       ..moveTo(cx + 12, cy)
