@@ -76,6 +76,12 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double get damageAbsorption => max(_baseDamageAbsorption, goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0);
   set damageAbsorption(double value) => _baseDamageAbsorption = value;
   double goldenShieldTimer = 0.0;
+
+  // Buff sát thương từ kỹ năng đặc biệt của Trợ thủ (VD: Hơi Thở Bão Tố - Pyro-Frost Dragon)
+  double petAttackBuffTimer = 0.0;
+  double petAttackBuffBonus = 0.0;
+  double get effectiveDamage =>
+      damage * (petAttackBuffTimer > 0 ? (1.0 + petAttackBuffBonus) : 1.0);
   double get shieldHp => goldenShieldTimer > 0
       ? 50.0
       : (damageAbsorption > 0 ? (damageAbsorption * 100.0) : 0.0);
@@ -196,6 +202,14 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       if (goldenShieldTimer <= 0) {
         goldenShieldTimer = 0.0;
         temporaryPetDamageAbsorption = 0.0;
+      }
+    }
+
+    if (petAttackBuffTimer > 0) {
+      petAttackBuffTimer -= dt;
+      if (petAttackBuffTimer <= 0) {
+        petAttackBuffTimer = 0.0;
+        petAttackBuffBonus = 0.0;
       }
     }
 
@@ -388,6 +402,18 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   void heal(double amount) {
     currentHp = min(maxHp, currentHp + amount);
+    onStatsChanged?.call();
+  }
+
+  void restoreKi(double amount) {
+    currentKi = min(maxKi, currentKi + amount);
+    onStatsChanged?.call();
+  }
+
+  void reduceSkillCooldowns(double seconds) {
+    skill1VisualCd = max(0.0, skill1VisualCd - seconds);
+    skill2VisualCd = max(0.0, skill2VisualCd - seconds);
+    skill3VisualCd = max(0.0, skill3VisualCd - seconds);
     onStatsChanged?.call();
   }
 

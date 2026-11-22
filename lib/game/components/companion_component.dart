@@ -101,15 +101,161 @@ class CompanionComponent extends PositionComponent
   double actionCooldown = 0.0;
   PositionComponent? lockedTarget;
 
-  // Kỹ năng Đặc biệt của Trợ thủ: Trường Trọng Lực Hoàng Kim (Golden Overdrive)
+  // Kỹ năng Đặc biệt riêng của từng Trợ thủ
   static const double maxSpecialSkillCooldown = 14.0;
   static const double specialSkillMaxCooldown = maxSpecialSkillCooldown;
   double specialSkillCooldown = 0.0;
   double overdriveTimer = 0.0;
   bool _ownsActiveShield = false;
+  bool _ownsAttackBuff = false;
+
+  // Overdrive riêng cho ORBIT-03 (bắn liên thanh + tia laser quỹ đạo)
+  double _rapidFireTimer = 0.0;
+  Vector2? _orbitalStrikePos;
+  double _orbitalStrikeTimer = 0.0;
 
   // Quản lý trạng thái làm chậm của Frost Drone / Aegis-X9
   final Map<PositionComponent, double> _slowedEnemies = {};
+  // Quản lý hiệu ứng đóng băng / làm chậm có thời hạn từ kỹ năng kích hoạt
+  final Map<PositionComponent, _TimedSpeedEffect> _timedSpeedEffects = {};
+
+  /// Tên kỹ năng đặc biệt hiển thị khi kích hoạt (FloatingCombatText)
+  String get skillName {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return 'MƯA ĐẠN PLASMA!';
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return 'LỒNG PHẢN CHẤN!';
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return 'BÃO TUYẾT ĐÓNG BĂNG!';
+      case 'cyber_drone':
+        return 'KHIÊN SINH HỌC & HỒI MÁU!';
+      case 'luna_fox':
+        return 'LINH HỒN HỒ LY!';
+      case 'orbit_03':
+        return 'PHÁO LASER QUỸ ĐẠO!';
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return 'TRƯỜNG TRỌNG LỰC HOÀNG KIM!';
+      case 'pyro_frost_dragon':
+        return 'HƠI THỞ BÃO TỐ!';
+      default:
+        return 'KỸ NĂNG TRỢ THỦ!';
+    }
+  }
+
+  /// Thời gian hồi chiêu riêng cho từng Trợ thủ
+  double get skillCooldownDuration {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return 10.0;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return 13.0;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return 13.0;
+      case 'cyber_drone':
+        return 15.0;
+      case 'luna_fox':
+        return 14.0;
+      case 'orbit_03':
+        return 13.0;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return 14.0;
+      case 'pyro_frost_dragon':
+        return 15.0;
+      default:
+        return maxSpecialSkillCooldown;
+    }
+  }
+
+  /// Màu chủ đạo trên nút PET HUD và vòng hiệu ứng kỹ năng
+  Color get skillColor {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return const Color(0xFFFF5252);
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return const Color(0xFF448AFF);
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return const Color(0xFF18FFFF);
+      case 'cyber_drone':
+        return const Color(0xFF00E5FF);
+      case 'luna_fox':
+        return const Color(0xFF80D8FF);
+      case 'orbit_03':
+        return const Color(0xFFFFAB00);
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return const Color(0xFFFFD700);
+      case 'pyro_frost_dragon':
+        return const Color(0xFFFF5252);
+      default:
+        return type.themeColor;
+    }
+  }
+
+  /// Icon hiển thị trên nút PET HUD
+  IconData get skillIcon {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return Icons.rocket_launch_rounded;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return Icons.shield_rounded;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return Icons.ac_unit_rounded;
+      case 'cyber_drone':
+        return Icons.health_and_safety_rounded;
+      case 'luna_fox':
+        return Icons.auto_fix_high_rounded;
+      case 'orbit_03':
+        return Icons.radar_rounded;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return Icons.auto_awesome_rounded;
+      case 'pyro_frost_dragon':
+        return Icons.whatshot_rounded;
+      default:
+        return Icons.auto_awesome;
+    }
+  }
+
+  bool get isRapidFireActive => _rapidFireTimer > 0;
 
   CompanionComponent({
     required this.companionId,
@@ -158,10 +304,15 @@ class CompanionComponent extends PositionComponent
   /// Dọn dẹp trạng thái, hoàn trả tốc độ quái vật và hồi phục chỉ số khi unequip / exit
   void cleanup() {
     _clearActiveShield();
+    _clearAttackBuff();
     lockedTarget = null;
+    _rapidFireTimer = 0.0;
+    _orbitalStrikePos = null;
+    _orbitalStrikeTimer = 0.0;
     if (type == CompanionType.shield || type == CompanionType.aegisX9) {
       player.damageAbsorption = 0.0;
     }
+    _restoreAllTimedSpeedEffects();
     _restoreAllSlowedEnemies();
   }
 
@@ -172,12 +323,24 @@ class CompanionComponent extends PositionComponent
     _ownsActiveShield = false;
   }
 
+  void _clearAttackBuff() {
+    if (!_ownsAttackBuff) return;
+    player.petAttackBuffTimer = 0.0;
+    player.petAttackBuffBonus = 0.0;
+    _ownsAttackBuff = false;
+  }
+
   /// No targeting/slow/shield state from a previous floor should leak into retry.
   void resetForFloor() {
     _clearActiveShield();
+    _clearAttackBuff();
+    _restoreAllTimedSpeedEffects();
     _restoreAllSlowedEnemies();
     lockedTarget = null;
     actionCooldown = specialSkillCooldown = overdriveTimer = 0.0;
+    _rapidFireTimer = 0.0;
+    _orbitalStrikePos = null;
+    _orbitalStrikeTimer = 0.0;
     position = player.position + Vector2(orbitRadius, 0);
     _foxRunning = false;
     _foxRunTime = 0;
@@ -191,49 +354,287 @@ class CompanionComponent extends PositionComponent
       final enemy = entry.key;
       final origSpeed = entry.value;
       if (enemy.isMounted) {
-        if (enemy is ZombieEnemy) {
-          enemy.speed = origSpeed;
-        } else if (enemy is SkeletonEnemy) {
-          enemy.speed = origSpeed;
-        } else if (enemy is BossEnemy) {
-          enemy.currentSpeed = origSpeed;
-        }
+        _setEnemySpeed(enemy, origSpeed);
       }
     }
     _slowedEnemies.clear();
   }
 
-  /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ: Trường Trọng Lực Hoàng Kim (Golden Overdrive)
+  void _restoreAllTimedSpeedEffects() {
+    for (final entry in _timedSpeedEffects.entries) {
+      final enemy = entry.key;
+      if (enemy.isMounted) {
+        _setEnemySpeed(enemy, entry.value.originalSpeed);
+      }
+    }
+    _timedSpeedEffects.clear();
+  }
+
+  double _getEnemySpeed(PositionComponent enemy) {
+    if (enemy is ZombieEnemy) return enemy.speed;
+    if (enemy is SkeletonEnemy) return enemy.speed;
+    if (enemy is BossEnemy) return enemy.currentSpeed;
+    return 0.0;
+  }
+
+  void _setEnemySpeed(PositionComponent enemy, double speed) {
+    if (enemy is ZombieEnemy) {
+      enemy.speed = speed;
+    } else if (enemy is SkeletonEnemy) {
+      enemy.speed = speed;
+    } else if (enemy is BossEnemy) {
+      enemy.currentSpeed = speed;
+    }
+  }
+
+  void _damageEnemy(PositionComponent enemy, double dmg) {
+    if (enemy is ZombieEnemy) {
+      enemy.takeDamage(dmg);
+    } else if (enemy is SkeletonEnemy) {
+      enemy.takeDamage(dmg);
+    } else if (enemy is BossEnemy) {
+      enemy.takeDamage(dmg);
+    }
+  }
+
+  void _applyTimedSpeedMultiplier(
+    PositionComponent enemy, {
+    required double multiplier,
+    required double duration,
+  }) {
+    final existing = _timedSpeedEffects[enemy];
+    final baseSpeed =
+        existing?.originalSpeed ?? _slowedEnemies[enemy] ?? _getEnemySpeed(enemy);
+    _timedSpeedEffects[enemy] = _TimedSpeedEffect(
+      originalSpeed: baseSpeed,
+      remaining: max(existing?.remaining ?? 0.0, duration),
+    );
+    _setEnemySpeed(enemy, baseSpeed * multiplier);
+  }
+
+  List<PositionComponent> _livingMonsters() {
+    if (!isMounted) return const [];
+    return <PositionComponent>[
+      ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
+      ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
+      if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
+        game.boss!,
+    ];
+  }
+
+  void _grantTemporaryShield({required double absorption, required double duration}) {
+    player.goldenShieldTimer = duration;
+    player.temporaryPetDamageAbsorption = absorption;
+    _ownsActiveShield = true;
+  }
+
+  /// Kích hoạt Kỹ năng Đặc biệt riêng theo từng Trợ thủ
   bool activateSpecialSkill() {
     if (specialSkillCooldown > 0 || player.currentHp <= 0) return false;
-    specialSkillCooldown = maxSpecialSkillCooldown;
+    specialSkillCooldown = skillCooldownDuration;
     overdriveTimer = 2.5;
-    player.goldenShieldTimer = 4.0;
-    player.temporaryPetDamageAbsorption = 0.25;
-    _ownsActiveShield = true;
 
-    AudioService.instance.playSfx(SfxSound.skillSmash);
-
-    if (isMounted) {
-      const pullRadius = 130.0;
-      final allMonsters = <PositionComponent>[
-        ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
-        ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
-        if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
-          game.boss!,
-      ];
-
-      for (final m in allMonsters) {
-        final dist = player.position.distanceTo(m.position);
-        if (dist <= pullRadius && dist > 18) {
-          final pullDir = (player.position - m.position).normalized();
-          m.position.add(pullDir * min(36.0, dist * 0.45));
-        }
-      }
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        _activateAttackNova();
+        break;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        _activateDefenseShockwave();
+        break;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        _activateFrostFreeze();
+        break;
+      case 'cyber_drone':
+        _activateCyberBioShield();
+        break;
+      case 'luna_fox':
+        _activateLunaSpirit();
+        break;
+      case 'orbit_03':
+        _activateOrbitLaserStrike();
+        break;
+      case 'pyro_frost_dragon':
+        _activateDragonStormBreath();
+        break;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+      default:
+        _activateAegisGravityField();
+        break;
     }
 
     player.onStatsChanged?.call();
     return true;
+  }
+
+  /// 1. Trợ Thủ Công Kích: Mưa Đạn Plasma (6 tia 360°, 24 DMG/tia)
+  void _activateAttackNova() {
+    AudioService.instance.playSfx(SfxSound.skillHurricane);
+    if (!isMounted) return;
+    const count = 6;
+    for (int i = 0; i < count; i++) {
+      final rad = (i * 2 * pi / count) + orbitAngle;
+      final dir = Vector2(cos(rad), sin(rad));
+      game.world.add(
+        CompanionPlasmaProjectile(
+          position: position.clone(),
+          direction: dir,
+          damage: 24.0,
+          speed: 320.0,
+          color: const Color(0xFFFF5252),
+        ),
+      );
+    }
+  }
+
+  /// 2. Trợ Thủ Phòng Ngự: Lồng Phản Chấn (Khiên 55% trong 5s + đẩy lùi quái 150px + 18 DMG)
+  void _activateDefenseShockwave() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    _grantTemporaryShield(absorption: 0.55, duration: 5.0);
+    for (final m in _livingMonsters()) {
+      final delta = m.position - player.position;
+      final dist = delta.length;
+      if (dist <= 150.0) {
+        final pushDir = dist > 1 ? delta.normalized() : Vector2(1, 0);
+        m.position.add(pushDir * 68.0);
+        _damageEnemy(m, 18.0);
+      }
+    }
+  }
+
+  /// 3. Trợ Thủ Khống Chế: Bão Tuyết Đóng Băng (đóng băng 3s + 20 DMG trong 180px)
+  void _activateFrostFreeze() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 180.0) {
+        _applyTimedSpeedMultiplier(m, multiplier: 0.0, duration: 3.0);
+        _damageEnemy(m, 20.0);
+      }
+    }
+  }
+
+  /// 4. Cyber Drone (PIXEL-01): Khiên Sinh Học & Hồi Máu (+25% Max HP + Khiên 45% 4.5s + 3 tia Plasma)
+  void _activateCyberBioShield() {
+    AudioService.instance.playSfx(SfxSound.pickupPotion);
+    player.heal(player.maxHp * 0.25);
+    _grantTemporaryShield(absorption: 0.45, duration: 4.5);
+    if (!isMounted) return;
+    final monsters = _livingMonsters();
+    monsters.sort(
+      (a, b) => position.distanceTo(a.position).compareTo(position.distanceTo(b.position)),
+    );
+    for (int i = 0; i < 3; i++) {
+      final Vector2 dir;
+      if (i < monsters.length) {
+        final delta = monsters[i].position - position;
+        dir = delta.length2 > 0 ? delta.normalized() : Vector2(1, 0);
+      } else {
+        final rad = (i * 2 * pi / 3);
+        dir = Vector2(cos(rad), sin(rad));
+      }
+      game.world.add(
+        CompanionPlasmaProjectile(
+          position: position.clone(),
+          direction: dir,
+          damage: 16.0,
+          speed: 300.0,
+          color: const Color(0xFF00E5FF),
+        ),
+      );
+    }
+  }
+
+  /// 5. Hồ Ly Luna: Linh Hồn Hồ Ly (+40% Ki + giảm 3s hồi chiêu Skill 1-2-3 + làm chậm 50% quái 4s)
+  void _activateLunaSpirit() {
+    AudioService.instance.playSfx(SfxSound.pickupGem);
+    player.restoreKi(player.maxKi * 0.40);
+    player.reduceSkillCooldowns(3.0);
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 160.0) {
+        _applyTimedSpeedMultiplier(m, multiplier: 0.50, duration: 4.0);
+        _damageEnemy(m, 15.0);
+      }
+    }
+  }
+
+  /// 6. ORBIT-03 Drone: Pháo Laser Quỹ Đạo (giáng laser nổ 55 DMG + bắn liên thanh 4s)
+  void _activateOrbitLaserStrike() {
+    AudioService.instance.playSfx(SfxSound.skillBerserk);
+    _rapidFireTimer = 4.0;
+    actionCooldown = 0.0;
+    final monsters = _livingMonsters();
+    if (monsters.isEmpty) return;
+
+    PositionComponent? nearest;
+    double nearestDist = 240.0;
+    for (final m in monsters) {
+      final d = player.position.distanceTo(m.position);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = m;
+      }
+    }
+    if (nearest != null) {
+      _orbitalStrikePos = nearest.position.clone();
+      _orbitalStrikeTimer = 0.9;
+      for (final m in monsters) {
+        if (m.position.distanceTo(_orbitalStrikePos!) <= 90.0) {
+          _damageEnemy(m, 55.0);
+        }
+      }
+    }
+  }
+
+  /// 7. Aegis-X9 Lôi Từ: Trường Trọng Lực Hoàng Kim (gom quái 170px + hút vật phẩm 320px + 35 DMG + Khiên 35% 4s)
+  void _activateAegisGravityField() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    _grantTemporaryShield(absorption: 0.35, duration: 4.0);
+    if (!isMounted) return;
+
+    const pullRadius = 170.0;
+    for (final m in _livingMonsters()) {
+      final dist = player.position.distanceTo(m.position);
+      if (dist <= pullRadius) {
+        if (dist > 22) {
+          final pullDir = (player.position - m.position).normalized();
+          m.position.add(pullDir * min(55.0, dist * 0.55));
+        }
+        _damageEnemy(m, 35.0);
+      }
+    }
+
+    // Hút toàn bộ vật phẩm (xu, ngọc, bình máu) trong 320px về gần người chơi
+    for (final item in game.pickups) {
+      if (!item.isMounted) continue;
+      final dist = player.position.distanceTo(item.position);
+      if (dist <= 320.0 && dist > 8.0) {
+        final pullDir = (player.position - item.position).normalized();
+        item.position.add(pullDir * (dist - 8.0));
+      }
+    }
+  }
+
+  /// 8. Pyro-Frost Dragon: Hơi Thở Bão Tố (65 DMG nổ 200px + đóng băng 2.5s + tăng 30% sát thương đòn đánh 5s)
+  void _activateDragonStormBreath() {
+    AudioService.instance.playSfx(SfxSound.skillBerserk);
+    player.petAttackBuffBonus = 0.30;
+    player.petAttackBuffTimer = 5.0;
+    _ownsAttackBuff = true;
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 200.0) {
+        _damageEnemy(m, 65.0);
+        _applyTimedSpeedMultiplier(m, multiplier: 0.0, duration: 2.5);
+      }
+    }
   }
 
   @override
@@ -246,6 +647,16 @@ class CompanionComponent extends PositionComponent
     if (overdriveTimer > 0) {
       overdriveTimer = max(0.0, overdriveTimer - dt);
     }
+    if (_rapidFireTimer > 0) {
+      _rapidFireTimer = max(0.0, _rapidFireTimer - dt);
+    }
+    if (_orbitalStrikeTimer > 0) {
+      _orbitalStrikeTimer = max(0.0, _orbitalStrikeTimer - dt);
+      if (_orbitalStrikeTimer <= 0) {
+        _orbitalStrikePos = null;
+      }
+    }
+    _updateTimedSpeedEffects(dt);
     if (player.currentHp <= 0) {
       lockedTarget = null;
       _foxRunning = false;
@@ -405,17 +816,46 @@ class CompanionComponent extends PositionComponent
 
     lockedTarget = nearest;
 
-    // Bắn đạn mini plasma mỗi 1.5s vào quái gần nhất
+    // Bắn đạn mini plasma (ORBIT-03 bắn liên thanh 0.3s khi đang Overdrive)
     if (lockedTarget != null && actionCooldown <= 0) {
       final toTarget = lockedTarget!.position - position;
       if (toTarget.length2 > 0) {
         final dir = toTarget.normalized();
+        final isOrbitRapid = companionId == 'orbit_03' && _rapidFireTimer > 0;
         final plasma = CompanionPlasmaProjectile(
           position: position.clone(),
           direction: dir,
+          damage: isOrbitRapid ? 16.0 : 12.0,
+          speed: isOrbitRapid ? 360.0 : 280.0,
+          color: isOrbitRapid
+              ? const Color(0xFFFFAB00)
+              : const Color(0xFFFF1744),
         );
         game.world.add(plasma);
-        actionCooldown = 1.5;
+        actionCooldown = isOrbitRapid ? 0.3 : 1.5;
+      }
+    }
+  }
+
+  void _updateTimedSpeedEffects(double dt) {
+    if (_timedSpeedEffects.isEmpty) return;
+    final expired = <PositionComponent>[];
+    for (final entry in _timedSpeedEffects.entries) {
+      final enemy = entry.key;
+      entry.value.remaining -= dt;
+      if (!enemy.isMounted || entry.value.remaining <= 0) {
+        expired.add(enemy);
+      }
+    }
+    for (final enemy in expired) {
+      final eff = _timedSpeedEffects.remove(enemy);
+      if (eff != null && enemy.isMounted) {
+        final auraOrig = _slowedEnemies[enemy];
+        if (auraOrig != null) {
+          _setEnemySpeed(enemy, auraOrig * 0.60);
+        } else {
+          _setEnemySpeed(enemy, eff.originalSpeed);
+        }
       }
     }
   }
@@ -489,20 +929,75 @@ class CompanionComponent extends PositionComponent
       player.position.y - position.y,
     );
 
-    // Hiệu ứng Trường Trọng Lực Hoàng Kim (Golden Overdrive) khi kích hoạt
+    // Hiệu ứng vòng kỹ năng đặc biệt riêng theo từng Trợ thủ khi kích hoạt
     if (overdriveTimer > 0) {
       final playerCenter = droneCenter + offsetToPlayer;
       final alpha = (overdriveTimer / 2.5).clamp(0.0, 1.0);
+      final ringColor = skillColor;
+      final ringRadius = companionId == 'pyro_frost_dragon'
+          ? 155.0
+          : companionId == 'comp_control'
+              ? 145.0
+              : 115.0;
       canvas.drawCircle(
         playerCenter,
-        115,
-        Paint()..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
+        ringRadius,
+        Paint()..color = ringColor.withValues(alpha: alpha * 0.14),
       );
       canvas.drawCircle(
         playerCenter,
-        115,
+        ringRadius,
         Paint()
-          ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.75)
+          ..color = ringColor.withValues(alpha: alpha * 0.78)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2,
+      );
+      if (companionId == 'pyro_frost_dragon') {
+        // Vòng song nguyên Băng bên trong kết hợp vòng Lửa bên ngoài
+        canvas.drawCircle(
+          playerCenter,
+          ringRadius * 0.68,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0,
+        );
+      }
+    }
+
+    // Hiệu ứng tia Pháo Laser Quỹ Đạo từ trên trời xuống của ORBIT-03
+    if (_orbitalStrikeTimer > 0 && _orbitalStrikePos != null) {
+      final alpha = (_orbitalStrikeTimer / 0.9).clamp(0.0, 1.0);
+      final strikeOffset = Offset(
+        _orbitalStrikePos!.x - position.x,
+        _orbitalStrikePos!.y - position.y,
+      );
+      final impact = droneCenter + strikeOffset;
+      canvas.drawLine(
+        Offset(impact.dx, impact.dy - 260),
+        impact,
+        Paint()
+          ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.85)
+          ..strokeWidth = 10.0 * alpha,
+      );
+      canvas.drawLine(
+        Offset(impact.dx, impact.dy - 260),
+        impact,
+        Paint()
+          ..color = Colors.white.withValues(alpha: alpha)
+          ..strokeWidth = 3.5 * alpha,
+      );
+      canvas.drawCircle(
+        impact,
+        90.0 * (1.1 - alpha * 0.3),
+        Paint()
+          ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.25),
+      );
+      canvas.drawCircle(
+        impact,
+        90.0 * (1.1 - alpha * 0.3),
+        Paint()
+          ..color = const Color(0xFFFFD740).withValues(alpha: alpha * 0.85)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0,
       );
@@ -819,12 +1314,20 @@ class CompanionComponent extends PositionComponent
   }
 }
 
-/// Tia đạn Plasma mini của Attack Drone / Aegis-X9
+class _TimedSpeedEffect {
+  final double originalSpeed;
+  double remaining;
+
+  _TimedSpeedEffect({required this.originalSpeed, required this.remaining});
+}
+
+/// Tia đạn Plasma mini của Attack Drone / Cyber Drone / ORBIT-03 / Aegis-X9
 class CompanionPlasmaProjectile extends PositionComponent
     with CollisionCallbacks, HasGameReference<BigWarGame> {
   final Vector2 direction;
-  final double speed = 280.0;
-  final double damage = 12.0;
+  final double speed;
+  final double damage;
+  final Color color;
 
   double _lifeTimer = 0.0;
   bool _hasHit = false;
@@ -832,6 +1335,9 @@ class CompanionPlasmaProjectile extends PositionComponent
   CompanionPlasmaProjectile({
     required Vector2 position,
     required Vector2 direction,
+    this.speed = 280.0,
+    this.damage = 12.0,
+    this.color = const Color(0xFFFF1744),
   })  : direction =
             direction.length2 > 0 ? direction.normalized() : Vector2(1, 0),
         super(
@@ -889,11 +1395,11 @@ class CompanionPlasmaProjectile extends PositionComponent
     final center = Offset(size.x / 2, size.y / 2);
 
     final haloPaint = Paint()
-      ..color = const Color(0x66FF1744)
+      ..color = color.withValues(alpha: 0.4)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
     canvas.drawCircle(center, 5.5, haloPaint);
 
-    final bodyPaint = Paint()..color = const Color(0xFFFF1744);
+    final bodyPaint = Paint()..color = color;
     canvas.drawCircle(center, 3.8, bodyPaint);
 
     final corePaint = Paint()..color = const Color(0xFFFFF176);

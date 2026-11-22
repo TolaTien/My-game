@@ -418,7 +418,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
       }
 
       final isCombo3 = player.comboStep == 3;
-      final dmg = player.damage * (isCombo3 ? 1.4 : 1.0);
+      final dmg = player.effectiveDamage * (isCombo3 ? 1.4 : 1.0);
       final pType = isRanger
           ? HeroProjectileType.arrow
           : (isEmber ? HeroProjectileType.fireball : HeroProjectileType.frostOrb);
@@ -445,7 +445,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     // TƯỚNG CẬN CHIẾN: Gây sát thương quái trong phạm vi cận chiến (55px, hoặc 80px ở đòn combo thứ 3)
     final isCombo3 = player.comboStep == 3;
     final attackRange = isCombo3 ? 80.0 : 55.0;
-    final dmg = player.damage;
+    final dmg = player.effectiveDamage;
 
     for (final enemy in List<ZombieEnemy>.from(enemies)) {
       if (!enemy.isMounted) {
@@ -497,7 +497,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
 
     // Búa Cuồng Phong / Lôi Ảnh Trảm: Quét 360 độ (bán kính 85px)
     const aoeRadius = 85.0;
-    final skillDmg = player.damage * 1.8;
+    final skillDmg = player.effectiveDamage * 1.8;
     for (final enemy in List<ZombieEnemy>.from(enemies)) {
       if (!enemy.isMounted) {
         enemies.remove(enemy);
@@ -536,7 +536,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
 
     // Nện Đất / Lôi Điện Hộ Thể: Chấn động cực mạnh (bán kính 110px)
     const aoeRadius = 110.0;
-    final skillDmg = player.damage * 2.5;
+    final skillDmg = player.effectiveDamage * 2.5;
     for (final enemy in List<ZombieEnemy>.from(enemies)) {
       if (!enemy.isMounted) {
         enemies.remove(enemy);
@@ -599,7 +599,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
           hero != 'tanker' &&
           hero != 'ninja') {
         const ultRadius = 160.0;
-        final ultDmg = player.damage * 2.5;
+        final ultDmg = player.effectiveDamage * 2.5;
         for (final enemy in List<ZombieEnemy>.from(enemies)) {
           if (!enemy.isMounted) continue;
           if (player.position.distanceTo(enemy.position) <= ultRadius) {
@@ -658,7 +658,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
       if (isLoaded) {
         world.add(FloatingCombatText(
           position: player.position,
-          text: 'TRƯỜNG TRỌNG LỰC HOÀNG KIM!',
+          text: companion!.skillName,
           type: CombatTextType.buff,
         ));
       }

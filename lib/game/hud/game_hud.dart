@@ -5,7 +5,6 @@ import 'package:flutter/scheduler.dart';
 import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
 import '../../screens/settings_dialog.dart';
-import '../components/companion_component.dart';
 import '../components/player.dart';
 import '../big_war_game.dart';
 import 'boss_bar_overlay.dart';
@@ -535,20 +534,21 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                       ),
                     ),
 
-                    // Companion Active Skill Button (Aegis-X9 / PET: Trường Trọng Lực Hoàng Kim)
+                    // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)
                     if (widget.game.companion != null)
                       Positioned(
                         bottom: 124,
                         right: 54,
                         child: _ActionButton(
                           size: 44,
-                          icon: Icons.auto_awesome,
+                          icon: widget.game.companion!.skillIcon,
                           label: 'PET',
                           hotkey: isDesktopOrWeb ? 'E' : null,
-                          color: const Color(0xFFFFB300),
+                          color: widget.game.companion!.skillColor,
                           cooldownRemaining:
                               widget.game.companion!.specialSkillCooldown,
-                          maxCooldown: CompanionComponent.specialSkillMaxCooldown,
+                          maxCooldown:
+                              widget.game.companion!.skillCooldownDuration,
                           hasEnoughKi: true,
                           onTap: () => widget.game.onCompanionSkill(),
                         ),

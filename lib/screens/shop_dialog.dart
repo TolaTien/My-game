@@ -537,7 +537,7 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Trợ Thủ Công Kích',
         tag: 'TIER 1 • ATTACK DRONE',
         description:
-            'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
+            'Bắn đạn Plasma tự động. Kỹ năng [E]: Mưa Đạn Plasma phóng 6 tia 360°.',
         price: 2000,
         color: const Color(0xFFFF5252),
         icon: Icons.rocket_launch_rounded,
@@ -546,7 +546,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'comp_defense',
         name: 'Trợ Thủ Phòng Ngự',
         tag: 'TIER 1 • SHIELD DRONE',
-        description: 'Tạo lồng bảo hộ năng lượng giảm 30% sát thương nhận vào.',
+        description:
+            'Giảm 30% sát thương. Kỹ năng [E]: Lồng Phản Chấn (Khiên 55% + đẩy lùi quái).',
         price: 2500,
         color: const Color(0xFF448AFF),
         icon: Icons.shield_rounded,
@@ -556,7 +557,7 @@ class _ShopDialogState extends State<ShopDialog>
         name: 'Trợ Thủ Khống Chế',
         tag: 'TIER 1 • FROST DRONE',
         description:
-            'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
+            'Làm chậm 40% quái. Kỹ năng [E]: Bão Tuyết đóng băng toàn bộ quái 3s.',
         price: 3000,
         color: const Color(0xFF18FFFF),
         icon: Icons.ac_unit_rounded,
@@ -565,7 +566,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'cyber_drone',
         name: 'Cyber Drone (PIXEL-01)',
         tag: 'TIER 2 • SUPPORT (ASSET 1 & 2)',
-        description: 'Drone sừng trắng mắt lam: Bắn đạn Plasma, hồi máu đồng minh & bật Khiên Cầu Năng Lượng.',
+        description:
+            'Khiên 30%. Kỹ năng [E]: Khiên Sinh Học hồi 25% HP, bật Khiên 45% & bắn 3 tia Plasma.',
         price: 4000,
         color: const Color(0xFF00E5FF),
         icon: Icons.smart_toy_rounded,
@@ -575,7 +577,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'luna_fox',
         name: 'Hồ Ly Luna',
         tag: 'TIER 2 • PET FOX (ASSET 2)',
-        description: 'Linh thú Hồ Ly trắng xanh: Bắn cầu linh lực băng lam làm chậm quái và hồi Ki.',
+        description:
+            'Aura băng làm chậm. Kỹ năng [E]: Linh Hồn Hồ Ly hồi 40% Ki & giảm 3s hồi chiêu.',
         price: 4500,
         color: const Color(0xFF80D8FF),
         icon: Icons.pets_rounded,
@@ -585,7 +588,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'orbit_03',
         name: 'ORBIT-03 Drone',
         tag: 'TIER 2 • MECH SPHERE (ASSET 2)',
-        description: 'Cầu cơ khí Hoàng Kim bắn tia laser năng lượng tốc độ cao liên hoàn.',
+        description:
+            'Bắn laser tự động. Kỹ năng [E]: Pháo Laser Quỹ Đạo (55 DMG nổ) & bắn liên thanh 4s.',
         price: 5000,
         color: const Color(0xFFFFAB00),
         icon: Icons.radar_rounded,
@@ -595,7 +599,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'aegis_x9',
         name: 'Aegis-X9 Lôi Từ',
         tag: 'TIER 3 • HUYỀN THOẠI (ASSET 4)',
-        description: 'Lõi bát diện Hoàng Kim: Hút vàng 120px, bắn tia Laser & mở Trường Trọng Lực + Khiên Vàng.',
+        description:
+            'Hút vàng & laser vàng. Kỹ năng [E]: Trường Trọng Lực gom quái + hút toàn map + Khiên 35%.',
         price: 8000,
         color: const Color(0xFFFFD700),
         icon: Icons.auto_awesome_rounded,
@@ -605,7 +610,8 @@ class _ShopDialogState extends State<ShopDialog>
         id: 'pyro_frost_dragon',
         name: 'Pyro-Frost Dragon',
         tag: 'TIER 3 • HUYỀN THOẠI (ASSET 3)',
-        description: 'Phun lửa & tuyết xen kẽ; kích hoạt Hơi Thở Bão Tố đóng băng kẻ địch và buff khiên lửa.',
+        description:
+            'Aura băng. Kỹ năng [E]: Hơi Thở Bão Tố (65 DMG nổ + đóng băng 2.5s + tăng 30% ATK 5s).',
         price: 10000,
         color: const Color(0xFFFF5252),
         icon: Icons.whatshot_rounded,
