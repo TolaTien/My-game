@@ -93,18 +93,28 @@ class SpriteImageCache {
   };
 
   static const Set<String> proceduralHeroIds = {
-    'george',
     'ranger',
     'tanker',
-    'ninja',
     'valeria',
     'garrick',
+  };
+
+  /// Các tướng sử dụng bộ spritesheet 4-frame ngang (1024x256: idle.png, run.png, attack.png)
+  /// do Gemini tạo và cắt tự động qua `tool/slice_hero_sheet.py`.
+  static const Set<String> stripAnimatedHeroIds = {
+    'george',
+    'ninja',
   };
 
   static bool isProceduralHero(String heroId) =>
       proceduralHeroIds.contains(heroId);
 
+  static bool isStripAnimatedHero(String heroId) =>
+      stripAnimatedHeroIds.contains(heroId);
+
   static const Map<String, String> heroPortraitPaths = {
+    'george': 'assets/images/heroes/george/portrait.png',
+    'ninja': 'assets/images/heroes/ninja/portrait.png',
     'nova_blade': 'assets/images/heroes/nova/nova_portrait.png',
     'nova': 'assets/images/heroes/nova/nova_portrait.png',
     'shadow_01': 'assets/images/heroes/shadow_01_portrait.png',
@@ -114,6 +124,8 @@ class SpriteImageCache {
   };
 
   static const Map<String, String> heroIdlePaths = {
+    'george': 'assets/images/heroes/george/idle.png',
+    'ninja': 'assets/images/heroes/ninja/idle.png',
     'nova_blade': 'assets/images/heroes/nova/nova.png',
     'nova': 'assets/images/heroes/nova/nova.png',
     'ember_02': 'assets/images/heroes/ember/Ember-idle.png',
@@ -122,6 +134,8 @@ class SpriteImageCache {
     'shadow': 'assets/images/heroes/shadow/idle/01.png',
   };
   static const Map<String, String> heroRunPaths = {
+    'george': 'assets/images/heroes/george/run.png',
+    'ninja': 'assets/images/heroes/ninja/run.png',
     'nova_blade': 'assets/images/heroes/nova/nova-run.png',
     'nova': 'assets/images/heroes/nova/nova-run.png',
     'ember_02': 'assets/images/heroes/ember/ember-run.png',
@@ -131,6 +145,8 @@ class SpriteImageCache {
   };
 
   static const Map<String, String> heroAttackPaths = {
+    'george': 'assets/images/heroes/george/attack.png',
+    'ninja': 'assets/images/heroes/ninja/attack.png',
     'nova_blade': 'assets/images/heroes/nova/nova-attack.png',
     'nova': 'assets/images/heroes/nova/nova-attack.png',
     'ember_02': 'assets/images/heroes/ember/Ember-attack.png',

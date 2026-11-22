@@ -15,6 +15,9 @@ class SkeletonEnemy extends PositionComponent
   double maxHp = 45.0;
   double currentHp = 45.0;
   double speed = 50.0;
+  double arrowDamage = 10.0;
+  double arrowSpeed = 220.0;
+  double shootInterval = 1.8;
 
   final PlayerComponent player;
   Vector2 previousPosition = Vector2.zero();
@@ -97,7 +100,7 @@ class SkeletonEnemy extends PositionComponent
         _currentWaypointIndex = 0;
         if (shootCooldown <= 0) {
           _shootArrow();
-          shootCooldown = 1.8;
+          shootCooldown = shootInterval;
         }
       } else {
         // Bị cản bởi cột đá -> Dùng A* tìm đường vòng sang để flank
@@ -156,6 +159,8 @@ class SkeletonEnemy extends PositionComponent
     final arrow = ArrowProjectile(
       position: position + spawnOffset,
       direction: dir,
+      speed: arrowSpeed,
+      damage: arrowDamage,
     );
     game.world.add(arrow);
     AudioService.instance.playSfx(SfxSound.attackArrow);

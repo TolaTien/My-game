@@ -54,17 +54,51 @@ class BossEnemy extends PositionComponent
 
   static const double speedPhase1 = 55.0;
   static const double speedPhase2 = 80.0;
+  double phase1Speed = speedPhase1;
+  double phase2Speed = speedPhase2;
   double currentSpeed = speedPhase1;
 
-  // Combat parameters
+  // Combat parameters (scale theo cấp tầng màn chơi)
   static const double meleeRange = 70.0;
-  static const double meleeDamage = 25.0;
+  double meleeDamage = 25.0;
   static const double groundSlamRange = 220.0;
   static const double groundSlamAoERadius = 70.0; // 140px diameter AoE
-  static const double groundSlamDamage = 40.0;
+  double groundSlamDamage = 40.0;
   static const double groundSlamTelegraphDuration = 1.2;
-  static const double flameBurstDamage = 15.0;
-  static const double flameBurstSpeed = 180.0;
+  double flameBurstDamage = 15.0;
+  double flameBurstSpeed = 180.0;
+  int flameBurstCount = 8;
+
+  double meleeBaseCooldown = 2.0;
+  double groundSlamBaseCooldown = 8.0;
+  double flameBurstBaseCooldown = 5.0;
+  int floorLevel = 1;
+
+  /// Tăng dần độ khó của Boss theo cấp tầng (HP, sát thương, tốc độ, hồi chiêu, số cầu lửa)
+  void applyFloorDifficulty(int floor) {
+    final f = floor < 1 ? 1 : floor;
+    floorLevel = f;
+    final hpMult = 1.0 + (f - 1) * 0.35;
+    final dmgMult = 1.0 + (f - 1) * 0.25;
+    final speedMult = min(1.45, 1.0 + (f - 1) * 0.06);
+    final cdMult = max(0.65, 1.0 - (f - 1) * 0.05);
+
+    maxHp = defaultMaxHp * hpMult;
+    currentHp = maxHp;
+    meleeDamage = 25.0 * dmgMult;
+    groundSlamDamage = 40.0 * dmgMult;
+    flameBurstDamage = 15.0 * dmgMult;
+    flameBurstSpeed = 180.0 * min(1.35, 1.0 + (f - 1) * 0.05);
+    flameBurstCount = f >= 5 ? 12 : (f >= 3 ? 10 : 8);
+
+    phase1Speed = speedPhase1 * speedMult;
+    phase2Speed = speedPhase2 * speedMult;
+    currentSpeed = phase == 2 ? phase2Speed : phase1Speed;
+
+    meleeBaseCooldown = 2.0 * cdMult;
+    groundSlamBaseCooldown = 8.0 * cdMult;
+    flameBurstBaseCooldown = 5.0 * cdMult;
+  }
 
   BossState state = BossState.chase;
 
@@ -246,7 +280,7 @@ class BossEnemy extends PositionComponent
       }
     } else {
       axeSwingAngle = 0.0;
-      meleeCooldownTimer = 2.0;
+      meleeCooldownTimer = meleeBaseCooldown;
       state = BossState.chase;
     }
   }
@@ -275,7 +309,7 @@ class BossEnemy extends PositionComponent
 
     if (stateTimer >= 0.3) {
       axeSwingAngle = 0.0;
-      groundSlamCooldownTimer = 8.0;
+      groundSlamCooldownTimer = groundSlamBaseCooldown;
       state = BossState.chase;
     }
   }
@@ -283,8 +317,8 @@ class BossEnemy extends PositionComponent
   void _updateRadialFlameBurst(double dt) {
     stateTimer += dt;
     if (stateTimer >= 0.25) {
-      // Fire 8 fireballs in 360 degrees (45 deg increments)
-      const int numFireballs = 8;
+      // Bắn cầu lửa 360 độ (tăng số lượng theo tầng: 8 -> 10 -> 12)
+      final int numFireballs = flameBurstCount;
       for (int i = 0; i < numFireballs; i++) {
         final angle = i * (2 * pi / numFireballs);
         final dir = Vector2(cos(angle), sin(angle));
@@ -299,7 +333,7 @@ class BossEnemy extends PositionComponent
         }
       }
       AudioService.instance.playSfx(SfxSound.skillBerserk);
-      flameBurstCooldownTimer = 5.0;
+      flameBurstCooldownTimer = flameBurstBaseCooldown;
       state = BossState.chase;
     }
   }
@@ -313,7 +347,7 @@ class BossEnemy extends PositionComponent
     if (currentHp <= maxHp * 0.5 && phase == 1) {
       phase = 2;
       isEnraged = true;
-      currentSpeed = speedPhase2;
+      currentSpeed = phase2Speed;
     }
 
     // Minion wave trigger checks
@@ -351,10 +385,12 @@ class BossEnemy extends PositionComponent
 
       if (i < 2) {
         final skeleton = SkeletonEnemy(position: spawnPos, player: player);
+        game.scaleSkeletonForFloor(skeleton, game.currentFloor);
         game.skeletons.add(skeleton);
         game.world.add(skeleton);
       } else {
         final zombie = ZombieEnemy(position: spawnPos, player: player);
+        game.scaleZombieForFloor(zombie, game.currentFloor);
         game.enemies.add(zombie);
         game.world.add(zombie);
       }
@@ -387,24 +423,23 @@ class BossEnemy extends PositionComponent
       game.world.add(pickup);
     }
 
-    // Victory Portal
-    final portal = BossVictoryPortal(position: position.clone());
-    game.world.add(portal);
+    final allBossesDefeated = game.bosses.every((b) => b.isDefeated);
+    if (allBossesDefeated) {
+      // Victory Portal chỉ mở khi toàn bộ Boss trên tầng đã bị hạ
+      final portal = BossVictoryPortal(position: position.clone());
+      game.world.add(portal);
 
-    // Audio triggers: Victory fanfare & switch back to dungeon BGM
-    AudioService.instance.playSfx(SfxSound.wheelJackpot);
-    AudioService.instance.playBgm(BgmTrack.dungeon);
+      // Audio triggers: Victory fanfare & switch back to dungeon BGM
+      AudioService.instance.playSfx(SfxSound.wheelJackpot);
+      AudioService.instance.playBgm(BgmTrack.dungeon);
+    } else {
+      AudioService.instance.playSfx(SfxSound.skillSmash);
+    }
   }
 
   void _notifyHpChanged() {
     if (isMounted) {
-      game.bossHpNotifier.value = BossHpData(
-        currentHp: currentHp,
-        maxHp: maxHp,
-        phase: phase,
-        isEnraged: isEnraged,
-        isDefeated: isDefeated,
-      );
+      game.refreshBossHud();
     }
   }
 

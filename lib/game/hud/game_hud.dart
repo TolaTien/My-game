@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
 import '../../screens/settings_dialog.dart';
+import '../combat/hero_skill_system.dart';
 import '../components/player.dart';
 import '../big_war_game.dart';
 import 'boss_bar_overlay.dart';
@@ -480,58 +481,73 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                       ),
                     ),
 
-                    // Skill 1: Lôi Ảnh Trảm / Búa Cuồng Phong (25 Ki)
-                    Positioned(
-                      bottom: 84,
-                      right: 0,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: Icons.cyclone,
-                        label: '25 Ki',
-                        hotkey: isDesktopOrWeb ? '1' : null,
-                        color: const Color(0xFFFF9800),
-                        cooldownRemaining: player.skill1VisualCd,
-                        maxCooldown: PlayerComponent.skill1MaxCd,
-                        hasEnoughKi: player.currentKi >= 25,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill1(),
-                      ),
+                    // Skill 1 (riêng biệt theo từng nhân vật)
+                    Builder(
+                      builder: (_) {
+                        final s1 = HeroSkillSystem.getSkillMeta(player.heroId, 1);
+                        return Positioned(
+                          bottom: 84,
+                          right: 0,
+                          child: _ActionButton(
+                            size: 52,
+                            icon: s1.icon,
+                            label: s1.shortLabel,
+                            hotkey: isDesktopOrWeb ? '1' : null,
+                            color: s1.color,
+                            cooldownRemaining: player.skill1VisualCd,
+                            maxCooldown: s1.cooldown,
+                            hasEnoughKi: player.currentKi >= s1.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill1(),
+                          ),
+                        );
+                      },
                     ),
 
-                    // Skill 2: Lôi Điện Hộ Thể / Nện Đất (35 Ki)
-                    Positioned(
-                      bottom: 66,
-                      right: 66,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: Icons.landslide,
-                        label: '35 Ki',
-                        hotkey: isDesktopOrWeb ? '2' : null,
-                        color: const Color(0xFF00B0FF),
-                        cooldownRemaining: player.skill2VisualCd,
-                        maxCooldown: PlayerComponent.skill2MaxCd,
-                        hasEnoughKi: player.currentKi >= 35,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill2(),
-                      ),
+                    // Skill 2 (riêng biệt theo từng nhân vật)
+                    Builder(
+                      builder: (_) {
+                        final s2 = HeroSkillSystem.getSkillMeta(player.heroId, 2);
+                        return Positioned(
+                          bottom: 66,
+                          right: 66,
+                          child: _ActionButton(
+                            size: 52,
+                            icon: s2.icon,
+                            label: s2.shortLabel,
+                            hotkey: isDesktopOrWeb ? '2' : null,
+                            color: s2.color,
+                            cooldownRemaining: player.skill2VisualCd,
+                            maxCooldown: s2.cooldown,
+                            hasEnoughKi: player.currentKi >= s2.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill2(),
+                          ),
+                        );
+                      },
                     ),
 
-                    // Skill 3: Thiên Phạt Lôi Ngục / Cơn Cuồng Nộ (40 Ki)
-                    Positioned(
-                      bottom: 0,
-                      right: 84,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: Icons.whatshot,
-                        label: '40 Ki',
-                        hotkey: isDesktopOrWeb ? '3' : null,
-                        color: const Color(0xFF7B1FA2),
-                        cooldownRemaining: player.skill3VisualCd,
-                        maxCooldown: PlayerComponent.skill3MaxCd,
-                        hasEnoughKi: player.currentKi >= 40,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill3(),
-                      ),
+                    // Skill 3 Ultimate (riêng biệt theo từng nhân vật)
+                    Builder(
+                      builder: (_) {
+                        final s3 = HeroSkillSystem.getSkillMeta(player.heroId, 3);
+                        return Positioned(
+                          bottom: 0,
+                          right: 84,
+                          child: _ActionButton(
+                            size: 52,
+                            icon: s3.icon,
+                            label: s3.shortLabel,
+                            hotkey: isDesktopOrWeb ? '3' : null,
+                            color: s3.color,
+                            cooldownRemaining: player.skill3VisualCd,
+                            maxCooldown: s3.cooldown,
+                            hasEnoughKi: player.currentKi >= s3.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill3(),
+                          ),
+                        );
+                      },
                     ),
 
                     // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)

@@ -7,8 +7,8 @@ import 'dungeon_map.dart';
 
 class ArrowProjectile extends PositionComponent with CollisionCallbacks {
   final Vector2 direction;
-  final double speed = 220.0;
-  final double damage = 10.0;
+  final double speed;
+  final double damage;
 
   double _lifeTimer = 0.0;
   bool _hasHit = false;
@@ -16,6 +16,8 @@ class ArrowProjectile extends PositionComponent with CollisionCallbacks {
   ArrowProjectile({
     required Vector2 position,
     required Vector2 direction,
+    this.speed = 220.0,
+    this.damage = 10.0,
   })  : direction = direction.length2 > 0 ? direction.normalized() : Vector2(1, 0),
         super(
           position: position,

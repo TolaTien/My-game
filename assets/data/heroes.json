@@ -21,14 +21,14 @@
       },
       "skillIds": ["george_hurricane", "george_earth_smash", "george_berserk"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "portrait": "assets/images/heroes/george_portrait.png",
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/george/idle.png",
+        "runSheet": "assets/images/heroes/george/run.png",
+        "attackSheet": "assets/images/heroes/george/attack.png",
+        "portrait": "assets/images/heroes/george/portrait.png",
         "skill1Sheet": null,
-        "useProceduralFallback": true
+        "useProceduralFallback": false
       }
     },
     {
@@ -145,7 +145,7 @@
         "idleSheet": "",
         "runSheet": "",
         "attackSheet": "",
-        "portrait": "assets/images/heroes/george_portrait.png",
+        "portrait": "assets/images/heroes/valeria_portrait.png",
         "skill1Sheet": null,
         "useProceduralFallback": true
       }
@@ -256,13 +256,13 @@
       },
       "skillIds": ["ninja_shuriken_dash", "ninja_smoke_veil", "ninja_shadow_execution"],
       "sprites": {
-        "frameWidth": 48,
-        "frameHeight": 48,
-        "idleSheet": "",
-        "runSheet": "",
-        "attackSheet": "",
-        "portrait": "assets/images/heroes/ninja_portrait.png",
-        "useProceduralFallback": true
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "idleSheet": "assets/images/heroes/ninja/idle.png",
+        "runSheet": "assets/images/heroes/ninja/run.png",
+        "attackSheet": "assets/images/heroes/ninja/attack.png",
+        "portrait": "assets/images/heroes/ninja/portrait.png",
+        "useProceduralFallback": false
       }
     }
   ]

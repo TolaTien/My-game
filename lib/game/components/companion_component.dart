@@ -417,8 +417,7 @@ class CompanionComponent extends PositionComponent
     return <PositionComponent>[
       ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
       ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
-      if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
-        game.boss!,
+      ...game.bosses.where((b) => b.isMounted && !b.isDefeated),
     ];
   }
 
@@ -755,11 +754,12 @@ class CompanionComponent extends PositionComponent
         nearest = s;
       }
     }
-    if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated) {
-      final dist = position.distanceTo(game.boss!.position);
+    for (final b in game.bosses) {
+      if (!b.isMounted || b.isDefeated) continue;
+      final dist = position.distanceTo(b.position);
       if (dist < nearestDist) {
         nearestDist = dist;
-        nearest = game.boss;
+        nearest = b;
       }
     }
 
@@ -806,11 +806,12 @@ class CompanionComponent extends PositionComponent
       }
     }
 
-    if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated) {
-      final dist = position.distanceTo(game.boss!.position);
+    for (final b in game.bosses) {
+      if (!b.isMounted || b.isDefeated) continue;
+      final dist = position.distanceTo(b.position);
       if (dist < nearestDist) {
         nearestDist = dist;
-        nearest = game.boss;
+        nearest = b;
       }
     }
 
@@ -877,8 +878,7 @@ class CompanionComponent extends PositionComponent
     final allMonsters = <PositionComponent>[
       ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
       ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
-      if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
-        game.boss!,
+      ...game.bosses.where((b) => b.isMounted && !b.isDefeated),
     ];
 
     for (final monster in allMonsters) {

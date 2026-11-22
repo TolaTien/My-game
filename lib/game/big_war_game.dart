@@ -1,9 +1,11 @@
+import 'dart:math';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import '../models/player_profile.dart';
 import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
+import 'combat/hero_skill_system.dart';
 import 'components/dungeon_map.dart';
 import 'components/player.dart';
 import 'components/enemy_zombie.dart';
@@ -21,8 +23,84 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
 
   late final PlayerComponent player;
   late DungeonMapComponent dungeonMap;
-  BossEnemy? boss;
+  final List<BossEnemy> bosses = [];
+  BossEnemy? get boss {
+    for (final b in bosses) {
+      if (!b.isDefeated && b.isMounted) return b;
+    }
+    return bosses.isNotEmpty ? bosses.first : null;
+  }
   CompanionComponent? companion;
+
+  /// Số lượng Boss tăng dần theo tầng (T1-2: 1, T3-5: 2, T6-8: 3, T9+: 4)
+  static int bossCountForFloor(int floor) {
+    if (floor <= 2) return 1;
+    if (floor <= 5) return 2;
+    if (floor <= 8) return 3;
+    return 4;
+  }
+
+  /// Số Zombie cộng thêm mỗi tầng (+1/tầng, tối đa +6)
+  static int extraZombiesForFloor(int floor) => max(0, min(6, floor - 1));
+
+  /// Số Skeleton cộng thêm theo tầng (+1 mỗi 2 tầng, tối đa +4)
+  static int extraSkeletonsForFloor(int floor) => max(0, min(4, (floor - 1) ~/ 2));
+
+  void scaleZombieForFloor(ZombieEnemy zombie, int floor) {
+    final f = max(1, floor);
+    final hpMult = 1.0 + (f - 1) * 0.30;
+    final dmgMult = 1.0 + (f - 1) * 0.25;
+    final speedMult = min(1.40, 1.0 + (f - 1) * 0.05);
+    zombie.maxHp = 60.0 * hpMult;
+    zombie.currentHp = zombie.maxHp;
+    zombie.damage = 12.0 * dmgMult;
+    zombie.speed = 65.0 * speedMult;
+  }
+
+  void scaleSkeletonForFloor(SkeletonEnemy skeleton, int floor) {
+    final f = max(1, floor);
+    final hpMult = 1.0 + (f - 1) * 0.30;
+    final dmgMult = 1.0 + (f - 1) * 0.25;
+    final speedMult = min(1.40, 1.0 + (f - 1) * 0.05);
+    skeleton.maxHp = 45.0 * hpMult;
+    skeleton.currentHp = skeleton.maxHp;
+    skeleton.speed = 50.0 * speedMult;
+    skeleton.arrowDamage = 10.0 * dmgMult;
+    skeleton.arrowSpeed = 220.0 * min(1.30, 1.0 + (f - 1) * 0.04);
+    skeleton.shootInterval = max(1.1, 1.8 - (f - 1) * 0.08);
+  }
+
+  void refreshBossHud() {
+    if (bosses.isEmpty) {
+      bossHpNotifier.value = null;
+      return;
+    }
+    double totalHp = 0.0;
+    double totalMaxHp = 0.0;
+    int aliveCount = 0;
+    bool anyEnraged = false;
+    int maxPhase = 1;
+    for (final b in bosses) {
+      totalMaxHp += b.maxHp;
+      if (!b.isDefeated) {
+        aliveCount++;
+        totalHp += b.currentHp;
+        if (b.isEnraged) anyEnraged = true;
+        if (b.phase > maxPhase) maxPhase = b.phase;
+      }
+    }
+    final title = bosses.length > 1
+        ? 'CHÚA TỂ HẦM NGỤC • TẦNG $currentFloor ($aliveCount/${bosses.length} BOSS)'
+        : 'CHÚA TỂ HẦM NGỤC • TẦNG $currentFloor';
+    bossHpNotifier.value = BossHpData(
+      currentHp: totalHp,
+      maxHp: totalMaxHp > 0 ? totalMaxHp : 1.0,
+      phase: maxPhase,
+      isEnraged: anyEnraged,
+      isDefeated: aliveCount == 0,
+      title: title,
+    );
+  }
 
   final List<ZombieEnemy> enemies = [];
   final List<SkeletonEnemy> skeletons = [];
@@ -133,9 +211,13 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     enemies.removeWhere((e) => !e.isMounted || e.currentHp <= 0);
     skeletons.removeWhere((s) => !s.isMounted || s.currentHp <= 0);
 
-    // Kiểm tra quét sạch toàn bộ quái và Boss -> Kích hoạt Chiến Thắng Vượt Ải
-    final isBossDefeated = boss == null || boss!.isDefeated || !boss!.isMounted;
-    if (!isVictoryTriggered && enemies.isEmpty && skeletons.isEmpty && isBossDefeated) {
+    // Kiểm tra quét sạch toàn bộ quái và tất cả Boss -> Kích hoạt Chiến Thắng Vượt Ải
+    final allBossesDefeated =
+        bosses.every((b) => b.isDefeated || !b.isMounted);
+    if (!isVictoryTriggered &&
+        enemies.isEmpty &&
+        skeletons.isEmpty &&
+        allBossesDefeated) {
       isVictoryTriggered = true;
       AudioService.instance.playSfx(SfxSound.wheelJackpot);
       onVictory?.call();
@@ -231,10 +313,10 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     }
     pickups.clear();
 
-    if (boss != null && boss!.isMounted) {
-      boss!.removeFromParent();
+    for (final b in List<BossEnemy>.from(bosses)) {
+      if (b.isMounted) b.removeFromParent();
     }
-    boss = null;
+    bosses.clear();
     bossHpNotifier.value = null;
   }
 
@@ -246,14 +328,14 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
   }
 
   void _spawnZombies({int floor = 1}) {
-    final List<Vector2> spawnPoints;
+    final List<Vector2> basePoints;
     if (currentMapConfig.monsterPortals.isNotEmpty) {
-      spawnPoints = currentMapConfig.monsterPortals.map((p) =>
-        Vector2((p[0] + 0.5) * 32.0, (p[1] + 0.5) * 32.0)
-      ).toList();
-      spawnPoints.add(Vector2(540, 360));
+      basePoints = currentMapConfig.monsterPortals
+          .map((p) => Vector2((p[0] + 0.5) * 32.0, (p[1] + 0.5) * 32.0))
+          .toList();
+      basePoints.add(Vector2(540, 360));
     } else {
-      spawnPoints = [
+      basePoints = [
         Vector2(200, 200),
         Vector2(650, 220),
         Vector2(250, 500),
@@ -262,40 +344,61 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
       ];
     }
 
-    final multiplier = 1.0 + (floor - 1) * 0.2;
-    for (final pt in spawnPoints) {
+    final totalCount = basePoints.length + extraZombiesForFloor(floor);
+    final maxW = max(200.0, currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 64.0);
+    final maxH = max(200.0, currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 64.0);
+
+    for (int i = 0; i < totalCount; i++) {
+      final base = basePoints[i % basePoints.length];
+      final ring = i ~/ basePoints.length;
+      final offset = ring == 0
+          ? Vector2.zero()
+          : Vector2(cos(i * 1.7) * 44.0 * ring, sin(i * 1.7) * 44.0 * ring);
+      final pt = Vector2(
+        (base.x + offset.x).clamp(64.0, maxW),
+        (base.y + offset.y).clamp(64.0, maxH),
+      );
       final zombie = ZombieEnemy(position: pt, player: player);
-      zombie.maxHp = 60.0 * multiplier;
-      zombie.currentHp = zombie.maxHp;
-      zombie.damage = 10.0 * multiplier;
+      scaleZombieForFloor(zombie, floor);
       enemies.add(zombie);
       world.add(zombie);
     }
   }
 
   void _spawnSkeletons({int floor = 1}) {
-    final List<Vector2> spawnPoints;
+    final List<Vector2> basePoints;
     if (currentMapConfig.monsterPortals.length >= 2) {
-      spawnPoints = [
+      basePoints = [
         Vector2((currentMapConfig.monsterPortals.first[0] + 0.5) * 32.0,
-                (currentMapConfig.monsterPortals.first[1] + 1.2) * 32.0),
+            (currentMapConfig.monsterPortals.first[1] + 1.2) * 32.0),
         Vector2((currentMapConfig.monsterPortals.last[0] + 0.5) * 32.0,
-                (currentMapConfig.monsterPortals.last[1] - 1.2) * 32.0),
+            (currentMapConfig.monsterPortals.last[1] - 1.2) * 32.0),
         Vector2(450, 420),
       ];
     } else {
-      spawnPoints = [
+      basePoints = [
         Vector2(320, 180),
         Vector2(850, 320),
         Vector2(450, 560),
       ];
     }
 
-    final multiplier = 1.0 + (floor - 1) * 0.2;
-    for (final pt in spawnPoints) {
+    final totalCount = basePoints.length + extraSkeletonsForFloor(floor);
+    final maxW = max(200.0, currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 64.0);
+    final maxH = max(200.0, currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 64.0);
+
+    for (int i = 0; i < totalCount; i++) {
+      final base = basePoints[i % basePoints.length];
+      final ring = i ~/ basePoints.length;
+      final offset = ring == 0
+          ? Vector2.zero()
+          : Vector2(cos(i * 2.1) * 48.0 * ring, sin(i * 2.1) * 48.0 * ring);
+      final pt = Vector2(
+        (base.x + offset.x).clamp(64.0, maxW),
+        (base.y + offset.y).clamp(64.0, maxH),
+      );
       final skeleton = SkeletonEnemy(position: pt, player: player);
-      skeleton.maxHp = 45.0 * multiplier;
-      skeleton.currentHp = skeleton.maxHp;
+      scaleSkeletonForFloor(skeleton, floor);
       skeletons.add(skeleton);
       world.add(skeleton);
     }
@@ -308,13 +411,29 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     final bY = currentMapConfig.bossSpawn.length > 1
         ? currentMapConfig.bossSpawn[1] * 32.0
         : 380.0;
-    boss = BossEnemy(position: Vector2(bX, bY), player: player);
-    if (floor > 1) {
-      final multiplier = 1.0 + (floor - 1) * 0.25;
-      boss!.maxHp = 500.0 * multiplier;
-      boss!.currentHp = boss!.maxHp;
+    final maxW = max(240.0, currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 80.0);
+    final maxH = max(240.0, currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 80.0);
+
+    final count = bossCountForFloor(floor);
+    final offsets = <Vector2>[
+      Vector2.zero(),
+      Vector2(-110, -85),
+      Vector2(-110, 85),
+      Vector2(-200, 0),
+    ];
+
+    for (int i = 0; i < count; i++) {
+      final off = offsets[i % offsets.length];
+      final pos = Vector2(
+        (bX + off.x).clamp(80.0, maxW),
+        (bY + off.y).clamp(80.0, maxH),
+      );
+      final spawnedBoss = BossEnemy(position: pos, player: player);
+      spawnedBoss.applyFloorDifficulty(floor);
+      bosses.add(spawnedBoss);
+      world.add(spawnedBoss);
     }
-    world.add(boss!);
+    refreshBossHud();
   }
 
   void _spawnPickups() {
@@ -396,11 +515,12 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
           targetDir = (skel.position - player.position).normalized();
         }
       }
-      if (boss != null && boss!.isMounted && !boss!.isDefeated) {
-        final d = player.position.distanceTo(boss!.position);
+      for (final b in bosses) {
+        if (!b.isMounted || b.isDefeated) continue;
+        final d = player.position.distanceTo(b.position);
         if (d < closestDist) {
           closestDist = d;
-          targetDir = (boss!.position - player.position).normalized();
+          targetDir = (b.position - player.position).normalized();
         }
       }
 
@@ -479,12 +599,13 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
       }
     }
 
-    if (boss != null && boss!.isMounted && !boss!.isDefeated) {
-      final distance = player.position.distanceTo(boss!.position);
+    for (final b in List<BossEnemy>.from(bosses)) {
+      if (!b.isMounted || b.isDefeated) continue;
+      final distance = player.position.distanceTo(b.position);
       if (distance <= attackRange + 15.0) {
-        boss!.takeDamage(dmg);
+        b.takeDamage(dmg);
         _spawnDamageNumber(
-          boss!.position,
+          b.position,
           dmg.toInt(),
           isCombo3 ? CombatTextType.criticalDamage : CombatTextType.normalDamage,
         );
@@ -492,156 +613,87 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  List<SkillTargetAdapter> _buildPveSkillTargets() {
+    final list = <SkillTargetAdapter>[];
+    for (final enemy in List<ZombieEnemy>.from(enemies)) {
+      if (!enemy.isMounted) continue;
+      list.add(SkillTargetAdapter(
+        getPosition: () => enemy.position,
+        isAlive: () => enemy.isMounted && enemy.currentHp > 0,
+        applyDamage: (dmg, textType) {
+          enemy.takeDamage(dmg);
+          _spawnDamageNumber(enemy.position, dmg.toInt(), textType);
+        },
+        pushBy: (delta) => enemy.position.add(delta),
+      ));
+    }
+    for (final skel in List<SkeletonEnemy>.from(skeletons)) {
+      if (!skel.isMounted) continue;
+      list.add(SkillTargetAdapter(
+        getPosition: () => skel.position,
+        isAlive: () => skel.isMounted && skel.currentHp > 0,
+        applyDamage: (dmg, textType) {
+          skel.takeDamage(dmg);
+          _spawnDamageNumber(skel.position, dmg.toInt(), textType);
+        },
+        pushBy: (delta) => skel.position.add(delta),
+      ));
+    }
+    for (final b in List<BossEnemy>.from(bosses)) {
+      if (!b.isMounted || b.isDefeated) continue;
+      list.add(SkillTargetAdapter(
+        getPosition: () => b.position,
+        isAlive: () => b.isMounted && !b.isDefeated,
+        applyDamage: (dmg, textType) {
+          b.takeDamage(dmg);
+          _spawnDamageNumber(b.position, dmg.toInt(), textType);
+        },
+        extraHitRadius: 18.0,
+      ));
+    }
+    return list;
+  }
+
+  void _clampPlayerToDungeon(Vector2 pos) {
+    final maxW = currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 48.0;
+    final maxH = currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 48.0;
+    pos.x = pos.x.clamp(48.0, maxW > 48.0 ? maxW : 48.0);
+    pos.y = pos.y.clamp(48.0, maxH > 48.0 ? maxH : 48.0);
+  }
+
+  void _executeHeroSkillSlot(int slot) {
+    HeroSkillSystem.executeSkill(
+      slot: slot,
+      player: player,
+      world: world,
+      targets: _buildPveSkillTargets(),
+      onDamageText: _spawnDamageNumber,
+      onBannerText: (pos, text) {
+        if (isLoaded) {
+          world.add(FloatingCombatText(
+            position: pos,
+            text: text,
+            type: CombatTextType.buff,
+          ));
+        }
+      },
+      clampPlayerPos: _clampPlayerToDungeon,
+    );
+  }
+
   void onSkill1() {
     if (!player.useSkill1()) return;
-
-    // Búa Cuồng Phong / Lôi Ảnh Trảm: Quét 360 độ (bán kính 85px)
-    const aoeRadius = 85.0;
-    final skillDmg = player.effectiveDamage * 1.8;
-    for (final enemy in List<ZombieEnemy>.from(enemies)) {
-      if (!enemy.isMounted) {
-        enemies.remove(enemy);
-        continue;
-      }
-      final distance = player.position.distanceTo(enemy.position);
-      if (distance <= aoeRadius) {
-        enemy.takeDamage(skillDmg);
-        _spawnDamageNumber(enemy.position, skillDmg.toInt(), CombatTextType.skillDamage);
-      }
-    }
-
-    for (final skeleton in List<SkeletonEnemy>.from(skeletons)) {
-      if (!skeleton.isMounted) {
-        skeletons.remove(skeleton);
-        continue;
-      }
-      final distance = player.position.distanceTo(skeleton.position);
-      if (distance <= aoeRadius) {
-        skeleton.takeDamage(skillDmg);
-        _spawnDamageNumber(skeleton.position, skillDmg.toInt(), CombatTextType.skillDamage);
-      }
-    }
-
-    if (boss != null && boss!.isMounted && !boss!.isDefeated) {
-      final distance = player.position.distanceTo(boss!.position);
-      if (distance <= aoeRadius + 15.0) {
-        boss!.takeDamage(skillDmg);
-        _spawnDamageNumber(boss!.position, skillDmg.toInt(), CombatTextType.skillDamage);
-      }
-    }
+    _executeHeroSkillSlot(1);
   }
 
   void onSkill2() {
     if (!player.useSkill2()) return;
-
-    // Nện Đất / Lôi Điện Hộ Thể: Chấn động cực mạnh (bán kính 110px)
-    const aoeRadius = 110.0;
-    final skillDmg = player.effectiveDamage * 2.5;
-    for (final enemy in List<ZombieEnemy>.from(enemies)) {
-      if (!enemy.isMounted) {
-        enemies.remove(enemy);
-        continue;
-      }
-      final distance = player.position.distanceTo(enemy.position);
-      if (distance <= aoeRadius) {
-        enemy.takeDamage(skillDmg);
-        _spawnDamageNumber(enemy.position, skillDmg.toInt(), CombatTextType.criticalDamage);
-      }
-    }
-
-    for (final skeleton in List<SkeletonEnemy>.from(skeletons)) {
-      if (!skeleton.isMounted) {
-        skeletons.remove(skeleton);
-        continue;
-      }
-      final distance = player.position.distanceTo(skeleton.position);
-      if (distance <= aoeRadius) {
-        skeleton.takeDamage(skillDmg);
-        _spawnDamageNumber(skeleton.position, skillDmg.toInt(), CombatTextType.criticalDamage);
-      }
-    }
-
-    if (boss != null && boss!.isMounted && !boss!.isDefeated) {
-      final distance = player.position.distanceTo(boss!.position);
-      if (distance <= aoeRadius + 15.0) {
-        boss!.takeDamage(skillDmg);
-        _spawnDamageNumber(boss!.position, skillDmg.toInt(), CombatTextType.criticalDamage);
-      }
-    }
+    _executeHeroSkillSlot(2);
   }
 
   void onSkill3() {
-    if (player.useSkill3()) {
-      final hero = player.heroId;
-      String ultText = 'CUỒNG NỘ!';
-      switch (hero) {
-        case 'nova_blade':
-          ultText = 'QUANTUM BURST!';
-          break;
-        case 'valeria':
-          ultText = 'MƯA THIÊN THẠCH BĂNG HỎA!';
-          break;
-        case 'garrick':
-          ultText = 'NỘI ĐỊA CHẤN!';
-          break;
-        case 'shadow_01':
-        case 'shadow':
-          ultText = 'PHANTOM DASH!';
-          break;
-        case 'ember_02':
-        case 'ember':
-          ultText = 'THÁI DƯƠNG BỘC PHÁ!';
-          break;
-      }
-
-      if (hero != 'george' &&
-          hero != 'ranger' &&
-          hero != 'tanker' &&
-          hero != 'ninja') {
-        const ultRadius = 160.0;
-        final ultDmg = player.effectiveDamage * 2.5;
-        for (final enemy in List<ZombieEnemy>.from(enemies)) {
-          if (!enemy.isMounted) continue;
-          if (player.position.distanceTo(enemy.position) <= ultRadius) {
-            enemy.takeDamage(ultDmg);
-            _spawnDamageNumber(
-              enemy.position,
-              ultDmg.toInt(),
-              CombatTextType.criticalDamage,
-            );
-          }
-        }
-        for (final skeleton in List<SkeletonEnemy>.from(skeletons)) {
-          if (!skeleton.isMounted) continue;
-          if (player.position.distanceTo(skeleton.position) <= ultRadius) {
-            skeleton.takeDamage(ultDmg);
-            _spawnDamageNumber(
-              skeleton.position,
-              ultDmg.toInt(),
-              CombatTextType.criticalDamage,
-            );
-          }
-        }
-        if (boss != null && boss!.isMounted && !boss!.isDefeated) {
-          if (player.position.distanceTo(boss!.position) <= ultRadius + 20.0) {
-            boss!.takeDamage(ultDmg);
-            _spawnDamageNumber(
-              boss!.position,
-              ultDmg.toInt(),
-              CombatTextType.criticalDamage,
-            );
-          }
-        }
-      }
-
-      if (isLoaded) {
-        world.add(FloatingCombatText(
-          position: player.position,
-          text: ultText,
-          type: CombatTextType.buff,
-        ));
-      }
-    }
+    if (!player.useSkill3()) return;
+    _executeHeroSkillSlot(3);
   }
 
   /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ (Trường Trọng Lực Hoàng Kim - Aegis-X9)

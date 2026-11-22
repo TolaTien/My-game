@@ -5,6 +5,7 @@ import '../models/pvp_match.dart';
 import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
+import 'combat/hero_skill_system.dart';
 import 'components/floating_combat_text.dart';
 import 'components/hero_projectile.dart';
 import 'components/player.dart';
@@ -527,37 +528,82 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     onLocalAction?.call('basicAttack');
   }
 
+  List<SkillTargetAdapter> _buildPvpSkillTargets() {
+    return allEnemies
+        .map(
+          (enemy) => SkillTargetAdapter(
+            getPosition: () => enemy.position,
+            isAlive: () => enemy.isMounted && enemy.currentHp > 0,
+            applyDamage: (dmg, textType) {
+              enemy.takeDamage(dmg);
+              if (isMounted) {
+                world.add(FloatingCombatText(
+                  text: '-${dmg.toInt()}',
+                  position: enemy.position.clone()..y -= 20,
+                  type: textType,
+                ));
+              }
+            },
+            pushBy: (delta) {
+              enemy.position.add(delta);
+              enemy.position.x = enemy.position.x.clamp(52.0, 908.0);
+              enemy.position.y = enemy.position.y.clamp(52.0, 588.0);
+            },
+          ),
+        )
+        .toList();
+  }
+
+  void _executePvpSkillSlot(int slot) {
+    HeroSkillSystem.executeSkill(
+      slot: slot,
+      player: player,
+      world: world,
+      targets: _buildPvpSkillTargets(),
+      onDamageText: (pos, dmg, textType) {
+        if (isMounted) {
+          world.add(FloatingCombatText(
+            text: '-$dmg',
+            position: pos.clone()..y -= 20,
+            type: textType,
+          ));
+        }
+      },
+      onBannerText: (pos, text) {
+        if (isMounted) {
+          world.add(FloatingCombatText(
+            text: text,
+            position: pos.clone()..y -= 24,
+            type: CombatTextType.buff,
+          ));
+        }
+      },
+      clampPlayerPos: (pos) {
+        pos.x = pos.x.clamp(52.0, 908.0);
+        pos.y = pos.y.clamp(52.0, 588.0);
+      },
+    );
+  }
+
   void onSkill1() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     if (!player.useSkill1()) return;
-
-    _damageEnemiesInRange(player.damage * 1.8, 85, type: CombatTextType.skillDamage);
+    _executePvpSkillSlot(1);
     onLocalAction?.call('skill1');
   }
 
   void onSkill2() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
     if (!player.useSkill2()) return;
-
-    _damageEnemiesInRange(player.damage * 2.5, 110, type: CombatTextType.skillDamage);
+    _executePvpSkillSlot(2);
     onLocalAction?.call('skill2');
   }
 
   void onSkill3() {
     if (matchState != PvpMatchState.fighting || player.currentHp <= 0) return;
-    if (player.useSkill3()) {
-      if (player.heroId != 'george' &&
-          player.heroId != 'ranger' &&
-          player.heroId != 'tanker' &&
-          player.heroId != 'ninja') {
-        _damageEnemiesInRange(
-          player.damage * 2.2,
-          140,
-          type: CombatTextType.criticalDamage,
-        );
-      }
-      onLocalAction?.call('skill3');
-    }
+    if (!player.useSkill3()) return;
+    _executePvpSkillSlot(3);
+    onLocalAction?.call('skill3');
   }
 
   void sendQuickChat(QuickChatPhrase phrase) {

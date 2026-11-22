@@ -479,6 +479,7 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
     final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final bool isStripHero = SpriteImageCache.isStripAnimatedHero(heroId);
     final isMoving =
         !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
@@ -508,6 +509,50 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       Rect.fromCenter(center: Offset(size.x / 2, size.y - 2), width: 24, height: 8),
       shadowPaint,
     );
+
+    if (isStripHero) {
+      final strip = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+              SpriteImageCache.instance.getHeroIdleImage(heroId))
+          : (isMoving
+              ? (SpriteImageCache.instance.getHeroRunImage(heroId) ??
+                  SpriteImageCache.instance.getHeroIdleImage(heroId))
+              : SpriteImageCache.instance.getHeroIdleImage(heroId));
+      if (strip != null && strip.width >= 512) {
+        final frameCount = max(1, (strip.width / strip.height).round());
+        final int col;
+        if (isAttacking) {
+          final progress =
+              (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(0.0, 0.999);
+          col = (progress * frameCount).floor().clamp(0, frameCount - 1);
+        } else if (isMoving) {
+          col = (animTime * 10.5).floor() % frameCount;
+        } else {
+          col = (animTime * 5.5).floor() % frameCount;
+        }
+        final cellW = strip.width / frameCount;
+        final cellH = strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, 0, cellW, cellH);
+
+        const dstW = 54.0;
+        const dstH = 54.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+        canvas.drawImageRect(
+          strip,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
+    }
 
     if (isShadow) {
       final String action = isAttacking
