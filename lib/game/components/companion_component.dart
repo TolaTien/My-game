@@ -929,78 +929,49 @@ class CompanionComponent extends PositionComponent
       player.position.y - position.y,
     );
 
-    // Hiệu ứng vòng kỹ năng đặc biệt riêng theo từng Trợ thủ khi kích hoạt
+    // Hiệu ứng kỹ năng đặc biệt nâng cấp (Sprite Frame Sheet + Procedural VFX riêng cho từng Trợ thủ)
     if (overdriveTimer > 0) {
       final playerCenter = droneCenter + offsetToPlayer;
-      final alpha = (overdriveTimer / 2.5).clamp(0.0, 1.0);
-      final ringColor = skillColor;
-      final ringRadius = companionId == 'pyro_frost_dragon'
-          ? 155.0
-          : companionId == 'comp_control'
-              ? 145.0
-              : 115.0;
+      _renderSpecialSkillVfx(canvas, droneCenter, playerCenter);
+    }
+
+    // Hào quang kéo dài khi ORBIT-03 đang bắn liên thanh (4s)
+    if (companionId == 'orbit_03' && _rapidFireTimer > 0) {
+      final pulse = 0.55 + 0.35 * sin(bobbingTimer * 18.0);
       canvas.drawCircle(
-        playerCenter,
-        ringRadius,
-        Paint()..color = ringColor.withValues(alpha: alpha * 0.14),
-      );
-      canvas.drawCircle(
-        playerCenter,
-        ringRadius,
+        droneCenter,
+        22.0,
         Paint()
-          ..color = ringColor.withValues(alpha: alpha * 0.78)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2,
+          ..color = const Color(0xFFFFAB00).withValues(alpha: pulse * 0.25)
+          ..style = PaintingStyle.fill,
       );
-      if (companionId == 'pyro_frost_dragon') {
-        // Vòng song nguyên Băng bên trong kết hợp vòng Lửa bên ngoài
-        canvas.drawCircle(
-          playerCenter,
-          ringRadius * 0.68,
-          Paint()
-            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.75)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0,
-        );
-      }
+      canvas.drawCircle(
+        droneCenter,
+        22.0,
+        Paint()
+          ..color = const Color(0xFFFFD740).withValues(alpha: pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8,
+      );
+    }
+
+    // Hào quang lửa đỏ quanh người chơi suốt 5s buff +30% ATK của Pyro-Frost Dragon
+    if (companionId == 'pyro_frost_dragon' && player.petAttackBuffTimer > 0) {
+      final playerCenter = droneCenter + offsetToPlayer;
+      final pulse = 0.5 + 0.4 * sin(bobbingTimer * 10.0);
+      canvas.drawCircle(
+        playerCenter,
+        30.0 + sin(bobbingTimer * 8.0) * 3.0,
+        Paint()
+          ..color = const Color(0xFFFF5252).withValues(alpha: pulse * 0.65)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0,
+      );
     }
 
     // Hiệu ứng tia Pháo Laser Quỹ Đạo từ trên trời xuống của ORBIT-03
     if (_orbitalStrikeTimer > 0 && _orbitalStrikePos != null) {
-      final alpha = (_orbitalStrikeTimer / 0.9).clamp(0.0, 1.0);
-      final strikeOffset = Offset(
-        _orbitalStrikePos!.x - position.x,
-        _orbitalStrikePos!.y - position.y,
-      );
-      final impact = droneCenter + strikeOffset;
-      canvas.drawLine(
-        Offset(impact.dx, impact.dy - 260),
-        impact,
-        Paint()
-          ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.85)
-          ..strokeWidth = 10.0 * alpha,
-      );
-      canvas.drawLine(
-        Offset(impact.dx, impact.dy - 260),
-        impact,
-        Paint()
-          ..color = Colors.white.withValues(alpha: alpha)
-          ..strokeWidth = 3.5 * alpha,
-      );
-      canvas.drawCircle(
-        impact,
-        90.0 * (1.1 - alpha * 0.3),
-        Paint()
-          ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.25),
-      );
-      canvas.drawCircle(
-        impact,
-        90.0 * (1.1 - alpha * 0.3),
-        Paint()
-          ..color = const Color(0xFFFFD740).withValues(alpha: alpha * 0.85)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0,
-      );
+      _renderOrbitalStrikeVfx(canvas, droneCenter);
     }
 
     // World effects must be drawn before either sprite or procedural body.
@@ -1088,6 +1059,342 @@ class CompanionComponent extends PositionComponent
 
     // 5. Thấu kính / Lõi năng lượng phát sáng (Glowing Core / Sensor Lens)
     _renderGlowingCore(canvas, droneCenter);
+  }
+
+  void _renderSpecialSkillVfx(
+    Canvas canvas,
+    Offset droneCenter,
+    Offset playerCenter,
+  ) {
+    final progress = (1.0 - (overdriveTimer / 2.5)).clamp(0.0, 0.999);
+    final alpha = (overdriveTimer / 2.5).clamp(0.0, 1.0);
+    final burstScale = 0.72 + progress * 0.48;
+    final targetCenter =
+        companionId == 'comp_attack' ? droneCenter : playerCenter;
+
+    // 1. Sprite Frame Sheet (4-frame horizontal pixel-art VFX sinh từ Gemini)
+    final sheet = SpriteImageCache.instance.getCompanionSkillSheet(companionId);
+    if (sheet != null && sheet.width >= 4 && sheet.height > 0) {
+      final frameIdx = (progress * 4).floor().clamp(0, 3);
+      final frameW = sheet.width / 4.0;
+      final srcRect = Rect.fromLTWH(
+        frameIdx * frameW,
+        0,
+        frameW,
+        sheet.height.toDouble(),
+      );
+      final baseSize = companionId == 'pyro_frost_dragon'
+          ? 240.0
+          : companionId == 'comp_control' || companionId == 'aegis_x9'
+              ? 220.0
+              : 185.0;
+      final drawSize = baseSize * burstScale;
+      final dstRect = Rect.fromCenter(
+        center: targetCenter,
+        width: drawSize,
+        height: drawSize,
+      );
+      canvas.drawImageRect(
+        sheet,
+        srcRect,
+        dstRect,
+        Paint()
+          ..filterQuality = FilterQuality.none
+          ..blendMode = BlendMode.screen
+          ..color = Colors.white.withValues(alpha: (alpha * 1.15).clamp(0.0, 1.0)),
+      );
+    }
+
+    // 2. Procedural VFX lớp trên cho chuyển động 60fps mượt mà đặc trưng từng trợ thủ
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        // Sóng xung kích đỏ + 6 tia năng lượng tỏa ra
+        final r = 24.0 + progress * 115.0;
+        canvas.drawCircle(
+          droneCenter,
+          r,
+          Paint()
+            ..color = const Color(0xFFFF5252).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        for (int i = 0; i < 6; i++) {
+          final rad = (i * pi / 3) + orbitAngle;
+          final p1 = droneCenter + Offset(cos(rad) * 14, sin(rad) * 14);
+          final p2 = droneCenter + Offset(cos(rad) * r, sin(rad) * r);
+          canvas.drawLine(
+            p1,
+            p2,
+            Paint()
+              ..color = const Color(0xFFFFD54F).withValues(alpha: alpha * 0.7)
+              ..strokeWidth = 2.0,
+          );
+        }
+        break;
+
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        // Lồng lục giác xoay + 2 đợt sóng đẩy lùi xanh dương
+        final pushR = 32.0 + progress * 125.0;
+        canvas.drawCircle(
+          playerCenter,
+          pushR,
+          Paint()
+            ..color = const Color(0xFF448AFF).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.8,
+        );
+        final hexPath = Path();
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 2.2 + i * pi / 3;
+          final pt = playerCenter + Offset(cos(rad) * 42, sin(rad) * 42);
+          if (i == 0) {
+            hexPath.moveTo(pt.dx, pt.dy);
+          } else {
+            hexPath.lineTo(pt.dx, pt.dy);
+          }
+        }
+        hexPath.close();
+        canvas.drawPath(
+          hexPath,
+          Paint()
+            ..color = const Color(0xFF00E5FF).withValues(alpha: alpha * 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.2,
+        );
+        break;
+
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        // Hoa tuyết 6 cánh xoay + tinh thể băng nhọn quanh rìa 160px
+        final iceR = 40.0 + progress * 135.0;
+        canvas.drawCircle(
+          playerCenter,
+          iceR,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.14),
+        );
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 1.4 + i * pi / 3;
+          final tip = playerCenter + Offset(cos(rad) * iceR, sin(rad) * iceR);
+          canvas.drawLine(
+            playerCenter,
+            tip,
+            Paint()
+              ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.75)
+              ..strokeWidth = 2.0,
+          );
+          canvas.drawCircle(
+            tip,
+            4.5,
+            Paint()..color = Colors.white.withValues(alpha: alpha * 0.9),
+          );
+        }
+        break;
+
+      case 'cyber_drone':
+        // Vòng hồi máu xanh ngọc + dấu '+' bay lên quanh nhân vật
+        canvas.drawCircle(
+          playerCenter,
+          36.0 + progress * 34.0,
+          Paint()
+            ..color = const Color(0xFF00E676).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        final crossPaint = Paint()
+          ..color = const Color(0xFF00E676).withValues(alpha: alpha)
+          ..strokeWidth = 2.2;
+        for (int i = 0; i < 5; i++) {
+          final rad = i * (2 * pi / 5) + bobbingTimer * 1.5;
+          final cx = playerCenter.dx + cos(rad) * 32;
+          final cy = playerCenter.dy + sin(rad) * 18 - progress * 28.0;
+          canvas.drawLine(Offset(cx - 4, cy), Offset(cx + 4, cy), crossPaint);
+          canvas.drawLine(Offset(cx, cy - 4), Offset(cx, cy + 4), crossPaint);
+        }
+        break;
+
+      case 'luna_fox':
+        // 5 đốm Hồ Hỏa lam ngọc xoay xoắn ốc quanh nhân vật
+        canvas.drawCircle(
+          playerCenter,
+          44.0 + progress * 60.0,
+          Paint()
+            ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.6)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.8,
+        );
+        for (int i = 0; i < 5; i++) {
+          final rad = bobbingTimer * 4.5 + i * (2 * pi / 5);
+          final wispR = 30.0 + progress * 55.0;
+          final pt = playerCenter + Offset(cos(rad) * wispR, sin(rad) * wispR);
+          canvas.drawCircle(
+            pt,
+            6.0,
+            Paint()
+              ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.45)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          );
+          canvas.drawCircle(
+            pt,
+            3.0,
+            Paint()..color = Colors.white.withValues(alpha: alpha * 0.95),
+          );
+        }
+        break;
+
+      case 'orbit_03':
+        // Vòng ngắm khóa mục tiêu xoay quanh drone
+        canvas.drawCircle(
+          droneCenter,
+          28.0 + progress * 24.0,
+          Paint()
+            ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0,
+        );
+        break;
+
+      case 'pyro_frost_dragon':
+        // Vòng xoáy song nguyên Lửa (đỏ cam) & Băng (xanh cyan) xoay ngược chiều
+        final r = 45.0 + progress * 125.0;
+        canvas.drawCircle(
+          playerCenter,
+          r,
+          Paint()
+            ..color = const Color(0xFFFF5252).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        canvas.drawCircle(
+          playerCenter,
+          r * 0.72,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.2,
+        );
+        for (int i = 0; i < 8; i++) {
+          final isFire = i.isEven;
+          final rad = (isFire ? bobbingTimer * 3.8 : -bobbingTimer * 3.8) +
+              i * (pi / 4);
+          final pt = playerCenter + Offset(cos(rad) * (r * 0.85), sin(rad) * (r * 0.85));
+          canvas.drawCircle(
+            pt,
+            4.2,
+            Paint()
+              ..color = (isFire
+                      ? const Color(0xFFFF6E40)
+                      : const Color(0xFF18FFFF))
+                  .withValues(alpha: alpha * 0.95),
+          );
+        }
+        break;
+
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+      default:
+        // Vòng trọng lực hút vào tâm (implosion) + 6 tia sét vàng giật vào giữa
+        final implodeR = (155.0 * (1.0 - progress * 0.65)).clamp(35.0, 155.0);
+        canvas.drawCircle(
+          playerCenter,
+          implodeR,
+          Paint()
+            ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
+        );
+        canvas.drawCircle(
+          playerCenter,
+          implodeR,
+          Paint()
+            ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        final arcPaint = Paint()
+          ..color = const Color(0xFF00F0FF).withValues(alpha: alpha * 0.8)
+          ..strokeWidth = 1.6;
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 2.5 + i * (pi / 3);
+          final outer =
+              playerCenter + Offset(cos(rad) * implodeR, sin(rad) * implodeR);
+          final mid = playerCenter +
+              Offset(
+                cos(rad + 0.18) * (implodeR * 0.55),
+                sin(rad + 0.18) * (implodeR * 0.55),
+              );
+          canvas.drawLine(outer, mid, arcPaint);
+          canvas.drawLine(mid, playerCenter, arcPaint);
+        }
+        break;
+    }
+  }
+
+  void _renderOrbitalStrikeVfx(Canvas canvas, Offset droneCenter) {
+    final alpha = (_orbitalStrikeTimer / 0.9).clamp(0.0, 1.0);
+    final strikeOffset = Offset(
+      _orbitalStrikePos!.x - position.x,
+      _orbitalStrikePos!.y - position.y,
+    );
+    final impact = droneCenter + strikeOffset;
+
+    // Tia laser quỹ đạo 3 lớp (cam ngoài -> vàng giữa -> trắng lõi)
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = const Color(0xFFFF6D00).withValues(alpha: alpha * 0.5)
+        ..strokeWidth = 18.0 * alpha
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.9)
+        ..strokeWidth = 10.0 * alpha,
+    );
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = Colors.white.withValues(alpha: alpha)
+        ..strokeWidth = 3.5 * alpha,
+    );
+
+    // Vòng nổ + tâm ngắm xoay tại điểm rơi
+    final blastR = 90.0 * (1.12 - alpha * 0.32);
+    canvas.drawCircle(
+      impact,
+      blastR,
+      Paint()..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.22),
+    );
+    canvas.drawCircle(
+      impact,
+      blastR,
+      Paint()
+        ..color = const Color(0xFFFFD740).withValues(alpha: alpha * 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2,
+    );
+    // 4 vạch chữ thập tâm ngắm
+    final reticlePaint = Paint()
+      ..color = Colors.white.withValues(alpha: alpha * 0.85)
+      ..strokeWidth = 1.6;
+    for (int i = 0; i < 4; i++) {
+      final rad = bobbingTimer * 6.0 + i * (pi / 2);
+      canvas.drawLine(
+        impact + Offset(cos(rad) * 14, sin(rad) * 14),
+        impact + Offset(cos(rad) * 32, sin(rad) * 32),
+        reticlePaint,
+      );
+    }
   }
 
   /// Vẽ Aegis-X9 - Tinh Linh Lôi Từ (Pha lê bát diện #FFD700 + 2 vòng Gyroscope bạc/cyan xoay chéo)

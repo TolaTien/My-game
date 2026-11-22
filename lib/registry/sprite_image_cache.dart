@@ -20,6 +20,7 @@ class SpriteImageCache {
   final Map<String, ui.Image> _companionImages = {};
   final Map<String, ui.Image> _companionIdleSheets = {};
   final Map<String, ui.Image> _companionRunSheets = {};
+  final Map<String, ui.Image> _companionSkillSheets = {};
   final Map<String, ui.Image> _skillImages = {};
   final Map<String, ui.Image> _mapImages = {};
   final Map<String, ui.Image> _rawPathCache = {};
@@ -146,6 +147,27 @@ class SpriteImageCache {
     'pyro_frost_dragon': 'assets/images/companions/pyro_frost_dragon.png',
     'luna_fox': 'assets/images/companions/luna_fox.png',
     'orbit_03': 'assets/images/companions/orbit_03.png',
+  };
+
+  static const Map<String, String> companionSkillSheetPaths = {
+    'comp_attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'companion_attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'comp_defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'companion_defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'shield': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'comp_control': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'companion_frost': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'control': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'frost': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'cyber_drone': 'assets/images/skills/pet_skill_cyber_heal.png',
+    'luna_fox': 'assets/images/skills/pet_skill_luna_spirit.png',
+    'orbit_03': 'assets/images/skills/pet_skill_orbit_laser.png',
+    'aegis_x9': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'comp_aegis': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'aegis': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'pyro_frost_dragon': 'assets/images/skills/pet_skill_dragon_storm.png',
   };
 
   static const Map<String, String> skillEffectPaths = {
@@ -290,6 +312,21 @@ class SpriteImageCache {
     if (_loadingKeys.add('comp_run_$companionId')) {
       unawaited(_loadIntoCache('assets/images/companions/luna_fox_run_v2.png',
           (image) => _companionRunSheets[companionId] = image));
+    }
+    return null;
+  }
+
+  ui.Image? getCompanionSkillSheet(String companionId) {
+    final cached = _companionSkillSheets[companionId];
+    if (cached != null) return cached;
+    final path = companionSkillSheetPaths[companionId];
+    if (path != null && _loadingKeys.add('comp_skill_$companionId')) {
+      unawaited(
+        _loadIntoCache(
+          path,
+          (img) => _companionSkillSheets[companionId] = img,
+        ),
+      );
     }
     return null;
   }
@@ -456,6 +493,14 @@ class SpriteImageCache {
       if (!_skillImages.containsKey(key)) {
         _loadingKeys.add('skill_$key');
         secondaryFutures.add(_loadIntoCache(path, (img) => _skillImages[key] = img));
+      }
+    });
+    companionSkillSheetPaths.forEach((id, path) {
+      if (!_companionSkillSheets.containsKey(id)) {
+        _loadingKeys.add('comp_skill_$id');
+        secondaryFutures.add(
+          _loadIntoCache(path, (img) => _companionSkillSheets[id] = img),
+        );
       }
     });
     await Future.wait(secondaryFutures);
