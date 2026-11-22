@@ -85,6 +85,9 @@ class _GameHudOverlayState extends State<GameHudOverlay>
   Widget build(BuildContext context) {
     final player = widget.game.player;
     final isDesktopOrWeb = GamePlatformHelper.isDesktopOrWeb;
+    final s1 = HeroSkillSystem.getSkillMeta(player.heroId, 1);
+    final s2 = HeroSkillSystem.getSkillMeta(player.heroId, 2);
+    final s3 = HeroSkillSystem.getSkillMeta(player.heroId, 3);
 
     return SafeArea(
       child: Stack(
@@ -481,72 +484,57 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                     ),
 
                     // Skill 1 (riêng biệt theo từng nhân vật)
-                    Builder(
-                      builder: (_) {
-                        final s1 = HeroSkillSystem.getSkillMeta(player.heroId, 1);
-                        return Positioned(
-                          bottom: 84,
-                          right: 0,
-                          child: _ActionButton(
-                            size: 52,
-                            icon: s1.icon,
-                            label: s1.shortLabel,
-                            hotkey: isDesktopOrWeb ? '1' : null,
-                            color: s1.color,
-                            cooldownRemaining: player.skill1VisualCd,
-                            maxCooldown: s1.cooldown,
-                            hasEnoughKi: player.currentKi >= s1.kiCost,
-                            lowKiFlash: player.insufficientKiFlashTimer > 0,
-                            onTap: () => widget.game.onSkill1(),
-                          ),
-                        );
-                      },
+                    Positioned(
+                      bottom: 84,
+                      right: 0,
+                      child: _ActionButton(
+                        size: 52,
+                        icon: s1.icon,
+                        label: s1.shortLabel,
+                        hotkey: isDesktopOrWeb ? '1' : null,
+                        color: s1.color,
+                        cooldownRemaining: player.skill1VisualCd,
+                        maxCooldown: s1.cooldown,
+                        hasEnoughKi: player.currentKi >= s1.kiCost,
+                        lowKiFlash: player.insufficientKiFlashTimer > 0,
+                        onTap: () => widget.game.onSkill1(),
+                      ),
                     ),
 
                     // Skill 2 (riêng biệt theo từng nhân vật)
-                    Builder(
-                      builder: (_) {
-                        final s2 = HeroSkillSystem.getSkillMeta(player.heroId, 2);
-                        return Positioned(
-                          bottom: 66,
-                          right: 66,
-                          child: _ActionButton(
-                            size: 52,
-                            icon: s2.icon,
-                            label: s2.shortLabel,
-                            hotkey: isDesktopOrWeb ? '2' : null,
-                            color: s2.color,
-                            cooldownRemaining: player.skill2VisualCd,
-                            maxCooldown: s2.cooldown,
-                            hasEnoughKi: player.currentKi >= s2.kiCost,
-                            lowKiFlash: player.insufficientKiFlashTimer > 0,
-                            onTap: () => widget.game.onSkill2(),
-                          ),
-                        );
-                      },
+                    Positioned(
+                      bottom: 66,
+                      right: 66,
+                      child: _ActionButton(
+                        size: 52,
+                        icon: s2.icon,
+                        label: s2.shortLabel,
+                        hotkey: isDesktopOrWeb ? '2' : null,
+                        color: s2.color,
+                        cooldownRemaining: player.skill2VisualCd,
+                        maxCooldown: s2.cooldown,
+                        hasEnoughKi: player.currentKi >= s2.kiCost,
+                        lowKiFlash: player.insufficientKiFlashTimer > 0,
+                        onTap: () => widget.game.onSkill2(),
+                      ),
                     ),
 
                     // Skill 3 Ultimate (riêng biệt theo từng nhân vật)
-                    Builder(
-                      builder: (_) {
-                        final s3 = HeroSkillSystem.getSkillMeta(player.heroId, 3);
-                        return Positioned(
-                          bottom: 0,
-                          right: 84,
-                          child: _ActionButton(
-                            size: 52,
-                            icon: s3.icon,
-                            label: s3.shortLabel,
-                            hotkey: isDesktopOrWeb ? '3' : null,
-                            color: s3.color,
-                            cooldownRemaining: player.skill3VisualCd,
-                            maxCooldown: s3.cooldown,
-                            hasEnoughKi: player.currentKi >= s3.kiCost,
-                            lowKiFlash: player.insufficientKiFlashTimer > 0,
-                            onTap: () => widget.game.onSkill3(),
-                          ),
-                        );
-                      },
+                    Positioned(
+                      bottom: 0,
+                      right: 84,
+                      child: _ActionButton(
+                        size: 52,
+                        icon: s3.icon,
+                        label: s3.shortLabel,
+                        hotkey: isDesktopOrWeb ? '3' : null,
+                        color: s3.color,
+                        cooldownRemaining: player.skill3VisualCd,
+                        maxCooldown: s3.cooldown,
+                        hasEnoughKi: player.currentKi >= s3.kiCost,
+                        lowKiFlash: player.insufficientKiFlashTimer > 0,
+                        onTap: () => widget.game.onSkill3(),
+                      ),
                     ),
 
                     // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)
@@ -587,16 +575,16 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white24, width: 1),
                   ),
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.keyboard, color: Colors.amberAccent, size: 16),
-                        SizedBox(width: 8),
+                        const Icon(Icons.keyboard, color: Colors.amberAccent, size: 16),
+                        const SizedBox(width: 8),
                         Text(
-                          'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] Bão Búa  [2] Nện Đất  [3] Cuồng Nộ  |  Đánh: SPACE / J',
-                          style: TextStyle(
+                          'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] ${s1.name}  [2] ${s2.name}  [3] ${s3.name}  |  Đánh: SPACE / J',
+                          style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,

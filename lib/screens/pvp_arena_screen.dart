@@ -1774,6 +1774,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     final game = _arenaGame!;
     final p = game.player;
     final isDesktopOrWeb = GamePlatformHelper.isDesktopOrWeb;
+    final s1 = HeroSkillSystem.getSkillMeta(p.heroId, 1);
+    final s2 = HeroSkillSystem.getSkillMeta(p.heroId, 2);
+    final s3 = HeroSkillSystem.getSkillMeta(p.heroId, 3);
 
     return SizedBox(
       width: 200,
@@ -1793,68 +1796,53 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
               onTap: () => game.onBasicAttack(),
             ),
           ),
-          Builder(
-            builder: (_) {
-              final s1 = HeroSkillSystem.getSkillMeta(p.heroId, 1);
-              return Positioned(
-                bottom: 84,
-                right: 0,
-                child: _PvpActionButton(
-                  size: 52,
-                  icon: s1.icon,
-                  label: s1.shortLabel,
-                  hotkey: isDesktopOrWeb ? '1' : null,
-                  color: s1.color,
-                  cooldownRemaining: p.skill1VisualCd,
-                  maxCooldown: s1.cooldown,
-                  hasEnoughKi: p.currentKi >= s1.kiCost,
-                  lowKiFlash: p.insufficientKiFlashTimer > 0,
-                  onTap: () => game.onSkill1(),
-                ),
-              );
-            },
+          Positioned(
+            bottom: 84,
+            right: 0,
+            child: _PvpActionButton(
+              size: 52,
+              icon: s1.icon,
+              label: s1.shortLabel,
+              hotkey: isDesktopOrWeb ? '1' : null,
+              color: s1.color,
+              cooldownRemaining: p.skill1VisualCd,
+              maxCooldown: s1.cooldown,
+              hasEnoughKi: p.currentKi >= s1.kiCost,
+              lowKiFlash: p.insufficientKiFlashTimer > 0,
+              onTap: () => game.onSkill1(),
+            ),
           ),
-          Builder(
-            builder: (_) {
-              final s2 = HeroSkillSystem.getSkillMeta(p.heroId, 2);
-              return Positioned(
-                bottom: 66,
-                right: 66,
-                child: _PvpActionButton(
-                  size: 52,
-                  icon: s2.icon,
-                  label: s2.shortLabel,
-                  hotkey: isDesktopOrWeb ? '2' : null,
-                  color: s2.color,
-                  cooldownRemaining: p.skill2VisualCd,
-                  maxCooldown: s2.cooldown,
-                  hasEnoughKi: p.currentKi >= s2.kiCost,
-                  lowKiFlash: p.insufficientKiFlashTimer > 0,
-                  onTap: () => game.onSkill2(),
-                ),
-              );
-            },
+          Positioned(
+            bottom: 66,
+            right: 66,
+            child: _PvpActionButton(
+              size: 52,
+              icon: s2.icon,
+              label: s2.shortLabel,
+              hotkey: isDesktopOrWeb ? '2' : null,
+              color: s2.color,
+              cooldownRemaining: p.skill2VisualCd,
+              maxCooldown: s2.cooldown,
+              hasEnoughKi: p.currentKi >= s2.kiCost,
+              lowKiFlash: p.insufficientKiFlashTimer > 0,
+              onTap: () => game.onSkill2(),
+            ),
           ),
-          Builder(
-            builder: (_) {
-              final s3 = HeroSkillSystem.getSkillMeta(p.heroId, 3);
-              return Positioned(
-                bottom: 0,
-                right: 84,
-                child: _PvpActionButton(
-                  size: 52,
-                  icon: s3.icon,
-                  label: s3.shortLabel,
-                  hotkey: isDesktopOrWeb ? '3' : null,
-                  color: s3.color,
-                  cooldownRemaining: p.skill3VisualCd,
-                  maxCooldown: s3.cooldown,
-                  hasEnoughKi: p.currentKi >= s3.kiCost,
-                  lowKiFlash: p.insufficientKiFlashTimer > 0,
-                  onTap: () => game.onSkill3(),
-                ),
-              );
-            },
+          Positioned(
+            bottom: 0,
+            right: 84,
+            child: _PvpActionButton(
+              size: 52,
+              icon: s3.icon,
+              label: s3.shortLabel,
+              hotkey: isDesktopOrWeb ? '3' : null,
+              color: s3.color,
+              cooldownRemaining: p.skill3VisualCd,
+              maxCooldown: s3.cooldown,
+              hasEnoughKi: p.currentKi >= s3.kiCost,
+              lowKiFlash: p.insufficientKiFlashTimer > 0,
+              onTap: () => game.onSkill3(),
+            ),
           ),
         ],
       ),

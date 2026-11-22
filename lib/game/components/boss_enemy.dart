@@ -740,7 +740,7 @@ class BossVictoryPortal extends PositionComponent
     if (other is PlayerComponent) {
       hasTriggered = true;
       if (isMounted) {
-        game.onVictory?.call();
+        game.triggerVictory();
       }
     }
   }

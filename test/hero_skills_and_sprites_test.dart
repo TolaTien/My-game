@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:flame/components.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_game/game/big_war_game.dart';
 import 'package:my_game/game/combat/hero_skill_system.dart';
 import 'package:my_game/game/components/hero_projectile.dart';
 import 'package:my_game/game/components/player.dart';
+import 'package:my_game/game/hud/game_hud.dart';
+import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/registry/sprite_image_cache.dart';
 
 void main() {
@@ -165,5 +169,32 @@ void main() {
       onBannerText: (_, _) {},
     );
     expect(emberWorld.children.whereType<HeroProjectile>().length, equals(8));
+  });
+
+  testWidgets('GameHudOverlay renders all 3 skill buttons cleanly without ParentDataWidget error for all 9 heroes', (tester) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    for (final heroId in allHeroIds) {
+      final profile = PlayerProfile(selectedHeroId: heroId);
+      final game = BigWarGame(playerProfile: profile);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GameHudOverlay(game: game),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'HUD threw exception for $heroId');
+      expect(find.text('ATK'), findsOneWidget);
+      final s1 = HeroSkillSystem.getSkillMeta(heroId, 1);
+      final s2 = HeroSkillSystem.getSkillMeta(heroId, 2);
+      final s3 = HeroSkillSystem.getSkillMeta(heroId, 3);
+      expect(find.byIcon(s1.icon), findsAtLeastNWidgets(1), reason: 'Missing S1 icon for $heroId');
+      expect(find.byIcon(s2.icon), findsAtLeastNWidgets(1), reason: 'Missing S2 icon for $heroId');
+      expect(find.byIcon(s3.icon), findsAtLeastNWidgets(1), reason: 'Missing S3 icon for $heroId');
+    }
   });
 }

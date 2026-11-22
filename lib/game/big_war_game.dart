@@ -124,6 +124,14 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
   int currentFloor = 1;
   bool isVictoryTriggered = false;
   bool isGameOverTriggered = false;
+  double _bossClearedTimer = 0.0;
+
+  void triggerVictory() {
+    if (isVictoryTriggered || isGameOverTriggered) return;
+    isVictoryTriggered = true;
+    AudioService.instance.playSfx(SfxSound.wheelJackpot);
+    onVictory?.call();
+  }
 
   BigWarGame({this.playerProfile, this.selectedMapConfig}) {
     pauseWhenBackgrounded = false;
@@ -208,19 +216,27 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     }
 
     // Dọn dẹp quái đã bị tiêu diệt
-    enemies.removeWhere((e) => !e.isMounted || e.currentHp <= 0);
-    skeletons.removeWhere((s) => !s.isMounted || s.currentHp <= 0);
+    enemies.removeWhere((e) => e.currentHp <= 0 || (e.isLoaded && !e.isMounted));
+    skeletons.removeWhere((s) => s.currentHp <= 0 || (s.isLoaded && !s.isMounted));
 
-    // Kiểm tra quét sạch toàn bộ quái và tất cả Boss -> Kích hoạt Chiến Thắng Vượt Ải
+    // Khi hạ sạch toàn bộ Boss -> dọn quái lẻ còn kẹt trên map và tự động báo chuyển màn
     final allBossesDefeated =
-        bosses.every((b) => b.isDefeated || !b.isMounted);
-    if (!isVictoryTriggered &&
-        enemies.isEmpty &&
-        skeletons.isEmpty &&
-        allBossesDefeated) {
-      isVictoryTriggered = true;
-      AudioService.instance.playSfx(SfxSound.wheelJackpot);
-      onVictory?.call();
+        bosses.isNotEmpty && bosses.every((b) => b.isDefeated);
+    if (!isVictoryTriggered && allBossesDefeated) {
+      if (enemies.isNotEmpty || skeletons.isNotEmpty) {
+        for (final e in List<ZombieEnemy>.from(enemies)) {
+          if (e.isMounted) e.removeFromParent();
+        }
+        enemies.clear();
+        for (final s in List<SkeletonEnemy>.from(skeletons)) {
+          if (s.isMounted) s.removeFromParent();
+        }
+        skeletons.clear();
+      }
+      _bossClearedTimer += dt;
+      if (_bossClearedTimer >= 1.2) {
+        triggerVictory();
+      }
     }
   }
 
@@ -237,6 +253,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     currentFloor++;
     isVictoryTriggered = false;
     isGameOverTriggered = false;
+    _bossClearedTimer = 0.0;
 
     // Đổi sang một map ngẫu nhiên mới cho tầng tiếp theo (đảm bảo khác map hiện tại)
     final newMap = nextMap ??
@@ -269,6 +286,7 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
   void retryFloor() {
     isVictoryTriggered = false;
     isGameOverTriggered = false;
+    _bossClearedTimer = 0.0;
 
     // Khi chơi lại, cũng chọn ngẫu nhiên map mới để trải nghiệm phong phú
     final newMap =
@@ -317,6 +335,15 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
       if (b.isMounted) b.removeFromParent();
     }
     bosses.clear();
+    for (final portal in world.children.whereType<BossVictoryPortal>().toList()) {
+      portal.removeFromParent();
+    }
+    for (final tele in world.children.whereType<GroundSlamTelegraph>().toList()) {
+      tele.removeFromParent();
+    }
+    for (final flame in world.children.whereType<BossFlameProjectile>().toList()) {
+      flame.removeFromParent();
+    }
     bossHpNotifier.value = null;
   }
 

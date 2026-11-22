@@ -73,4 +73,39 @@ void main() {
     expect(s5.arrowSpeed, greaterThan(s1.arrowSpeed));
     expect(s5.shootInterval, lessThan(s1.shootInterval));
   });
+
+  test('Defeating all bosses clears leftover minions and triggers victory reliably', () {
+    var victoryCalls = 0;
+    final game = BigWarGame(
+      playerProfile: const PlayerProfile(),
+      selectedMapConfig: GameAssetRegistry.defaultSanctumMap,
+    )..onVictory = () => victoryCalls++;
+
+    // Simulate floor with 2 bosses + 1 stray zombie stuck far away
+    final b1 = BossEnemy(position: Vector2(500, 300), player: game.player);
+    final b2 = BossEnemy(position: Vector2(600, 300), player: game.player);
+    final strayZombie = ZombieEnemy(position: Vector2(950, 700), player: game.player);
+    game.bosses.addAll([b1, b2]);
+    game.enemies.add(strayZombie);
+
+    // Only 1 boss defeated -> victory must NOT trigger yet
+    b1.takeDamage(9999);
+    game.update(1.5);
+    expect(victoryCalls, 0);
+    expect(game.isVictoryTriggered, isFalse);
+
+    // Both bosses defeated -> clears stray zombie and triggers victory after 1.2s grace
+    b2.takeDamage(9999);
+    game.update(0.6);
+    expect(game.enemies, isEmpty);
+    expect(victoryCalls, 0);
+
+    game.update(0.7);
+    expect(game.isVictoryTriggered, isTrue);
+    expect(victoryCalls, 1);
+
+    // Calling triggerVictory again (e.g. from portal) does not double-fire
+    game.triggerVictory();
+    expect(victoryCalls, 1);
+  });
 }
