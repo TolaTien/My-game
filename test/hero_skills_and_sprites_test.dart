@@ -9,6 +9,8 @@ import 'package:my_game/game/components/player.dart';
 import 'package:my_game/game/hud/game_hud.dart';
 import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/registry/sprite_image_cache.dart';
+import 'package:my_game/services/player_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const allHeroIds = [
@@ -196,5 +198,31 @@ void main() {
       expect(find.byIcon(s2.icon), findsAtLeastNWidgets(1), reason: 'Missing S2 icon for $heroId');
       expect(find.byIcon(s3.icon), findsAtLeastNWidgets(1), reason: 'Missing S3 icon for $heroId');
     }
+  });
+
+  test('PvE floor progress persists across restarts and resets only when requested', () async {
+    SharedPreferences.setMockInitialValues({});
+    await PlayerStorage.saveProfile(const PlayerProfile(pveCurrentFloor: 1, pveHighestFloor: 1));
+
+    // Clear Floor 1 -> saved next floor is 2
+    await PlayerStorage.savePveProgress(2);
+    expect(PlayerStorage.currentProfile.pveCurrentFloor, equals(2));
+    expect(PlayerStorage.currentProfile.pveHighestFloor, equals(2));
+
+    // Clear Floor 5 -> saved next floor is 6
+    await PlayerStorage.savePveProgress(6);
+    final reloaded = await PlayerStorage.loadProfile();
+    expect(reloaded.pveCurrentFloor, equals(6));
+    expect(reloaded.pveHighestFloor, equals(6));
+
+    // Launching BigWarGame without explicit initialFloor resumes at Floor 6
+    final resumedGame = BigWarGame(playerProfile: reloaded);
+    expect(resumedGame.currentFloor, equals(6));
+
+    // Explicit reset returns to Floor 1 while keeping highest floor record
+    await PlayerStorage.resetPveToFloorOne();
+    final afterReset = await PlayerStorage.loadProfile();
+    expect(afterReset.pveCurrentFloor, equals(1));
+    expect(afterReset.pveHighestFloor, equals(6));
   });
 }

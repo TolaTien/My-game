@@ -14,6 +14,7 @@ import '../big_war_game.dart';
 enum BossState {
   chase,
   meleeCleave,
+  chargeDash,
   groundSlamTelegraph,
   groundSlamImpact,
   radialFlameBurst,
@@ -104,9 +105,13 @@ class BossEnemy extends PositionComponent
 
   // Cooldowns
   double meleeCooldownTimer = 0.0;
-  double groundSlamCooldownTimer = 5.0;
-  double flameBurstCooldownTimer = 4.0;
+  double groundSlamCooldownTimer = 4.5;
+  double flameBurstCooldownTimer = 3.5;
+  double chargeCooldownTimer = 5.5;
   double stateTimer = 0.0;
+  double _spiralAngleOffset = 0.0;
+  Vector2 _chargeDirection = Vector2(1, 0);
+  bool _chargeHitPlayer = false;
 
   // Wave spawn flags
   bool summonedWave70 = false;
@@ -163,6 +168,7 @@ class BossEnemy extends PositionComponent
     if (meleeCooldownTimer > 0) meleeCooldownTimer -= dt;
     if (groundSlamCooldownTimer > 0) groundSlamCooldownTimer -= dt;
     if (flameBurstCooldownTimer > 0) flameBurstCooldownTimer -= dt;
+    if (chargeCooldownTimer > 0) chargeCooldownTimer -= dt;
 
     final distanceToPlayer = position.distanceTo(player.position);
     isFacingRight = player.position.x >= position.x;
@@ -174,6 +180,9 @@ class BossEnemy extends PositionComponent
         break;
       case BossState.meleeCleave:
         _updateMeleeCleave(dt, distanceToPlayer);
+        break;
+      case BossState.chargeDash:
+        _updateChargeDash(dt, distanceToPlayer);
         break;
       case BossState.groundSlamTelegraph:
         _updateGroundSlamTelegraph(dt);
@@ -190,18 +199,36 @@ class BossEnemy extends PositionComponent
   }
 
   void _updateChaseState(double dt, double distanceToPlayer) {
-    // 1. Phase 2 Special: Radial Flame Burst (every 5.0s)
-    if (phase == 2 && flameBurstCooldownTimer <= 0) {
+    // 1. Flame Attack: Phase 2 bắn cầu lửa xoáy 360°, Phase 1 bắn quạt 3 cầu lửa đón đầu khi player thả diều xa
+    if (flameBurstCooldownTimer <= 0 && (phase == 2 || distanceToPlayer > 155.0)) {
       state = BossState.radialFlameBurst;
       stateTimer = 0.0;
       return;
     }
 
-    // 2. Special Attack: Ground Slam (1.2s telegraphed AoE)
+    // 2. Gap-Closer Charge Dash: Lao húc áp sát khi người chơi thả diều ở tầm 145..290px
+    if (chargeCooldownTimer <= 0 &&
+        distanceToPlayer >= 145.0 &&
+        distanceToPlayer <= 290.0 &&
+        (!isMounted ||
+            game.walkableGrid.isEmpty ||
+            AStarPathfinder.hasLineOfSight(position, player.position, game.walkableGrid))) {
+      state = BossState.chargeDash;
+      stateTimer = 0.0;
+      _chargeHitPlayer = false;
+      final predicted = player.position + player.moveDirection * player.speed * 0.35;
+      final diff = predicted - position;
+      _chargeDirection = diff.length2 > 1.0 ? diff.normalized() : Vector2(isFacingRight ? 1 : -1, 0);
+      axeSwingAngle = isFacingRight ? -1.5 : 1.5;
+      return;
+    }
+
+    // 3. Special Attack: Predictive Ground Slam (đón đầu hướng chạy của Player)
     if (groundSlamCooldownTimer <= 0 && distanceToPlayer <= groundSlamRange) {
       state = BossState.groundSlamTelegraph;
       stateTimer = 0.0;
-      groundSlamCenter = player.position.clone();
+      final leadOffset = player.moveDirection * player.speed * 0.45;
+      groundSlamCenter = player.position + leadOffset;
       activeTelegraph = GroundSlamTelegraph(
         position: groundSlamCenter!,
         duration: groundSlamTelegraphDuration,
@@ -314,22 +341,62 @@ class BossEnemy extends PositionComponent
     }
   }
 
+  void _updateChargeDash(double dt, double distanceToPlayer) {
+    stateTimer += dt;
+    // 0.0 - 0.30s: Gồng lấy đà, 0.30 - 0.80s: Lao húc tốc độ cao 3.1x
+    if (stateTimer < 0.30) {
+      axeSwingAngle = isFacingRight ? -1.7 : 1.7;
+    } else if (stateTimer < 0.80) {
+      previousPosition = position.clone();
+      position.add(_chargeDirection * (currentSpeed * 3.1) * dt);
+      axeSwingAngle = isFacingRight ? 1.4 : -1.4;
+      if (!_chargeHitPlayer && distanceToPlayer <= meleeRange - 12.0) {
+        _chargeHitPlayer = true;
+        player.takeDamage(meleeDamage * 1.15);
+        AudioService.instance.playSfx(SfxSound.skillSmash);
+      }
+    } else {
+      axeSwingAngle = 0.0;
+      chargeCooldownTimer = phase == 2 ? 5.5 : 7.5;
+      state = BossState.chase;
+    }
+  }
+
   void _updateRadialFlameBurst(double dt) {
     stateTimer += dt;
     if (stateTimer >= 0.25) {
-      // Bắn cầu lửa 360 độ (tăng số lượng theo tầng: 8 -> 10 -> 12)
-      final int numFireballs = flameBurstCount;
-      for (int i = 0; i < numFireballs; i++) {
-        final angle = i * (2 * pi / numFireballs);
-        final dir = Vector2(cos(angle), sin(angle));
-        final fireball = BossFlameProjectile(
-          position: position.clone(),
-          direction: dir,
-          speed: flameBurstSpeed,
-          damage: flameBurstDamage,
-        );
-        if (isMounted) {
-          game.world.add(fireball);
+      if (phase == 2) {
+        // Phase 2: Bắn cầu lửa 360° xoay góc lệch liên tục để không thể đứng yên né
+        final int numFireballs = flameBurstCount;
+        _spiralAngleOffset += pi / numFireballs;
+        for (int i = 0; i < numFireballs; i++) {
+          final angle = _spiralAngleOffset + i * (2 * pi / numFireballs);
+          final dir = Vector2(cos(angle), sin(angle));
+          final fireball = BossFlameProjectile(
+            position: position.clone(),
+            direction: dir,
+            speed: flameBurstSpeed,
+            damage: flameBurstDamage,
+          );
+          if (isMounted) {
+            game.world.add(fireball);
+          }
+        }
+      } else {
+        // Phase 1: Bắn quạt 3 cầu lửa đón đầu về phía Player
+        final predicted = player.position + player.moveDirection * player.speed * 0.35;
+        final baseAngle = atan2(predicted.y - position.y, predicted.x - position.x);
+        for (final offsetDeg in [-16.0, 0.0, 16.0]) {
+          final a = baseAngle + offsetDeg * pi / 180.0;
+          final fireball = BossFlameProjectile(
+            position: position.clone(),
+            direction: Vector2(cos(a), sin(a)),
+            speed: flameBurstSpeed * 1.1,
+            damage: flameBurstDamage,
+          );
+          if (isMounted) {
+            game.world.add(fireball);
+          }
         }
       }
       AudioService.instance.playSfx(SfxSound.skillBerserk);

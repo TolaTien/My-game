@@ -133,10 +133,15 @@ class BigWarGame extends FlameGame with HasCollisionDetection {
     onVictory?.call();
   }
 
-  BigWarGame({this.playerProfile, this.selectedMapConfig}) {
+  BigWarGame({
+    this.playerProfile,
+    this.selectedMapConfig,
+    int? initialFloor,
+  }) {
     pauseWhenBackgrounded = false;
     currentMapConfig =
         selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
+    currentFloor = (initialFloor ?? activeProfile.pveCurrentFloor).clamp(1, 9999);
     final hero = activeProfile.selectedHeroId;
     final userHeroLv = activeProfile.getHeroLevel(hero);
     player = PlayerComponent(

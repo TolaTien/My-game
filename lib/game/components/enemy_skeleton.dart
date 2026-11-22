@@ -28,11 +28,15 @@ class SkeletonEnemy extends PositionComponent
   List<Vector2> _waypoints = [];
   int _currentWaypointIndex = 0;
   double _pathRecalcTimer = 0.0;
-  static const double _pathRecalcInterval = 0.5;
+  bool _isAggroed = false;
+  double _strafeTimer = 0.0;
+  double _strafeSign = 1.0;
+  static const double _pathRecalcInterval = 0.42;
   static const double _waypointReachThreshold = 12.0;
 
   SkeletonEnemy({required Vector2 position, required this.player})
-      : super(
+      : _strafeSign = Random().nextBool() ? 1.0 : -1.0,
+        super(
           position: position,
           size: Vector2(32, 38),
           anchor: Anchor.center,
@@ -48,23 +52,32 @@ class SkeletonEnemy extends PositionComponent
   void update(double dt) {
     super.update(dt);
     if (shootCooldown > 0) shootCooldown -= dt;
+    _strafeTimer += dt;
+    if (_strafeTimer >= 1.7) {
+      _strafeTimer = 0.0;
+      _strafeSign = -_strafeSign;
+    }
 
     final distanceToPlayer = position.distanceTo(player.position);
+    if (distanceToPlayer < 460) _isAggroed = true;
 
     // Luôn quay mặt về phía Player
     isFacingRight = player.position.x >= position.x;
 
-    // AI Kiting & Tactical Archery Behavior:
-    if (distanceToPlayer < 110) {
-      // 1. Khoảng cách < 110px: Lùi lại (kiting away)
+    // AI Kiting thông minh (không lùi đâm tường) & Bắn đón đầu:
+    if (distanceToPlayer < 115) {
       _waypoints.clear();
       _currentWaypointIndex = 0;
+      final away = (position - player.position);
+      final awayDir = away.length2 > 0.01 ? away.normalized() : Vector2(1, 0);
+      final strafe = Vector2(-awayDir.y * _strafeSign, awayDir.x * _strafeSign);
+      final desired = _isWalkablePoint(position + awayDir * 24)
+          ? (awayDir * 0.8 + strafe * 0.5).normalized()
+          : strafe;
       previousPosition = position.clone();
-      final awayDir = (position - player.position).normalized();
-      position.add(awayDir * speed * dt);
-    } else if (distanceToPlayer > 240) {
-      // 2. Khoảng cách > 240px: Tiến lại gần
-      if (distanceToPlayer < 500) {
+      position.add(desired * (speed * 1.15) * dt);
+    } else if (distanceToPlayer > 250) {
+      if (_isAggroed) {
         if (isMounted && game.walkableGrid.isNotEmpty) {
           _pathRecalcTimer -= dt;
           if (_pathRecalcTimer <= 0) {
@@ -84,7 +97,6 @@ class SkeletonEnemy extends PositionComponent
         }
       }
     } else {
-      // 3. Trong tầm 110-240px: Kiểm tra Line-of-Sight trước khi bắn
       bool hasLoS = true;
       if (isMounted && game.walkableGrid.isNotEmpty) {
         hasLoS = AStarPathfinder.hasLineOfSight(
@@ -95,15 +107,25 @@ class SkeletonEnemy extends PositionComponent
       }
 
       if (hasLoS) {
-        // Đường đạn thông thoáng -> Giữ vị trí và bắn tên mỗi 1.8s
         _waypoints.clear();
         _currentWaypointIndex = 0;
+        // Di chuyển lách ngang khi đang chờ bắn thay vì đứng yên
+        final toP = (player.position - position);
+        if (toP.length2 > 1.0) {
+          final norm = toP.normalized();
+          final strafe = Vector2(-norm.y * _strafeSign, norm.x * _strafeSign);
+          if (_isWalkablePoint(position + strafe * 18)) {
+            previousPosition = position.clone();
+            position.add(strafe * (speed * 0.65) * dt);
+          } else {
+            _strafeSign = -_strafeSign;
+          }
+        }
         if (shootCooldown <= 0) {
           _shootArrow();
           shootCooldown = shootInterval;
         }
       } else {
-        // Bị cản bởi cột đá -> Dùng A* tìm đường vòng sang để flank
         if (isMounted && game.walkableGrid.isNotEmpty) {
           _pathRecalcTimer -= dt;
           if (_pathRecalcTimer <= 0) {
@@ -119,6 +141,14 @@ class SkeletonEnemy extends PositionComponent
         }
       }
     }
+  }
+
+  bool _isWalkablePoint(Vector2 pt) {
+    if (!isMounted || game.walkableGrid.isEmpty) return true;
+    final (col, row) = AStarPathfinder.worldToGrid(pt);
+    if (col < 0 || col >= game.walkableGrid.length) return false;
+    if (row < 0 || row >= game.walkableGrid[0].length) return false;
+    return game.walkableGrid[col][row];
   }
 
   void _followWaypoints(double dt) {
@@ -151,9 +181,14 @@ class SkeletonEnemy extends PositionComponent
   }
 
   void _shootArrow() {
-    final toPlayer = player.position - position;
-    if (toPlayer.length2 == 0) return;
-    final dir = toPlayer.normalized();
+    // Bắn đón đầu (Predictive Leading Aim) theo vận tốc di chuyển của Player
+    final dist = position.distanceTo(player.position);
+    final leadTime = (dist / max(1.0, arrowSpeed)).clamp(0.0, 0.75) * 0.65;
+    final predictedPos =
+        player.position + (player.moveDirection * player.speed * leadTime);
+    final toTarget = predictedPos - position;
+    if (toTarget.length2 == 0) return;
+    final dir = toTarget.normalized();
 
     final spawnOffset = Vector2(isFacingRight ? 12 : -12, 0);
     final arrow = ArrowProjectile(
@@ -175,6 +210,7 @@ class SkeletonEnemy extends PositionComponent
   }
 
   void takeDamage(double dmg) {
+    _isAggroed = true;
     currentHp -= dmg;
     if (currentHp <= 0) {
       // Thưởng 50 EXP cho player

@@ -126,6 +126,24 @@ class PlayerStorage {
     }
   }
 
+  /// Lưu tiến độ tầng PvE hiện tại (tự động đồng bộ local + Firebase)
+  static Future<void> savePveProgress(int nextFloor) async {
+    final safeFloor = nextFloor.clamp(1, 9999);
+    final updated = currentProfile.copyWith(
+      pveCurrentFloor: safeFloor,
+      pveHighestFloor: max(currentProfile.pveHighestFloor, safeFloor),
+    );
+    await saveProfile(updated);
+  }
+
+  /// Đặt lại tiến độ PvE về Tầng 1 khi người chơi chủ động chọn đánh lại từ đầu
+  static Future<void> resetPveToFloorOne() async {
+    final updated = currentProfile.copyWith(
+      pveCurrentFloor: 1,
+    );
+    await saveProfile(updated);
+  }
+
   /// Cộng Vàng vào tài khoản
   static Future<void> addGold(int amount) async {
     final updated = currentProfile.copyWith(

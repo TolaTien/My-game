@@ -26,6 +26,8 @@ class PlayerProfile {
   final Map<String, int> heroLevels;
   final Map<String, int> heroExp;
   final List<String> friendIds;
+  final int pveCurrentFloor;
+  final int pveHighestFloor;
 
   /// Tỷ giá quy đổi chuẩn trong lộ trình: 1 Xu = 1000 Vàng
   static const int goldPerXu = 1000;
@@ -49,6 +51,8 @@ class PlayerProfile {
     this.heroLevels = const {'george': 1},
     this.heroExp = const {'george': 0},
     this.friendIds = const [],
+    this.pveCurrentFloor = 1,
+    this.pveHighestFloor = 1,
     // ignore: prefer_initializing_formals
   }) : _rankStars = rankStars,
        // ignore: prefer_initializing_formals
@@ -257,6 +261,8 @@ class PlayerProfile {
     Map<String, int>? heroLevels,
     Map<String, int>? heroExp,
     List<String>? friendIds,
+    int? pveCurrentFloor,
+    int? pveHighestFloor,
   }) {
     final int resolvedRp;
     final int? resolvedStars;
@@ -292,6 +298,11 @@ class PlayerProfile {
       heroLevels: heroLevels ?? this.heroLevels,
       heroExp: heroExp ?? this.heroExp,
       friendIds: friendIds ?? this.friendIds,
+      pveCurrentFloor: (pveCurrentFloor ?? this.pveCurrentFloor).clamp(1, 9999),
+      pveHighestFloor: max(
+        (pveHighestFloor ?? this.pveHighestFloor).clamp(1, 9999),
+        (pveCurrentFloor ?? this.pveCurrentFloor).clamp(1, 9999),
+      ),
     );
   }
 
@@ -315,6 +326,8 @@ class PlayerProfile {
       'heroLevels': heroLevels,
       'heroExp': heroExp,
       'friendIds': friendIds,
+      'pveCurrentFloor': pveCurrentFloor,
+      'pveHighestFloor': pveHighestFloor,
     };
   }
 
@@ -386,6 +399,10 @@ class PlayerProfile {
       heroLevels: parseIntMap(json['heroLevels'], const {'george': 1}),
       heroExp: parseIntMap(json['heroExp'], const {'george': 0}),
       friendIds: parseStringList(json['friendIds'], const []),
+      pveCurrentFloor:
+          ((json['pveCurrentFloor'] as num?)?.toInt() ?? 1).clamp(1, 9999),
+      pveHighestFloor:
+          ((json['pveHighestFloor'] as num?)?.toInt() ?? 1).clamp(1, 9999),
     );
   }
 }

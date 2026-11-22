@@ -597,6 +597,24 @@ class _LobbyScreenState extends State<LobbyScreen>
       _lastLaunchedMatchRoomId = startedParty?.activeMatchRoomId;
     }
 
+    int? selectedPveFloor;
+    if (!_isPvpMode) {
+      final savedFloor = PlayerStorage.currentProfile.pveCurrentFloor;
+      if (savedFloor > 1) {
+        final choice = await _showPveFloorResumeDialog(
+          savedFloor: savedFloor,
+          highestFloor: PlayerStorage.currentProfile.pveHighestFloor,
+        );
+        if (choice == null || !mounted) return;
+        if (choice == 1) {
+          await PlayerStorage.resetPveToFloorOne();
+        }
+        selectedPveFloor = choice;
+      } else {
+        selectedPveFloor = 1;
+      }
+    }
+
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -605,7 +623,10 @@ class _LobbyScreenState extends State<LobbyScreen>
                 initialMode: startedParty?.mode ?? _selectedPvpMode,
                 partyRoom: startedParty,
               )
-            : GamePlayScreen(initialMapConfig: randomMap),
+            : GamePlayScreen(
+                initialMapConfig: randomMap,
+                initialFloor: selectedPveFloor,
+              ),
       ),
     );
     if (mounted) {
@@ -614,6 +635,112 @@ class _LobbyScreenState extends State<LobbyScreen>
       await PlayerStorage.loadProfile();
       setState(() {});
     }
+  }
+
+  /// Hộp thoại chọn tiếp tục tầng PvE đã chinh phục hoặc đánh lại từ Tầng 1.
+  Future<int?> _showPveFloorResumeDialog({
+    required int savedFloor,
+    required int highestFloor,
+  }) {
+    return showDialog<int>(
+      context: context,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10192D),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF40E0FF), width: 1.8),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF40E0FF).withValues(alpha: 0.28),
+                blurRadius: 20,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.stairs_rounded,
+                color: Color(0xFF40E0FF),
+                size: 38,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'TIẾN ĐỘ VƯỢT ẢI HẦM NGỤC',
+                style: TextStyle(
+                  color: Color(0xFF40E0FF),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Bạn đang dừng ở Tầng $savedFloor (Kỷ lục cao nhất: Tầng $highestFloor).\nBạn muốn tiếp tục hay đánh lại từ Tầng 1?',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5FF),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: Text(
+                    'TIẾP TỤC TẦNG $savedFloor',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(dialogCtx).pop(savedFloor),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.amberAccent,
+                    side: const BorderSide(color: Colors.amberAccent, width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                  label: const Text(
+                    'ĐÁNH LẠI TỪ TẦNG 1',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(dialogCtx).pop(1),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   static const double _designWidth = 1763.0;
@@ -1879,7 +2006,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                 child: Text(
                   _isPvpMode
                       ? 'CHẾ ĐỘ: ĐẤU TRƯỜNG PVP (RANK ${_selectedPvpMode.shortLabel})'
-                      : 'CHẾ ĐỘ: VƯỢT ẢI HẦM NGỤC (PVE)',
+                      : 'CHẾ ĐỘ: VƯỢT ẢI HẦM NGỤC (PVE • TẦNG ${PlayerStorage.currentProfile.pveCurrentFloor})',
                   style: TextStyle(
                     color: _isPvpMode
                         ? const Color(0xFFFFB74D)

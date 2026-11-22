@@ -18,15 +18,20 @@ class ZombieEnemy extends PositionComponent
   Vector2 previousPosition = Vector2.zero();
   double attackCooldown = 0.0;
 
-  // A* Navigation state
+  // A* Navigation, Flanking & Lunge state
   List<Vector2> _waypoints = [];
   int _currentWaypointIndex = 0;
   double _pathRecalcTimer = 0.0;
-  static const double _pathRecalcInterval = 0.45; // 0.45s re-path
-  static const double _waypointReachThreshold = 12.0; // 12px reach radius
+  bool _isAggroed = false;
+  double _lungeTimer = 0.0;
+  double _lungeCooldown = 2.0;
+  final double _flankSign;
+  static const double _pathRecalcInterval = 0.38;
+  static const double _waypointReachThreshold = 12.0;
 
   ZombieEnemy({required Vector2 position, required this.player})
-      : super(
+      : _flankSign = Random().nextBool() ? 1.0 : -1.0,
+        super(
           position: position,
           size: Vector2(32, 36),
           anchor: Anchor.center,
@@ -35,7 +40,6 @@ class ZombieEnemy extends PositionComponent
       size: Vector2(20, 24),
       position: Vector2(6, 8),
     ));
-    // Stagger recalculation across entities to prevent CPU spike on the same frame
     _pathRecalcTimer = Random().nextDouble() * _pathRecalcInterval;
   }
 
@@ -43,23 +47,39 @@ class ZombieEnemy extends PositionComponent
   void update(double dt) {
     super.update(dt);
     if (attackCooldown > 0) attackCooldown -= dt;
+    if (_lungeCooldown > 0) _lungeCooldown -= dt;
+    if (_lungeTimer > 0) _lungeTimer = max(0.0, _lungeTimer - dt);
 
     final distanceToPlayer = position.distanceTo(player.position);
 
-    // Tầm phát hiện: 280 pixel
-    if (distanceToPlayer < 280 && distanceToPlayer > 18) {
+    // Tầm phát hiện chủ động: 380px (hoặc toàn bản đồ nếu đã bị đánh trúng)
+    if (distanceToPlayer < 380) {
+      _isAggroed = true;
+    }
+
+    if (_isAggroed && distanceToPlayer > 18) {
+      // Lao vồ tăng tốc ngắn khi áp sát 65..135px có tầm nhìn thẳng
+      if (_lungeCooldown <= 0 &&
+          distanceToPlayer >= 65 &&
+          distanceToPlayer <= 135 &&
+          isMounted &&
+          (game.walkableGrid.isEmpty ||
+              AStarPathfinder.hasLineOfSight(position, player.position, game.walkableGrid))) {
+        _lungeTimer = 0.45;
+        _lungeCooldown = 4.2;
+      }
+
       if (isMounted && game.walkableGrid.isNotEmpty) {
         _pathRecalcTimer -= dt;
         if (_pathRecalcTimer <= 0) {
           _pathRecalcTimer = _pathRecalcInterval;
           _recalculatePath();
         }
-        _followWaypoints(dt);
+        _followWaypoints(dt, distanceToPlayer);
       } else {
-        // Fallback di chuyển thẳng nếu chưa mount game
         previousPosition = position.clone();
         final dir = (player.position - position).normalized();
-        position.add(dir * speed * dt);
+        position.add(dir * _effectiveSpeed * dt);
       }
     } else {
       _waypoints.clear();
@@ -67,10 +87,26 @@ class ZombieEnemy extends PositionComponent
     }
 
     // Tấn công người chơi khi áp sát
-    if (distanceToPlayer <= 26 && attackCooldown <= 0) {
+    if (distanceToPlayer <= 28 && attackCooldown <= 0) {
       player.takeDamage(damage);
-      attackCooldown = 1.0; // 1 giây đánh 1 lần
+      attackCooldown = 0.9;
     }
+  }
+
+  double get _effectiveSpeed => _lungeTimer > 0 ? speed * 1.65 : speed;
+
+  Vector2 _computeSeparation() {
+    if (!isMounted) return Vector2.zero();
+    final sep = Vector2.zero();
+    for (final other in game.enemies) {
+      if (other == this || !other.isMounted) continue;
+      final diff = position - other.position;
+      final d = diff.length;
+      if (d > 0.1 && d < 26.0) {
+        sep.add(diff.normalized() * ((26.0 - d) / 26.0));
+      }
+    }
+    return sep;
   }
 
   void _recalculatePath() {
@@ -82,33 +118,39 @@ class ZombieEnemy extends PositionComponent
     _currentWaypointIndex = 0;
   }
 
-  void _followWaypoints(double dt) {
+  void _followWaypoints(double dt, double distanceToPlayer) {
+    Vector2 moveDir;
     if (_waypoints.isEmpty || _currentWaypointIndex >= _waypoints.length) {
-      // Direct approach fallback
-      previousPosition = position.clone();
-      final dir = (player.position - position).normalized();
-      position.add(dir * speed * dt);
-      return;
-    }
-
-    var targetPt = _waypoints[_currentWaypointIndex];
-    if (_currentWaypointIndex == _waypoints.length - 1) {
-      targetPt = player.position;
-    }
-
-    final dist = position.distanceTo(targetPt);
-    if (dist <= _waypointReachThreshold) {
-      _currentWaypointIndex++;
-      if (_currentWaypointIndex < _waypoints.length) {
-        targetPt = _waypoints[_currentWaypointIndex];
+      moveDir = (player.position - position);
+    } else {
+      var targetPt = _waypoints[_currentWaypointIndex];
+      if (_currentWaypointIndex == _waypoints.length - 1) {
+        targetPt = player.position;
       }
+      if (position.distanceTo(targetPt) <= _waypointReachThreshold) {
+        _currentWaypointIndex++;
+        if (_currentWaypointIndex < _waypoints.length) {
+          targetPt = _waypoints[_currentWaypointIndex];
+        }
+      }
+      moveDir = targetPt - position;
     }
 
-    final toTarget = targetPt - position;
-    if (toTarget.length2 > 0.0001) {
-      previousPosition = position.clone();
-      final dir = toTarget.normalized();
-      position.add(dir * speed * dt);
+    if (moveDir.length2 > 0.0001) {
+      moveDir.normalize();
+      // Áp dụng tách đàn + đánh bọc sườn nhẹ khi ở tầm trung
+      if (distanceToPlayer > 48 && distanceToPlayer < 170) {
+        final flank = Vector2(-moveDir.y * _flankSign, moveDir.x * _flankSign) * 0.28;
+        moveDir.add(flank);
+      }
+      final sep = _computeSeparation();
+      if (sep.length2 > 0.001) {
+        moveDir.add(sep * 0.65);
+      }
+      if (moveDir.length2 > 0.0001) {
+        previousPosition = position.clone();
+        position.add(moveDir.normalized() * _effectiveSpeed * dt);
+      }
     }
   }
 
@@ -121,6 +163,7 @@ class ZombieEnemy extends PositionComponent
   }
 
   void takeDamage(double dmg) {
+    _isAggroed = true;
     currentHp -= dmg;
     if (currentHp <= 0) {
       // Thưởng EXP cho player

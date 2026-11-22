@@ -10,8 +10,13 @@ import '../services/player_storage.dart';
 
 class GamePlayScreen extends StatefulWidget {
   final MapAssetConfig? initialMapConfig;
+  final int? initialFloor;
 
-  const GamePlayScreen({super.key, this.initialMapConfig});
+  const GamePlayScreen({
+    super.key,
+    this.initialMapConfig,
+    this.initialFloor,
+  });
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
@@ -31,6 +36,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
     _game = BigWarGame(
       playerProfile: PlayerStorage.currentProfile,
       selectedMapConfig: widget.initialMapConfig,
+      initialFloor: widget.initialFloor,
     );
     _keyboardController = GameKeyboardController(
       onMoveDirectionChanged: (dir) => _game.setPlayerMoveDirection(dir),
@@ -57,9 +63,10 @@ class _GamePlayScreenState extends State<GamePlayScreen>
         await PlayerStorage.addXu(newCoins);
       }
 
-      // Thưởng Vàng vượt ải thành công
+      // Thưởng Vàng vượt ải thành công & lưu tiến độ tầng tiếp theo (kể cả khi về sảnh/thoát game)
       final floorGoldReward = 200 * _game.currentFloor;
       await PlayerStorage.addGold(floorGoldReward);
+      await PlayerStorage.savePveProgress(_game.currentFloor + 1);
 
       final levelUpResult = await PlayerStorage.addHeroExpAfterMatch(
         isVictory: true,
