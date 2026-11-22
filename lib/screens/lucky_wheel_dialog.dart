@@ -69,7 +69,7 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
       label: '5 Xu',
       primaryColor: Color(0xFF43A047),
       secondaryColor: Color(0xFF2E7D32),
-      icon: Icons.diamond_rounded,
+      icon: Icons.auto_awesome_rounded,
     ),
     WheelReward(
       coins: 10,

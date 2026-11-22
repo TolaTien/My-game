@@ -176,18 +176,8 @@ class PlayerStorage {
     return true;
   }
 
-  /// Trừ Kim Cương khỏi tài khoản (nếu đủ số dư)
-  static Future<bool> spendDiamonds(int amount) async {
-    if (currentProfile.diamonds < amount) return false;
-    final updated = currentProfile.copyWith(
-      diamonds: currentProfile.diamonds - amount,
-    );
-    await saveProfile(updated);
-    return true;
-  }
-
   /// Cộng EXP cho nhân vật sau mỗi trận đấu (Level 1 -> 100)
-  /// Tự động tăng cấp và cộng chỉ số HP, Ki, Sức đánh theo hệ tướng.
+  /// Tự động tăng cấp, cập nhật số trận / số trận thắng và cộng chỉ số HP, Ki, Sức đánh theo hệ tướng.
   static Future<HeroLevelUpResult> addHeroExpAfterMatch({
     String? heroId,
     required bool isVictory,
@@ -222,6 +212,8 @@ class PlayerStorage {
     final updated = currentProfile.copyWith(
       heroLevels: newLevels,
       heroExp: newExps,
+      totalMatches: currentProfile.totalMatches + 1,
+      totalWins: currentProfile.totalWins + (isVictory ? 1 : 0),
     );
     await saveProfile(updated);
     return result;

@@ -413,7 +413,7 @@ flutter test --reporter expanded
 
 | Loại dữ liệu | Vị trí lưu trữ | Mục đích & Vòng đời |
 |---|---|---|
-| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Kim Cương, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `big_war_player_profile` hoặc `big_war_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
+| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Tỉ lệ thắng, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `big_war_player_profile` hoặc `big_war_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
 | **Cài đặt âm thanh & đồ họa/điều khiển** (`targetFps`, `graphicsQuality`, bật/tắt số sát thương, auto-aim, rung haptic, rung màn hình, âm lượng/tắt BGM & SFX) | Thiết bị người dùng — `SharedPreferences` | Khôi phục ngay khi mở lại ứng dụng (`AudioService`, `GameSettingsService`). |
 | **Bộ nhớ đệm BXH & Tổ đội cục bộ** | Thiết bị người dùng — `SharedPreferences` (`big_war_mock_leaderboard`, `big_war_shared_*`) | Dự phòng mượt mà khi tắt mạng hoặc chạy test/offline. |
 | **Tài khoản đăng nhập** (Email, UID, DisplayName) | **Firebase Authentication** | Xác thực đăng nhập/đăng ký, hỗ trợ quên mật khẩu; phiên trên Web dùng `Persistence.SESSION`. |

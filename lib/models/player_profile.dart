@@ -12,7 +12,8 @@ class PlayerProfile {
   final String playerCode;
   final int gold;
   final int xu;
-  final int diamonds;
+  final int totalMatches;
+  final int totalWins;
   final int rankPoints;
   final int? _rankStars;
   final bool? _isChallengerTop10;
@@ -34,7 +35,8 @@ class PlayerProfile {
     this.playerCode = 'GR8899',
     this.gold = 500,
     this.xu = 1,
-    this.diamonds = 20,
+    this.totalMatches = 0,
+    this.totalWins = 0,
     this.rankPoints = 1000,
     int? rankStars,
     bool? isChallengerTop10,
@@ -128,6 +130,20 @@ class PlayerProfile {
 
   /// Tổng giá trị tài sản quy đổi ra Vàng (1 Xu = 1000 Vàng)
   int get totalWealthInGold => gold + (xu * goldPerXu);
+
+  /// Tỉ lệ thắng (%) tính trên tổng số trận đã đấu
+  double get winRate =>
+      totalMatches <= 0 ? 0.0 : (totalWins.clamp(0, totalMatches) / totalMatches) * 100.0;
+
+  /// Chuỗi hiển thị gọn gàng cho Tỉ lệ thắng (VD: "0%", "75%", "66.7%")
+  String get winRateDisplay {
+    if (totalMatches <= 0) return '0%';
+    final rate = winRate;
+    if ((rate - rate.roundToDouble()).abs() < 0.05) {
+      return '${rate.round()}%';
+    }
+    return '${rate.toStringAsFixed(1)}%';
+  }
 
   /// Bậc rank theo hệ thống Sao (Đồng -> Bạc -> Vàng -> Bạch Kim -> Kim Cương -> Huyền Thoại -> Thách Đấu Top 10)
   String get rankTier {
@@ -226,7 +242,8 @@ class PlayerProfile {
     String? playerCode,
     int? gold,
     int? xu,
-    int? diamonds,
+    int? totalMatches,
+    int? totalWins,
     int? rankPoints,
     int? rankStars,
     bool? isChallengerTop10,
@@ -259,7 +276,8 @@ class PlayerProfile {
       playerCode: playerCode ?? this.playerCode,
       gold: gold ?? this.gold,
       xu: xu ?? this.xu,
-      diamonds: diamonds ?? this.diamonds,
+      totalMatches: totalMatches ?? this.totalMatches,
+      totalWins: totalWins ?? this.totalWins,
       rankPoints: resolvedRp,
       rankStars: resolvedStars,
       isChallengerTop10: isChallengerTop10 ?? _isChallengerTop10,
@@ -283,7 +301,8 @@ class PlayerProfile {
       'playerCode': playerCode,
       'gold': gold,
       'xu': xu,
-      'diamonds': diamonds,
+      'totalMatches': totalMatches,
+      'totalWins': totalWins,
       'rankPoints': rankPoints,
       'rankStars': rankStars,
       'isChallengerTop10': isChallengerTop10,
@@ -331,12 +350,22 @@ class PlayerProfile {
     final parsedChallenger = json['isChallengerTop10'] as bool?;
     final parsedServerRank = (json['serverRank'] as num?)?.toInt();
 
+    final parsedMatches = ((json['totalMatches'] as num?)?.toInt() ?? 0).clamp(
+      0,
+      1000000000,
+    );
+    final parsedWins = ((json['totalWins'] as num?)?.toInt() ?? 0).clamp(
+      0,
+      parsedMatches,
+    );
+
     return PlayerProfile(
       playerName: json['playerName'] as String? ?? 'Chiến Binh #88',
       playerCode: json['playerCode'] as String? ?? 'GR8899',
       gold: (json['gold'] as num?)?.toInt() ?? 500,
       xu: (json['xu'] as num?)?.toInt() ?? 1,
-      diamonds: (json['diamonds'] as num?)?.toInt() ?? 20,
+      totalMatches: parsedMatches,
+      totalWins: parsedWins,
       rankPoints: parsedRp,
       rankStars: parsedStars,
       isChallengerTop10: parsedChallenger,

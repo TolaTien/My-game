@@ -1054,7 +1054,7 @@ class _LobbyScreenState extends State<LobbyScreen>
     );
   }
 
-  // --- 2. CÁC Ô TIỀN TỆ GÓC TRÊN PHẢI (XU, VÀNG, KIM CƯƠNG) ---
+  // --- 2. CÁC Ô TIỀN TỆ GÓC TRÊN PHẢI (XU, VÀNG) ---
   Widget _buildXuCoinIcon() {
     return Container(
       width: 26,

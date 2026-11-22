@@ -56,6 +56,8 @@ void main() {
         playerCode: 'GR7777',
         rankStars: 14,
         rankPoints: 1930,
+        totalMatches: 8,
+        totalWins: 6,
       );
 
       await tester.pumpWidget(
@@ -72,6 +74,9 @@ void main() {
       expect(find.text('2/3 Sao'), findsOneWidget);
       expect(find.text('1930 RP'), findsOneWidget);
       expect(find.text('Kế tiếp: Huyền Thoại'), findsOneWidget);
+      expect(find.text('Tỉ lệ thắng'), findsOneWidget);
+      expect(find.text('75%'), findsOneWidget);
+      expect(find.text('Kim Cương'), findsNothing);
     });
 
     testWidgets('EditProfileDialog displays Top 10 Challenger badge and accumulated stars',

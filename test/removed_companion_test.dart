@@ -22,7 +22,7 @@ void main() {
       expect(profile.selectedCompanionId, isNull);
       expect(profile.unlockedCompanionIds, ['luna_fox', 'pyro_frost_dragon']);
       expect(profile.gold, 1234);
-      expect(profile.diamonds, 87);
+      expect(profile.toJson().containsKey('diamonds'), isFalse);
       expect(profile.selectedHeroId, 'ember_02');
       expect(
         PlayerProfile.fromJson(profile.toJson()).selectedCompanionId,

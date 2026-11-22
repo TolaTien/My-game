@@ -11,7 +11,6 @@ import 'services/auth_service.dart';
 import 'services/database_service.dart';
 import 'services/firebase_bootstrap.dart';
 import 'services/firebase_database_service.dart';
-import 'services/game_settings_service.dart';
 import 'services/player_storage.dart';
 
 void main() async {
@@ -52,9 +51,8 @@ void main() async {
     await DatabaseService.instance.updateLeaderboard(PlayerStorage.currentProfile);
   }
 
-  // Khởi tạo hệ thống âm thanh và cài đặt trò chơi
+  // Khởi tạo hệ thống âm thanh
   await AudioService.instance.initialize();
-  await GameSettingsService.instance.initialize();
 
   // Khởi chạy giao diện ngay lập tức để tránh lỗi ANR (Application Not Responding)
   runApp(BigWarApp(isSignedIn: isSignedIn));
