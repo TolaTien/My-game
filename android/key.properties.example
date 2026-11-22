@@ -1,0 +1,9 @@
+# Sao chép file này thành `android/key.properties` (file thật đã được .gitignore)
+# để ký bản phát hành APK release bằng khóa riêng (keystore).
+#
+# Tạo keystore mới (chỉ chạy 1 lần, KHÔNG commit file .jks lên Git):
+#   keytool -genkey -v -keystore android/app/big-war-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias bigwar
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=bigwar
+storeFile=big-war-release.jks

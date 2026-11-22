@@ -64,3 +64,5 @@ server/ai_proxy/.venv/
 *.jks
 *.keystore
 android/key.properties
+android/app/google-services.json
+android/app/src/google-services.json
