@@ -18,7 +18,11 @@ timeout /t 3 /nobreak >nul
 
 REM 3. Chay ung dung len may ao
 echo [3/3] Dang khoi chay Flutter len Medium Phone...
-call flutter run -d emulator-5554
+if exist ".env" (
+    call flutter run -d emulator-5554 --dart-define-from-file=.env
+) else (
+    call flutter run -d emulator-5554
+)
 
 echo.
 echo [DA DONG] Hoan tat.
