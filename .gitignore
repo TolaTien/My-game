@@ -65,3 +65,4 @@ server/ai_proxy/.venv/
 *.jks
 *.keystore
 android/key.properties
+emulator_screenshot.png
