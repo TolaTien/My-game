@@ -1,4 +1,4 @@
-import 'dart:math' show max;
+import 'dart:math' show max, min, pi;
 
 import 'package:flame/game.dart';
 import 'package:flame/components.dart';
@@ -23,6 +23,12 @@ import 'components/player_skill_effect.dart';
 import 'components/hero_projectile.dart';
 
 class GoldRushGame extends FlameGame with HasCollisionDetection {
+  static const _hitStopDuration = .050;
+  static const _hitStopScale = .1;
+
+  final bool _combatHitStopEnabled;
+  double _hitStopRemaining = 0;
+
   final PlayerProfile? playerProfile;
   final MapAssetConfig? selectedMapConfig;
   late MapAssetConfig currentMapConfig;
@@ -56,7 +62,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   bool isVictoryTriggered = false;
   bool isGameOverTriggered = false;
 
-  GoldRushGame({this.playerProfile, this.selectedMapConfig}) {
+  GoldRushGame({
+    this.playerProfile,
+    this.selectedMapConfig,
+    bool enableCombatHitStop = true,
+  }) : _combatHitStopEnabled = enableCombatHitStop {
     pauseWhenBackgrounded = false;
     currentMapConfig =
         selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
@@ -124,12 +134,40 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   @override
+  set paused(bool value) {
+    if (value) {
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
+    }
+    super.paused = value;
+  }
+
+  @override
+  void pauseEngine() {
+    _hitStopRemaining = 0;
+    player.clearBasicAttackBuffer();
+    super.pauseEngine();
+  }
+
+  @override
   void update(double dt) {
+    if (paused || isVictoryTriggered || isGameOverTriggered) {
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
+    }
+    // Consume real time before stepping so impacts during this update get
+    // their full window. Any part of this frame past expiry runs at full speed.
+    if (_hitStopRemaining > 0 && dt > 0) {
+      final slowedTime = min(dt, _hitStopRemaining);
+      _hitStopRemaining -= slowedTime;
+      dt -= slowedTime * (1 - _hitStopScale);
+    }
     super.update(dt);
 
     // Kiểm tra nhân vật tử trận -> Kích hoạt Thất Bại
     if (!isGameOverTriggered && player.currentHp <= 0) {
       isGameOverTriggered = true;
+      _hitStopRemaining = 0;
       AudioService.instance.playSfx(SfxSound.attackHammer);
       onGameOver?.call();
       return;
@@ -146,6 +184,8 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         skeletons.isEmpty &&
         isBossDefeated) {
       isVictoryTriggered = true;
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
       AudioService.instance.playSfx(SfxSound.wheelJackpot);
       onVictory?.call();
     }
@@ -161,6 +201,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void advanceToNextFloor({MapAssetConfig? nextMap}) {
+    _hitStopRemaining = 0;
     currentFloor++;
     isVictoryTriggered = false;
     isGameOverTriggered = false;
@@ -201,6 +242,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void retryFloor() {
+    _hitStopRemaining = 0;
     isVictoryTriggered = false;
     isGameOverTriggered = false;
 
@@ -270,6 +312,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
 
   @override
   void onRemove() {
+    _hitStopRemaining = 0;
     AudioService.instance.stopBgm();
     companion?.cleanup();
     super.onRemove();
@@ -393,13 +436,11 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
   }
 
   void onBasicAttack() {
-    if (paused ||
-        isVictoryTriggered ||
-        isGameOverTriggered ||
-        !player.performBasicAttack()) {
-      return;
-    }
+    if (paused || isVictoryTriggered || isGameOverTriggered) return;
+    player.performBasicAttack(onStarted: _resolveBasicAttack);
+  }
 
+  void _resolveBasicAttack() {
     final heroId = player.heroId;
     final isRanger = heroId == 'ranger';
     final isEmber = heroId == 'ember_02' || heroId == 'ember';
@@ -460,6 +501,8 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         type: pType,
         isFromPlayer: true,
         onHit: (target, hitPos) {
+          // HeroProjectile calls this after applying damage to a live target.
+          if (dmg.isFinite && dmg > 0) _startCombatHitStop();
           _spawnDamageNumber(
             hitPos,
             dmg.toInt(),
@@ -484,7 +527,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
         continue;
       }
       if (enemy.currentHp > 0 && player.canHitBasicAttack(enemy.position)) {
-        enemy.takeDamage(dmg);
+        _applyPlayerDamage(enemy, dmg);
         _spawnDamageNumber(
           enemy.position,
           dmg.toInt(),
@@ -502,7 +545,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       }
       if (skeleton.currentHp > 0 &&
           player.canHitBasicAttack(skeleton.position)) {
-        skeleton.takeDamage(dmg);
+        _applyPlayerDamage(skeleton, dmg);
         _spawnDamageNumber(
           skeleton.position,
           dmg.toInt(),
@@ -515,7 +558,7 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
 
     if (boss != null && boss!.isMounted && !boss!.isDefeated) {
       if (player.canHitBasicAttack(boss!.position, targetPadding: 15)) {
-        boss!.takeDamage(dmg);
+        _applyPlayerDamage(boss!, dmg);
         _spawnDamageNumber(
           boss!.position,
           dmg.toInt(),
@@ -605,19 +648,28 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     switch (effects.delivery) {
       case SkillDelivery.projectile:
         if (isLoaded) {
-          _addSkillEffect(
-            PlayerSkillProjectile(
-              position: player.position,
-              direction: facing,
-              range: config.radius,
-              piercing: effects.piercing,
-              color: color,
-              animation: animation,
-              targets: () => _liveTargets,
-              canTravel: _isWalkable,
-              onHit: (target) => hit(target, damage, direction: facing),
-            ),
-          );
+          final multishot = slot == 1 && config.id == 'ranger_multishot';
+          final angles = multishot
+              ? const [0.0, -pi / 15, pi / 15]
+              : const [0.0];
+          final shotDamage = damage / angles.length;
+          for (final angle in angles) {
+            final direction = facing.clone()..rotate(angle);
+            _addSkillEffect(
+              PlayerSkillProjectile(
+                position: player.position,
+                direction: direction,
+                range: config.radius,
+                piercing: effects.piercing,
+                color: color,
+                animation: animation,
+                targets: () => _liveTargets,
+                canTravel: _isWalkable,
+                onHit: (target) =>
+                    hit(target, shotDamage, direction: direction),
+              ),
+            );
+          }
         }
         break;
       case SkillDelivery.dash:
@@ -707,22 +759,20 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
     Vector2 direction,
   ) {
     if (damage <= 0) return;
+    _applyPlayerDamage(target, damage);
     if (target is ZombieEnemy) {
-      target.takeDamage(damage);
       target.applyControl(
         stunDuration: effects.stunDuration,
         knockback: effects.knockback,
         direction: direction,
       );
     } else if (target is SkeletonEnemy) {
-      target.takeDamage(damage);
       target.applyControl(
         stunDuration: effects.stunDuration,
         knockback: effects.knockback,
         direction: direction,
       );
     } else if (target is BossEnemy) {
-      target.takeDamage(damage);
       target.applyControl(
         stunDuration: effects.stunDuration,
         knockback: effects.knockback,
@@ -736,6 +786,40 @@ class GoldRushGame extends FlameGame with HasCollisionDetection {
       damage.round(),
       CombatTextType.skillDamage,
     );
+  }
+
+  void _applyPlayerDamage(PositionComponent target, double damage) {
+    final hpBefore = _combatHitStopEnabled ? _combatTargetHp(target) : 0.0;
+    switch (target) {
+      case ZombieEnemy():
+        target.takeDamage(damage);
+      case SkeletonEnemy():
+        target.takeDamage(damage);
+      case BossEnemy():
+        target.takeDamage(damage);
+    }
+    if (_combatHitStopEnabled &&
+        damage > 0 &&
+        _combatTargetHp(target) < hpBefore) {
+      _startCombatHitStop();
+    }
+  }
+
+  double _combatTargetHp(PositionComponent target) => switch (target) {
+    ZombieEnemy() => target.currentHp,
+    SkeletonEnemy() => target.currentHp,
+    BossEnemy() => target.currentHp,
+    _ => 0,
+  };
+
+  void _startCombatHitStop() {
+    if (_combatHitStopEnabled &&
+        !paused &&
+        !isVictoryTriggered &&
+        !isGameOverTriggered) {
+      // Refresh the remaining window rather than adding a window per target.
+      _hitStopRemaining = _hitStopDuration;
+    }
   }
 
   /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ (Trường Trọng Lực Hoàng Kim - Aegis-X9)

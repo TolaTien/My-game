@@ -258,6 +258,18 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   }
 
   @override
+  set paused(bool value) {
+    if (value) player.clearBasicAttackBuffer();
+    super.paused = value;
+  }
+
+  @override
+  void pauseEngine() {
+    player.clearBasicAttackBuffer();
+    super.pauseEngine();
+  }
+
+  @override
   void update(double dt) {
     if (!dt.isFinite || dt < 0) return;
     player.actionsEnabled = !paused && matchState == PvpMatchState.fighting;
@@ -483,12 +495,11 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   }
 
   void onBasicAttack() {
-    if (paused ||
-        matchState != PvpMatchState.fighting ||
-        !player.performBasicAttack()) {
-      return;
-    }
+    if (paused || matchState != PvpMatchState.fighting) return;
+    player.performBasicAttack(onStarted: _resolveBasicAttack);
+  }
 
+  void _resolveBasicAttack() {
     final heroId = player.heroId;
     final isRanger = heroId == 'ranger';
     final isEmber = heroId == 'ember_02' || heroId == 'ember';
