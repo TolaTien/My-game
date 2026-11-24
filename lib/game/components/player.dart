@@ -16,7 +16,13 @@ import 'hero_sprite_animator.dart';
 class PlayerComponent extends PositionComponent with CollisionCallbacks {
   // Chỉ số nhân vật (giữ chuẩn baseline cho toàn bộ unit test)
   double maxHp = GameConstants.playerMaxHp;
-  double currentHp = GameConstants.playerMaxHp;
+  double _currentHp = GameConstants.playerMaxHp;
+  double get currentHp => _currentHp;
+  set currentHp(double value) {
+    _currentHp = value;
+    if (value <= 0) clearBasicAttackBuffer();
+  }
+
   double maxKi = GameConstants.playerMaxKi;
   double currentKi = GameConstants.playerMaxKi;
   double damage = GameConstants.playerBaseDamage;
@@ -33,8 +39,19 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   bool isFacingRight = true;
   int facingRow = 2; // 0: Down, 1: Down-Right, 2: Right, 3: Up-Right, 4: Up
   bool isAttacking = false;
-  bool actionsEnabled = true;
+  bool _actionsEnabled = true;
+  bool get actionsEnabled => _actionsEnabled;
+  set actionsEnabled(bool value) {
+    _actionsEnabled = value;
+    if (!value) clearBasicAttackBuffer();
+  }
+
   bool get canAct => actionsEnabled && currentHp > 0;
+  static const double _basicAttackDuration = .25;
+  static const double _basicAttackBufferWindow = .15;
+  bool _isBasicAttackSwing = false;
+  void Function()? _bufferedBasicAttack;
+  double _basicAttackBufferRemaining = 0;
   static const double basicAttackRange = 55;
   static const double comboFinisherRange = 80;
   static const double basicAttackHalfAngle = pi / 3;
@@ -45,11 +62,9 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double _dashTrailTimer = 0;
   Vector2? _visualPosition;
 
-  // Combo 3 đòn đánh thường (Đòn 1: Chém ngang -> Đòn 2: Chém chéo -> Đòn 3: Xoay 360 + Sóng kiếm)
+  // Basic combo: horizontal sweep, diagonal cut, circular finisher.
   int comboStep = 0;
   double comboResetTimer = 0.0;
-  double swordWaveTimer = 0.0;
-  double swordWaveDist = 0.0;
 
   // Hiệu ứng Hit / Hurt flash trắng (0.08s)
   double hitFlashTimer = 0.0;
@@ -212,10 +227,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       comboResetTimer -= dt;
       if (comboResetTimer <= 0) comboStep = 0;
     }
-    if (swordWaveTimer > 0) {
-      swordWaveTimer = max(0.0, swordWaveTimer - dt);
-      swordWaveDist += 280.0 * dt;
-    }
     if (skill1TrailTimer > 0) {
       skill1TrailTimer = max(0.0, skill1TrailTimer - dt);
     }
@@ -260,6 +271,13 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
 
     // Xử lý hoạt ảnh vung vũ khí đánh thường
+    if (_bufferedBasicAttack != null) {
+      _basicAttackBufferRemaining -= dt;
+      // Keep the exact boundary inclusive despite floating-point frame deltas.
+      if (!isAttacking || _basicAttackBufferRemaining < -1e-9) {
+        clearBasicAttackBuffer();
+      }
+    }
     if (isAttacking) {
       attackTimer += dt;
       final swing = ((visualAnimator.actionProgress - .12) / .58).clamp(
@@ -267,9 +285,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         1.0,
       );
       attackAngle = -.9 + (1 - pow(1 - swing, 3)) * 2.1;
-      if (attackTimer >= 0.25) {
+      if (attackTimer >= _basicAttackDuration) {
         isAttacking = false;
+        _isBasicAttackSwing = false;
         attackTimer = 0.0;
+        if (canAct) _bufferedBasicAttack?.call();
       }
     }
 
@@ -336,24 +356,43 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     _ => Vector2(isFacingRight ? 1 : -1, 0),
   };
 
-  bool performBasicAttack() {
-    if (!canAct || isAttacking) return false;
+  /// Returns true if the swing starts now. A queued press calls [onStarted]
+  /// only when its swing starts.
+  bool performBasicAttack({void Function()? onStarted}) {
+    if (!canAct) return false;
+    if (isAttacking) {
+      if (_isBasicAttackSwing &&
+          attackTimer >= _basicAttackDuration - _basicAttackBufferWindow &&
+          _bufferedBasicAttack == null) {
+        _basicAttackBufferRemaining = _basicAttackBufferWindow;
+        _bufferedBasicAttack = () => _startBasicAttack(onStarted);
+      }
+      return false;
+    }
+
+    _startBasicAttack(onStarted);
+    return true;
+  }
+
+  void clearBasicAttackBuffer() {
+    _bufferedBasicAttack = null;
+    _basicAttackBufferRemaining = 0;
+  }
+
+  void _startBasicAttack(void Function()? onStarted) {
+    clearBasicAttackBuffer();
+    _isBasicAttackSwing = true;
     isAttacking = true;
     attackTimer = 0.0;
-    visualAnimator.playAction(.25);
+    visualAnimator.playAction(_basicAttackDuration);
     comboStep = (comboStep % 3) + 1;
     comboResetTimer = 1.2;
-
-    if (comboStep == 3) {
-      swordWaveTimer = 0.28;
-      swordWaveDist = 14.0;
-    }
 
     attackAngle = isFacingRight ? -0.8 : 0.8;
     AudioService.instance.playSfx(
       heroId == 'ranger' ? SfxSound.attackArrow : SfxSound.attackHammer,
     );
-    return true;
+    onStarted?.call();
   }
 
   bool canHitBasicAttack(
@@ -373,6 +412,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
 
   bool useSkill1() {
     if (!_tryCastSkill(1)) return false;
+    clearBasicAttackBuffer();
+    _isBasicAttackSwing = false;
     isAttacking = true;
     attackTimer = -0.3; // Kéo dài đòn xoay
     skill1TrailTimer = 0.35;
@@ -420,6 +461,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void resetCombatState() {
+    clearBasicAttackBuffer();
+    _isBasicAttackSwing = false;
     visualAnimator.reset();
     _visualPosition = null;
     afterimagePositions.clear();
@@ -436,7 +479,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     skill1TrailTimer = 0;
     skill2VortexTimer = 0;
     skill3JudgmentTimer = 0;
-    swordWaveTimer = 0;
     moveDirection = Vector2.zero();
   }
 
@@ -681,8 +723,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       }
     }
 
-    // Vệt chém lưỡi liềm & Sóng kiếm đồng bộ theo đòn đánh của từng nhân vật (Combo 1-2-3)
-    if (isAttacking && sprites == null) {
+    // Preserve the legacy slash for non-basic actions such as skill 1.
+    if (isAttacking && !_isBasicAttackSwing && sprites == null) {
       final slashColor = _heroPrimaryColor;
       final secondarySlash = _heroSecondaryColor;
       final sweepStart = comboStep == 2 ? -pi / 1.4 : -pi / 2.2;
@@ -720,26 +762,6 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       );
     }
 
-    if (swordWaveTimer > 0 && sprites == null) {
-      final wavePaint = Paint()
-        ..color = _heroPrimaryColor.withValues(
-          alpha: (swordWaveTimer / 0.28).clamp(0.0, 1.0),
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.8;
-      canvas.drawArc(
-        Rect.fromCenter(
-          center: Offset(size.x / 2 + swordWaveDist, size.y / 2),
-          width: 26,
-          height: 38,
-        ),
-        -pi / 2.5,
-        pi * 0.85,
-        false,
-        wavePaint,
-      );
-    }
-
     // Nháy trắng khi trúng đòn (Hit Flash 0.08s)
     if (hitFlashTimer > 0) {
       canvas.drawRRect(
@@ -752,11 +774,61 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     }
 
     canvas.restore();
+    _renderBasicAttackImpact(canvas, center);
 
     // --- BONG BÓNG QUICK CHAT (SPEECH BUBBLE) ---
     if (speechBubbleText != null) {
       _renderSpeechBubble(canvas, speechBubbleText!);
     }
+  }
+
+  void _renderBasicAttackImpact(Canvas canvas, Offset center) {
+    if (!canAct || !isAttacking || !_isBasicAttackSwing || comboStep == 0) {
+      return;
+    }
+
+    final finisher = comboStep == 3;
+    final diagonal = comboStep == 2;
+    // Swing start is also melee impact / projectile release, even if buffered.
+    final duration = finisher ? .18 : (diagonal ? .14 : .12);
+    final remaining = 1 - attackTimer / duration;
+    if (remaining <= 0) return;
+    final fade = remaining * remaining * (3 - 2 * remaining);
+    final spread = 4 * (1 - remaining * remaining);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = finisher ? 3.6 : (diagonal ? 2.8 : 2.4)
+      ..color = _heroPrimaryColor.withValues(
+        alpha: fade * (finisher ? .66 : (diagonal ? .56 : .50)),
+      );
+
+    final direction = attackDirection;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(atan2(direction.y, direction.x));
+    if (finisher) {
+      final ring = Rect.fromCircle(center: Offset.zero, radius: 29 + spread);
+      canvas.drawArc(ring, .12, pi - .24, false, paint);
+      canvas.drawArc(ring, pi + .12, pi - .24, false, paint);
+      paint
+        ..strokeWidth = 1.6
+        ..color = _heroSecondaryColor.withValues(alpha: fade * .38);
+      final rim = ring.inflate(4);
+      canvas.drawArc(rim, -.4, .8, false, paint);
+      canvas.drawArc(rim, pi - .4, .8, false, paint);
+    } else {
+      canvas.translate(11, 0);
+      if (diagonal) canvas.rotate(isFacingRight ? -.48 : .48);
+      final sweep = Rect.fromCenter(
+        center: Offset.zero,
+        width: (diagonal ? 46 : 52) + spread,
+        height: (diagonal ? 54 : 36) + spread,
+      );
+      final halfSweep = diagonal ? 1.04 : 1.16;
+      canvas.drawArc(sweep, -halfSweep, 2 * halfSweep, false, paint);
+    }
+    canvas.restore();
   }
 
   /// Vẽ Kaelen & Nova Blade với đầy đủ Cổ, Khuôn mặt sáng rõ, Vai, 2 Tay cầm Song Đao, Thắt lưng, Đùi & Giày
