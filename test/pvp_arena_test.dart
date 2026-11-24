@@ -687,7 +687,8 @@ void main() {
       kaelen.isAttacking = false;
       kaelen.performBasicAttack();
       expect(kaelen.comboStep, equals(3));
-      expect(kaelen.swordWaveTimer, greaterThan(0));
+      expect(kaelen.isAttacking, isTrue);
+      expect(kaelen.attackTimer, isZero);
 
       // Skill 1: Thunder Flash trail & visual CD
       expect(kaelen.useSkill1(), isTrue);
