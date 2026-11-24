@@ -447,12 +447,18 @@ class BossEnemy extends PositionComponent
       final progress =
           (stateTimer / flameBurstTelegraphDuration).clamp(0.0, 1.0);
       final lanePaint = Paint()
-        ..color = const Color(0x33FFB300)
+        ..color = const Color(0xA6FFB300)
         ..strokeWidth = BossFlameProjectile.hitRadius * 2;
       final arrowPaint = Paint()
         ..color = const Color(0xFFFFD54F)
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke;
+      final cueOutline = Paint()
+        ..color = const Color(0xFF101018)
+        ..strokeWidth = 3;
+      final cuePaint = Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..strokeWidth = 1.5;
       for (int i = 0; i < flameBurstProjectileCount; i++) {
         final dir = flameDirection(i);
         final ray = Offset(dir.x, dir.y);
@@ -462,6 +468,18 @@ class BossEnemy extends PositionComponent
         final side = Offset(-dir.y, dir.x);
         canvas.drawLine(tip - ray * 10 + side * 5, tip, arrowPaint);
         canvas.drawLine(tip - ray * 10 - side * 5, tip, arrowPaint);
+        // Repeated, outlined chevrons stay readable without hue or flashing.
+        for (double distance = 120;
+            distance <= flameBurstSpeed * BossFlameProjectile.lifetime - 28;
+            distance += 72) {
+          final cueTip = center + ray * (distance + 28 * progress);
+          final left = cueTip - ray * 10 + side * 4;
+          final right = cueTip - ray * 10 - side * 4;
+          canvas.drawLine(left, cueTip, cueOutline);
+          canvas.drawLine(right, cueTip, cueOutline);
+          canvas.drawLine(left, cueTip, cuePaint);
+          canvas.drawLine(right, cueTip, cuePaint);
+        }
       }
     }
 
@@ -730,6 +748,22 @@ class GroundSlamTelegraph extends PositionComponent {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4.0;
       canvas.drawCircle(center, radius, flashPaint);
+    }
+
+    // Keep the damage boundary fixed and patterned throughout windup/impact.
+    final boundary = Rect.fromCircle(center: center, radius: radius);
+    final dashOutline = Paint()
+      ..color = const Color(0xFF101018)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4;
+    final dashPaint = Paint()
+      ..color = const Color(0xFFFFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    for (int i = 0; i < 24; i++) {
+      final angle = i * pi / 12;
+      canvas.drawArc(boundary, angle, pi / 18, false, dashOutline);
+      canvas.drawArc(boundary, angle, pi / 18, false, dashPaint);
     }
   }
 }
