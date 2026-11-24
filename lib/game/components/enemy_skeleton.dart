@@ -21,6 +21,9 @@ class SkeletonEnemy extends PositionComponent
   Vector2 previousPosition = Vector2.zero();
   double shootCooldown = 0.0;
   double stunTimer = 0;
+  static const double hitFlashDuration = 0.14;
+  double _hitFlashTimer = 0;
+  double get hitFlashTimer => _hitFlashTimer;
   bool isFacingRight = true;
 
   final Random random;
@@ -43,6 +46,7 @@ class SkeletonEnemy extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    _hitFlashTimer = max(0, _hitFlashTimer - dt);
     previousPosition.setFrom(position);
     if (stunTimer > 0) {
       stunTimer = max(0, stunTimer - dt);
@@ -146,13 +150,22 @@ class SkeletonEnemy extends PositionComponent
   void takeDamage(double dmg) {
     currentHp -= dmg;
     if (currentHp <= 0) {
+      _hitFlashTimer = 0;
       // Thưởng 50 EXP cho player
       player.gainExp(50);
       _dropLoot();
       game.skeletons.remove(this);
       removeFromParent();
+    } else if (dmg > 0) {
+      _hitFlashTimer = hitFlashDuration;
     }
   }
+
+  Color _hitTint(Color base) => Color.lerp(
+    base,
+    const Color(0xFFFFB3A7),
+    0.65 * _hitFlashTimer / hitFlashDuration,
+  )!;
 
   void _dropLoot() {
     final rand = random.nextDouble();
@@ -178,6 +191,7 @@ class SkeletonEnemy extends PositionComponent
 
   @override
   void render(Canvas canvas) {
+    if (currentHp <= 0) return;
     super.render(canvas);
 
     // 1. Bóng đổ dưới chân
@@ -194,8 +208,8 @@ class SkeletonEnemy extends PositionComponent
       canvas.translate(-size.x, 0);
     }
 
-    final bonePaint = Paint()..color = const Color(0xFFE0E0E0);
-    final boneShadow = Paint()..color = const Color(0xFF9E9E9E);
+    final bonePaint = Paint()..color = _hitTint(const Color(0xFFE0E0E0));
+    final boneShadow = Paint()..color = _hitTint(const Color(0xFF9E9E9E));
 
     // 2.1 Chân xương
     canvas.drawRect(Rect.fromLTWH(10, size.y - 10, 3, 8), bonePaint);
@@ -211,7 +225,7 @@ class SkeletonEnemy extends PositionComponent
     canvas.drawRect(Rect.fromLTWH(12, 23, 8, 2.2), bonePaint);
 
     // 2.4 Hộp sọ Skeleton
-    final skullPaint = Paint()..color = const Color(0xFFEEEEEE);
+    final skullPaint = Paint()..color = _hitTint(const Color(0xFFEEEEEE));
     canvas.drawRRect(
       RRect.fromRectAndRadius(const Rect.fromLTWH(8, 2, 16, 12), const Radius.circular(3)),
       skullPaint,

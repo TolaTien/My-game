@@ -18,6 +18,9 @@ class ZombieEnemy extends PositionComponent
   Vector2 previousPosition = Vector2.zero();
   double attackCooldown = 0.0;
   double stunTimer = 0;
+  static const double hitFlashDuration = 0.14;
+  double _hitFlashTimer = 0;
+  double get hitFlashTimer => _hitFlashTimer;
 
   final ChaseNavigation navigation;
 
@@ -38,6 +41,7 @@ class ZombieEnemy extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    _hitFlashTimer = max(0, _hitFlashTimer - dt);
     previousPosition.setFrom(position);
     if (stunTimer > 0) {
       stunTimer = max(0, stunTimer - dt);
@@ -93,17 +97,27 @@ class ZombieEnemy extends PositionComponent
   void takeDamage(double dmg) {
     currentHp -= dmg;
     if (currentHp <= 0) {
+      _hitFlashTimer = 0;
       // Thưởng EXP cho player
       player.gainExp(35);
       if (isMounted) {
         game.enemies.remove(this);
       }
       removeFromParent();
+    } else if (dmg > 0) {
+      _hitFlashTimer = hitFlashDuration;
     }
   }
 
+  Color _hitTint(Color base) => Color.lerp(
+    base,
+    const Color(0xFFFFB3A7),
+    0.65 * _hitFlashTimer / hitFlashDuration,
+  )!;
+
   @override
   void render(Canvas canvas) {
+    if (currentHp <= 0) return;
     super.render(canvas);
 
     // 1. Bóng đổ
@@ -114,18 +128,18 @@ class ZombieEnemy extends PositionComponent
     );
 
     // 2. Thân Zombie xanh rêu (Undead)
-    final bodyPaint = Paint()..color = const Color(0xFF388E3C);
+    final bodyPaint = Paint()..color = _hitTint(const Color(0xFF388E3C));
     canvas.drawRRect(
       RRect.fromRectAndRadius(const Rect.fromLTWH(8, 14, 16, 16), const Radius.circular(3)),
       bodyPaint,
     );
 
     // Áo rách tơi tả
-    final clothesPaint = Paint()..color = const Color(0xFF4E342E);
+    final clothesPaint = Paint()..color = _hitTint(const Color(0xFF4E342E));
     canvas.drawRect(const Rect.fromLTWH(8, 18, 16, 8), clothesPaint);
 
     // 3. Đầu Zombie
-    final headPaint = Paint()..color = const Color(0xFF4CAF50);
+    final headPaint = Paint()..color = _hitTint(const Color(0xFF4CAF50));
     canvas.drawRRect(
       RRect.fromRectAndRadius(const Rect.fromLTWH(7, 2, 18, 14), const Radius.circular(4)),
       headPaint,
