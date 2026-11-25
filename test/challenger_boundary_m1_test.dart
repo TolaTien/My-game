@@ -354,8 +354,8 @@ void main() {
     );
 
     test('Collecting all 12 Boss coins strictly increments wallet by 12,000 Gold', () async {
-      final initialGold = PlayerStorage.currentProfile.gold; // 2000 default
-      expect(initialGold, 2000);
+      final initialGold = PlayerStorage.currentProfile.gold; // 500 default
+      expect(initialGold, 500);
 
       final player = PlayerComponent(position: Vector2(100, 100));
       expect(player.coinsCollected, 0);

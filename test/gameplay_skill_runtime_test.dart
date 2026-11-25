@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/core/game_keyboard_controller.dart';
 import 'package:my_game/game/components/player.dart';
 import 'package:my_game/game/components/floating_combat_text.dart';
-import 'package:my_game/game/components/player_skill_effect.dart';
+import 'package:my_game/game/components/hero_projectile.dart';
 import 'package:my_game/game/gold_rush_game.dart';
 import 'package:my_game/game/hud/game_hud.dart';
 import 'package:my_game/game/pvp_arena_game.dart';
@@ -98,8 +98,12 @@ void main() {
 
   test('Configured timed buffs expire without erasing progression or other shields', () {
     final player = PlayerComponent(position: Vector2.zero(), userHeroLevel: 10);
-    player.useSkill3();
-    expect(player.effectiveDamage, closeTo(player.damage * 1.6, 0.00001));
+    expect(player.skillConfig(3).id, 'george_berserk');
+    expect(player.useSkill3(), isTrue);
+    expect(player.isBerserk, isTrue);
+    expect(player.berserkTimer, 6);
+    expect(player.skill3VisualCd, 13);
+    expect(player.effectiveDamage, closeTo(player.damage * 1.55, 0.00001));
     player.gainExp(100);
     final progressedDamage = player.damage;
     final progressedSpeed = player.speed;
@@ -160,7 +164,7 @@ void main() {
     },
   );
 
-  for (final hero in ['ember_02', 'shadow_01']) {
+  for (final hero in ['ember_02', 'nova_blade']) {
     testWidgets(
       '$hero projectile has delayed impact and respects piercing once per target',
       (tester) async {
@@ -183,16 +187,15 @@ void main() {
         expect(first.currentHp, 1000);
         await tester.pump();
         game.pauseEngine();
-        final projectile = game.world.children
-            .whereType<PlayerSkillProjectile>()
-            .single;
+        final shots = game.world.children.whereType<HeroProjectile>().toList();
+        final projectile = hero == 'ember_02' ? shots[1] : shots.single;
         projectile.update(1);
         final damage =
             game.player.damage * game.player.skillConfig(1).damageMultiplier;
         expect(first.currentHp, closeTo(1000 - damage, .00001));
         expect(
           second.currentHp,
-          hero == 'shadow_01' ? closeTo(1000 - damage, .00001) : 1000,
+          hero == 'nova_blade' ? closeTo(1000 - damage, .00001) : 1000,
         );
         projectile.update(1);
         expect(first.currentHp, closeTo(1000 - damage, .00001));
@@ -235,7 +238,7 @@ void main() {
   );
 
   testWidgets(
-    'Orbital damage is delayed and totals the configured multiplier exactly',
+    'Valeria slot 2 deals its configured damage once and grants a shield',
     (tester) async {
       final game = GoldRushGame(
         selectedMapConfig: legacyTestMap,
@@ -250,25 +253,13 @@ void main() {
       final target = game.enemies.first;
       target.position = Vector2(440, 300);
       target.currentHp = 1000;
+      final damage =
+          game.player.damage * game.player.skillConfig(2).damageMultiplier;
       game.onSkill2();
-      expect(target.currentHp, 1000);
-      await tester.pump();
-      game.pauseEngine();
-      final area = game.world.children.whereType<PlayerSkillArea>().single;
-      expect(area.priority, greaterThan(game.dungeonMap.priority));
-      expect(area.priority, lessThan(game.player.priority));
-      area.update(.1);
-      expect(target.currentHp, 1000);
-      area.update(10);
-      expect(
-        target.currentHp,
-        closeTo(1000 - game.player.damage * 2.6, .00001),
-      );
-      area.update(10);
-      expect(
-        target.currentHp,
-        closeTo(1000 - game.player.damage * 2.6, .00001),
-      );
+      expect(target.currentHp, closeTo(1000 - damage, .00001));
+      expect(game.player.ironShieldTimer, greaterThan(0));
+      game.onSkill2();
+      expect(target.currentHp, closeTo(1000 - damage, .00001));
     },
   );
 
@@ -324,11 +315,14 @@ void main() {
     game.onSkill1();
     await tester.pump();
     game.pauseEngine();
-    final projectile = game.world.children
-        .whereType<PlayerSkillProjectile>()
-        .single;
-    projectile.update(1);
-    expect(projectile.position.x, lessThan(544));
+    final projectiles = game.world.children
+        .whereType<HeroProjectile>()
+        .toList();
+    expect(projectiles, hasLength(2));
+    for (final projectile in projectiles) {
+      projectile.update(1);
+      expect(projectile.position.x, lessThan(544));
+    }
     expect(target.currentHp, 1000);
   });
 
@@ -341,11 +335,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       game.onSkill3();
       await tester.pump();
-      expect(game.world.children.whereType<PlayerSkillArea>(), isNotEmpty);
+      expect(game.player.skill3JudgmentTimer, greaterThan(0));
       expect(game.player.isBerserk, isTrue);
       game.retryFloor();
       await tester.pump();
-      expect(game.world.children.whereType<PlayerSkillArea>(), isEmpty);
+      expect(game.player.skill3JudgmentTimer, 0);
       expect(game.player.isBerserk, isFalse);
       expect(game.player.skill3VisualCd, 0);
       expect(game.player.comboStep, 0);

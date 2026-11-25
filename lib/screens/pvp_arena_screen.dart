@@ -4,7 +4,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../core/game_keyboard_controller.dart';
-import '../game/components/player.dart';
+import '../game/combat/hero_skill_system.dart';
 import '../game/hud/virtual_joystick.dart';
 import '../game/pvp_arena_game.dart';
 import '../models/friend_party_models.dart';
@@ -1774,6 +1774,9 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     final game = _arenaGame!;
     final p = game.player;
     final isDesktopOrWeb = GamePlatformHelper.isDesktopOrWeb;
+    final s1 = HeroSkillSystem.getSkillMeta(p.heroId, 1);
+    final s2 = HeroSkillSystem.getSkillMeta(p.heroId, 2);
+    final s3 = HeroSkillSystem.getSkillMeta(p.heroId, 3);
 
     return SizedBox(
       width: 200,
@@ -1798,13 +1801,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 0,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.cyclone,
-              label: '25 Ki',
+              icon: s1.icon,
+              label: s1.shortLabel,
               hotkey: isDesktopOrWeb ? '1' : null,
-              color: const Color(0xFFFF9800),
+              color: s1.color,
               cooldownRemaining: p.skill1VisualCd,
-              maxCooldown: PlayerComponent.skill1MaxCd,
-              hasEnoughKi: p.currentKi >= 25,
+              maxCooldown: s1.cooldown,
+              hasEnoughKi: p.currentKi >= s1.kiCost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill1(),
             ),
@@ -1814,13 +1817,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 66,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.landslide,
-              label: '35 Ki',
+              icon: s2.icon,
+              label: s2.shortLabel,
               hotkey: isDesktopOrWeb ? '2' : null,
-              color: const Color(0xFF00B0FF),
+              color: s2.color,
               cooldownRemaining: p.skill2VisualCd,
-              maxCooldown: PlayerComponent.skill2MaxCd,
-              hasEnoughKi: p.currentKi >= 35,
+              maxCooldown: s2.cooldown,
+              hasEnoughKi: p.currentKi >= s2.kiCost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill2(),
             ),
@@ -1830,13 +1833,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
             right: 84,
             child: _PvpActionButton(
               size: 52,
-              icon: Icons.whatshot,
-              label: '40 Ki',
+              icon: s3.icon,
+              label: s3.shortLabel,
               hotkey: isDesktopOrWeb ? '3' : null,
-              color: const Color(0xFF7B1FA2),
+              color: s3.color,
               cooldownRemaining: p.skill3VisualCd,
-              maxCooldown: PlayerComponent.skill3MaxCd,
-              hasEnoughKi: p.currentKi >= 40,
+              maxCooldown: s3.cooldown,
+              hasEnoughKi: p.currentKi >= s3.kiCost,
               lowKiFlash: p.insufficientKiFlashTimer > 0,
               onTap: () => game.onSkill3(),
             ),

@@ -1,17 +1,22 @@
+import '../core/pve_balance.dart';
+
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../core/game_keyboard_controller.dart';
 import '../core/stat_growth_formula.dart';
-import '../game/gold_rush_game.dart';
+import '../game/big_war_game.dart';
 import '../game/hud/game_hud.dart';
 import '../registry/asset_registry.dart';
 import '../services/player_storage.dart';
 
 class GamePlayScreen extends StatefulWidget {
   final MapAssetConfig? initialMapConfig;
+  final int? initialFloor;
 
-  const GamePlayScreen({super.key, this.initialMapConfig});
+  const GamePlayScreen({super.key, this.initialMapConfig, this.initialFloor});
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
@@ -19,18 +24,20 @@ class GamePlayScreen extends StatefulWidget {
 
 class _GamePlayScreenState extends State<GamePlayScreen>
     with WidgetsBindingObserver {
-  late final GoldRushGame _game;
+  late final BigWarGame _game;
   late final GameKeyboardController _keyboardController;
   final FocusNode _focusNode = FocusNode(debugLabel: 'gameplay_focus');
   bool _isPauseDialogOpen = false;
+  int _claimedCoins = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _game = GoldRushGame(
+    _game = BigWarGame(
       playerProfile: PlayerStorage.currentProfile,
       selectedMapConfig: widget.initialMapConfig,
+      initialFloor: widget.initialFloor,
     );
     _keyboardController = GameKeyboardController(
       onMoveDirectionChanged: (dir) => _game.setPlayerMoveDirection(dir),
@@ -49,6 +56,21 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   void _showVictoryDialog() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+
+      // Cộng Xu nhặt được trong trận vào tài khoản
+      final newCoins = _game.player.coinsCollected - _claimedCoins;
+      if (newCoins > 0) {
+        _claimedCoins = _game.player.coinsCollected;
+        await PlayerStorage.addXu(newCoins);
+      }
+
+      // Thưởng Vàng vượt ải thành công & lưu tiến độ tầng tiếp theo (kể cả khi về sảnh/thoát game)
+      final floorGoldReward = PveBalance.floorCompletionGold(
+        _game.currentFloor,
+      );
+      await PlayerStorage.addGold(floorGoldReward);
+      await PlayerStorage.savePveProgress(_game.currentFloor + 1);
+
       final levelUpResult = await PlayerStorage.addHeroExpAfterMatch(
         isVictory: true,
         isPvp: false,
@@ -63,7 +85,8 @@ class _GamePlayScreenState extends State<GamePlayScreen>
         barrierDismissible: false,
         builder: (dialogCtx) => _LevelClearDialog(
           floor: _game.currentFloor,
-          coinsEarned: _game.player.coinsCollected,
+          coinsEarned: newCoins > 0 ? newCoins : _game.player.coinsCollected,
+          goldReward: floorGoldReward,
           playerLevel: _game.player.level,
           heroLevelUpResult: levelUpResult,
           onNextFloor: () {
@@ -82,6 +105,14 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   void _showGameOverDialog() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+
+      // Dù thất thủ vẫn lưu toàn bộ Xu người chơi đã nỗ lực nhặt được
+      final newCoins = _game.player.coinsCollected - _claimedCoins;
+      if (newCoins > 0) {
+        _claimedCoins = _game.player.coinsCollected;
+        await PlayerStorage.addXu(newCoins);
+      }
+
       final levelUpResult = await PlayerStorage.addHeroExpAfterMatch(
         isVictory: false,
         isPvp: false,
@@ -180,6 +211,11 @@ class _GamePlayScreenState extends State<GamePlayScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_game.player.coinsCollected > _claimedCoins) {
+      final unclaim = _game.player.coinsCollected - _claimedCoins;
+      _claimedCoins = _game.player.coinsCollected;
+      unawaited(PlayerStorage.addXu(unclaim));
+    }
     _keyboardController.detach();
     _focusNode.dispose();
     super.dispose();
@@ -192,7 +228,7 @@ class _GamePlayScreenState extends State<GamePlayScreen>
       body: Focus(
         focusNode: _focusNode,
         autofocus: true,
-        child: GameWidget<GoldRushGame>(
+        child: GameWidget<BigWarGame>(
           game: _game,
           overlayBuilderMap: {
             'HUD': (context, game) => GameHudOverlay(
@@ -275,6 +311,7 @@ class _PauseMenuDialog extends StatelessWidget {
 class _LevelClearDialog extends StatelessWidget {
   final int floor;
   final int coinsEarned;
+  final int goldReward;
   final int playerLevel;
   final HeroLevelUpResult heroLevelUpResult;
   final VoidCallback onNextFloor;
@@ -283,6 +320,7 @@ class _LevelClearDialog extends StatelessWidget {
   const _LevelClearDialog({
     required this.floor,
     required this.coinsEarned,
+    required this.goldReward,
     required this.playerLevel,
     required this.heroLevelUpResult,
     required this.onNextFloor,
@@ -356,10 +394,17 @@ class _LevelClearDialog extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _StatBadge(
-                      icon: Icons.monetization_on,
-                      iconColor: Colors.amber,
-                      label: 'Vàng tích lũy',
-                      value: '$coinsEarned Vàng',
+                      icon: Icons.currency_exchange_rounded,
+                      iconColor: Colors.orangeAccent,
+                      label: 'Xu nhặt được',
+                      value: '+$coinsEarned Xu',
+                    ),
+                    Container(width: 1, height: 28, color: Colors.white24),
+                    _StatBadge(
+                      icon: Icons.monetization_on_rounded,
+                      iconColor: Colors.amberAccent,
+                      label: 'Vàng vượt ải',
+                      value: '+$goldReward Vàng',
                     ),
                     Container(width: 1, height: 28, color: Colors.white24),
                     _StatBadge(
@@ -497,13 +542,13 @@ class _GameOverDialog extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(
-                      Icons.monetization_on,
-                      color: Colors.amber,
-                      size: 18,
+                      Icons.currency_exchange_rounded,
+                      color: Colors.orangeAccent,
+                      size: 20,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Vàng đã thu thập: $coinsEarned Vàng',
+                      'Xu đã thu thập: +$coinsEarned Xu',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,

@@ -1,0 +1,1126 @@
+import 'dart:math';
+
+import 'package:flame/game.dart';
+import 'package:flame/components.dart';
+
+import '../core/constants.dart';
+import '../core/pve_balance.dart';
+import '../registry/sprite_image_cache.dart';
+import 'components/player_skill_effect.dart';
+
+import 'package:flutter/foundation.dart';
+
+import '../models/player_profile.dart';
+import '../registry/asset_registry.dart';
+import '../services/audio_service.dart';
+import '../services/player_storage.dart';
+import 'combat/hero_skill_system.dart';
+import 'components/dungeon_map.dart';
+import 'components/player.dart';
+import 'components/enemy_zombie.dart';
+import 'components/enemy_skeleton.dart';
+import 'components/pickup_item.dart';
+import 'components/boss_enemy.dart';
+import 'components/companion_component.dart';
+import 'components/floating_combat_text.dart';
+import 'components/hero_projectile.dart';
+
+class BigWarGame extends FlameGame with HasCollisionDetection {
+  static const _hitStopDuration = .050;
+  static const _hitStopScale = .1;
+
+  final bool _combatHitStopEnabled;
+  double _hitStopRemaining = 0;
+
+  final List<PositionComponent> _skillEffects = [];
+  final PlayerProfile? playerProfile;
+  final MapAssetConfig? selectedMapConfig;
+  late MapAssetConfig currentMapConfig;
+
+  late final PlayerComponent player;
+  late DungeonMapComponent dungeonMap;
+  final List<BossEnemy> bosses = [];
+  BossEnemy? get boss {
+    for (final b in bosses) {
+      if (!b.isDefeated && b.isMounted) return b;
+    }
+    return bosses.isNotEmpty ? bosses.first : null;
+  }
+
+  CompanionComponent? companion;
+
+  /// Số lượng Boss tăng dần theo tầng (T1-2: 1, T3-5: 2, T6-8: 3, T9+: 4)
+  static int bossCountForFloor(int floor) {
+    if (floor <= 2) return 1;
+    if (floor <= 5) return 2;
+    if (floor <= 8) return 3;
+    return 4;
+  }
+
+  /// Số Zombie cộng thêm mỗi tầng (+1/tầng, tối đa +6)
+  static int extraZombiesForFloor(int floor) => max(0, min(6, floor - 1));
+
+  /// Số Skeleton cộng thêm theo tầng (+1 mỗi 2 tầng, tối đa +4)
+  static int extraSkeletonsForFloor(int floor) =>
+      max(0, min(4, (floor - 1) ~/ 2));
+
+  void scaleZombieForFloor(ZombieEnemy zombie, int floor) {
+    final f = max(1, floor);
+    final speedMult = min(1.40, 1.0 + (f - 1) * 0.05);
+    zombie.maxHp = PveBalance.zombieMaxHp(f);
+    zombie.currentHp = zombie.maxHp;
+    zombie.damage = PveBalance.zombieDamage(f);
+    zombie.speed = 65.0 * speedMult;
+  }
+
+  void scaleSkeletonForFloor(SkeletonEnemy skeleton, int floor) {
+    final f = max(1, floor);
+    final dmgMult = 1.0 + (f - 1) * 0.25;
+    final speedMult = min(1.40, 1.0 + (f - 1) * 0.05);
+    skeleton.maxHp = PveBalance.skeletonMaxHp(f);
+    skeleton.currentHp = skeleton.maxHp;
+    skeleton.speed = 50.0 * speedMult;
+    skeleton.arrowDamage = 10.0 * dmgMult;
+    skeleton.arrowSpeed = 220.0 * min(1.30, 1.0 + (f - 1) * 0.04);
+    skeleton.shootInterval = max(1.1, 1.8 - (f - 1) * 0.08);
+  }
+
+  void refreshBossHud() {
+    if (bosses.isEmpty) {
+      bossHpNotifier.value = null;
+      return;
+    }
+    double totalHp = 0.0;
+    double totalMaxHp = 0.0;
+    int aliveCount = 0;
+    bool anyEnraged = false;
+    int maxPhase = 1;
+    for (final b in bosses) {
+      totalMaxHp += b.maxHp;
+      if (!b.isDefeated) {
+        aliveCount++;
+        totalHp += b.currentHp;
+        if (b.isEnraged) anyEnraged = true;
+        if (b.phase > maxPhase) maxPhase = b.phase;
+      }
+    }
+    final title = bosses.length > 1
+        ? 'CHÚA TỂ HẦM NGỤC • TẦNG $currentFloor ($aliveCount/${bosses.length} BOSS)'
+        : 'CHÚA TỂ HẦM NGỤC • TẦNG $currentFloor';
+    bossHpNotifier.value = BossHpData(
+      currentHp: totalHp,
+      maxHp: totalMaxHp > 0 ? totalMaxHp : 1.0,
+      phase: maxPhase,
+      isEnraged: anyEnraged,
+      isDefeated: aliveCount == 0,
+      title: title,
+    );
+  }
+
+  final List<ZombieEnemy> enemies = [];
+  final List<SkeletonEnemy> skeletons = [];
+  final List<PickupItem> pickups = [];
+
+  // Reactive notifier cho Boss Health Bar HUD
+  final ValueNotifier<BossHpData?> bossHpNotifier = ValueNotifier(null);
+
+  // Callback thông báo cho Flutter HUD khi Player thay đổi stats
+  Function()? onPlayerStatsChanged;
+
+  // Callback thông báo cho Flutter HUD khi đổi map / chuyển tầng
+  Function()? onMapChanged;
+
+  // Callback chiến thắng màn chơi khi quét sạch quái hoặc vào portal
+  Function()? onVictory;
+
+  // Callback khi Player tử trận
+  Function()? onGameOver;
+
+  int currentFloor = 1;
+  bool isVictoryTriggered = false;
+  bool isGameOverTriggered = false;
+  double _bossClearedTimer = 0.0;
+
+  void triggerVictory() {
+    if (isVictoryTriggered || isGameOverTriggered) return;
+    isVictoryTriggered = true;
+    _hitStopRemaining = 0;
+    player.clearBasicAttackBuffer();
+    AudioService.instance.playSfx(SfxSound.wheelJackpot);
+    onVictory?.call();
+  }
+
+  BigWarGame({
+    this.playerProfile,
+    this.selectedMapConfig,
+    int? initialFloor,
+    bool enableCombatHitStop = true,
+  }) : _combatHitStopEnabled = enableCombatHitStop {
+    pauseWhenBackgrounded = false;
+    currentMapConfig =
+        selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
+    currentFloor = (initialFloor ?? activeProfile.pveCurrentFloor).clamp(
+      1,
+      9999,
+    );
+    final hero = activeProfile.selectedHeroId;
+    final userHeroLv = activeProfile.getHeroLevel(hero);
+    player = PlayerComponent(
+      position: Vector2(400, 300),
+      heroId: hero,
+      userHeroLevel: userHeroLv,
+    );
+  }
+
+  PlayerProfile get activeProfile =>
+      playerProfile ?? PlayerStorage.currentProfile;
+
+  List<List<bool>> get walkableGrid => dungeonMap.walkableGrid;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+
+    // 1. Thêm bản đồ hầm ngục
+    dungeonMap = DungeonMapComponent(config: currentMapConfig);
+    await world.add(dungeonMap);
+
+    // 2. Thêm Player ở tọa độ spawn của bản đồ
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
+    player.onStatsChanged = () => onPlayerStatsChanged?.call();
+    await world.add(player);
+
+    // 3. Thêm một số Zombie quái vật
+    _spawnZombies(floor: currentFloor);
+
+    // 4. Thêm Skeleton quái vật cung thủ tầm xa
+    _spawnSkeletons(floor: currentFloor);
+
+    // 5. Thêm các vật phẩm rải rác trên bản đồ
+    _spawnPickups();
+
+    // 6. Thêm Boss Chúa Tể Hầm Ngục
+    _spawnBoss(floor: currentFloor);
+
+    // 7. Thêm AI Companion Drone nếu người chơi đã trang bị
+    final companionId = activeProfile.selectedCompanionId;
+    if (companionId != null && companionId.isNotEmpty) {
+      companion = CompanionComponent(companionId: companionId, player: player);
+      await world.add(companion!);
+    }
+
+    // 8. Cấu hình Camera bám sát theo Player
+    camera.follow(player);
+    camera.viewfinder.zoom = 1.4; // Zoom vừa vặn chuẩn pixel art trên mobile
+
+    // 9. Bật Dungeon BGM
+    AudioService.instance.playBgm(BgmTrack.dungeon);
+
+    // Kích hoạt cập nhật HUD sau khi hoàn tất tải toàn bộ game world
+    onPlayerStatsChanged?.call();
+  }
+
+  @override
+  set paused(bool value) {
+    if (value) {
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
+    }
+    super.paused = value;
+  }
+
+  @override
+  void pauseEngine() {
+    _hitStopRemaining = 0;
+    player.clearBasicAttackBuffer();
+    super.pauseEngine();
+  }
+
+  @override
+  void update(double dt) {
+    if (paused || isVictoryTriggered || isGameOverTriggered) {
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
+    }
+    // Consume real time before stepping so impacts during this update get
+    // their full window. Any part of this frame past expiry runs at full speed.
+    if (_hitStopRemaining > 0 && dt > 0) {
+      final slowedTime = min(dt, _hitStopRemaining);
+      _hitStopRemaining -= slowedTime;
+      dt -= slowedTime * (1 - _hitStopScale);
+    }
+    super.update(dt);
+
+    // Kiểm tra nhân vật tử trận -> Kích hoạt Thất Bại
+    if (!isGameOverTriggered && player.currentHp <= 0) {
+      isGameOverTriggered = true;
+      _hitStopRemaining = 0;
+      player.clearBasicAttackBuffer();
+      AudioService.instance.playSfx(SfxSound.attackHammer);
+      onGameOver?.call();
+      return;
+    }
+
+    // Dọn dẹp quái đã bị tiêu diệt
+    enemies.removeWhere(
+      (e) => e.currentHp <= 0 || (e.isLoaded && !e.isMounted),
+    );
+    skeletons.removeWhere(
+      (s) => s.currentHp <= 0 || (s.isLoaded && !s.isMounted),
+    );
+
+    // Khi hạ sạch toàn bộ Boss -> dọn quái lẻ còn kẹt trên map và tự động báo chuyển màn
+    final allBossesDefeated =
+        bosses.isNotEmpty && bosses.every((b) => b.isDefeated);
+    if (!isVictoryTriggered && allBossesDefeated) {
+      if (enemies.isNotEmpty || skeletons.isNotEmpty) {
+        for (final e in List<ZombieEnemy>.from(enemies)) {
+          if (e.isMounted) e.removeFromParent();
+        }
+        enemies.clear();
+        for (final s in List<SkeletonEnemy>.from(skeletons)) {
+          if (s.isMounted) s.removeFromParent();
+        }
+        skeletons.clear();
+      }
+      _bossClearedTimer += dt;
+      if (_bossClearedTimer >= 1.2) {
+        triggerVictory();
+      }
+    }
+  }
+
+  Future<void> _switchDungeonMap(MapAssetConfig newMap) async {
+    currentMapConfig = newMap;
+    if (dungeonMap.isMounted) {
+      dungeonMap.removeFromParent();
+    }
+    dungeonMap = DungeonMapComponent(config: currentMapConfig);
+    await world.add(dungeonMap);
+  }
+
+  void advanceToNextFloor({MapAssetConfig? nextMap}) {
+    currentFloor++;
+    isVictoryTriggered = false;
+    isGameOverTriggered = false;
+    _bossClearedTimer = 0.0;
+
+    // Đổi sang một map ngẫu nhiên mới cho tầng tiếp theo (đảm bảo khác map hiện tại)
+    final newMap =
+        nextMap ??
+        GameAssetRegistry.instance.getRandomMap(excludeId: currentMapConfig.id);
+    _switchDungeonMap(newMap);
+
+    // Hồi phục sinh lực và Ki cho tầng mới
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
+    player.currentHp = player.maxHp;
+    player.currentKi = player.maxKi;
+
+    _cleanupFloorEntities();
+
+    // Sinh quái tầng mới mạnh hơn theo cấp tầng
+    _spawnZombies(floor: currentFloor);
+    _spawnSkeletons(floor: currentFloor);
+    _spawnPickups();
+    _spawnBoss(floor: currentFloor);
+
+    onPlayerStatsChanged?.call();
+    onMapChanged?.call();
+  }
+
+  void retryFloor() {
+    isVictoryTriggered = false;
+    isGameOverTriggered = false;
+    _bossClearedTimer = 0.0;
+
+    // Khi chơi lại, cũng chọn ngẫu nhiên map mới để trải nghiệm phong phú
+    final newMap = GameAssetRegistry.instance.getRandomMap(
+      excludeId: currentMapConfig.id,
+    );
+    _switchDungeonMap(newMap);
+
+    final pSpawnX = currentMapConfig.playerSpawn.isNotEmpty
+        ? currentMapConfig.playerSpawn[0] * 32.0
+        : 400.0;
+    final pSpawnY = currentMapConfig.playerSpawn.length > 1
+        ? currentMapConfig.playerSpawn[1] * 32.0
+        : 300.0;
+    player.position = Vector2(pSpawnX, pSpawnY);
+    player.currentHp = player.maxHp;
+    player.currentKi = player.maxKi;
+
+    _cleanupFloorEntities();
+
+    _spawnZombies(floor: currentFloor);
+    _spawnSkeletons(floor: currentFloor);
+    _spawnPickups();
+    _spawnBoss(floor: currentFloor);
+
+    onPlayerStatsChanged?.call();
+    onMapChanged?.call();
+  }
+
+  void _cleanupFloorEntities() {
+    _hitStopRemaining = 0;
+    player.resetCombatState();
+    companion?.resetForFloor();
+    for (final projectile
+        in world.children.whereType<CompanionPlasmaProjectile>().toList()) {
+      projectile.removeFromParent();
+    }
+    for (final projectile
+        in world.children.whereType<HeroProjectile>().toList()) {
+      projectile.removeFromParent();
+    }
+    for (final effect in _skillEffects) {
+      if (!effect.isRemoving && !effect.isRemoved) effect.removeFromParent();
+    }
+    _skillEffects.clear();
+
+    for (final e in List<ZombieEnemy>.from(enemies)) {
+      if (e.isMounted) e.removeFromParent();
+    }
+    enemies.clear();
+
+    for (final s in List<SkeletonEnemy>.from(skeletons)) {
+      if (s.isMounted) s.removeFromParent();
+    }
+    skeletons.clear();
+
+    for (final p in List<PickupItem>.from(pickups)) {
+      if (p.isMounted) p.removeFromParent();
+    }
+    pickups.clear();
+
+    for (final b in List<BossEnemy>.from(bosses)) {
+      if (b.isMounted) b.removeFromParent();
+    }
+    bosses.clear();
+    for (final portal
+        in world.children.whereType<BossVictoryPortal>().toList()) {
+      portal.removeFromParent();
+    }
+    for (final tele
+        in world.children.whereType<GroundSlamTelegraph>().toList()) {
+      tele.removeFromParent();
+    }
+    for (final flame
+        in world.children.whereType<BossFlameProjectile>().toList()) {
+      flame.removeFromParent();
+    }
+    bossHpNotifier.value = null;
+  }
+
+  @override
+  void onRemove() {
+    AudioService.instance.stopBgm();
+    companion?.cleanup();
+    super.onRemove();
+  }
+
+  void _spawnZombies({int floor = 1}) {
+    final List<Vector2> basePoints;
+    if (currentMapConfig.monsterPortals.isNotEmpty) {
+      basePoints = currentMapConfig.monsterPortals
+          .map((p) => Vector2((p[0] + 0.5) * 32.0, (p[1] + 0.5) * 32.0))
+          .toList();
+      basePoints.add(Vector2(540, 360));
+    } else {
+      basePoints = [
+        Vector2(200, 200),
+        Vector2(650, 220),
+        Vector2(250, 500),
+        Vector2(700, 520),
+        Vector2(500, 450),
+      ];
+    }
+
+    final totalCount = basePoints.length + extraZombiesForFloor(floor);
+    final maxW = max(
+      200.0,
+      currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 64.0,
+    );
+    final maxH = max(
+      200.0,
+      currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 64.0,
+    );
+
+    for (int i = 0; i < totalCount; i++) {
+      final base = basePoints[i % basePoints.length];
+      final ring = i ~/ basePoints.length;
+      final offset = ring == 0
+          ? Vector2.zero()
+          : Vector2(cos(i * 1.7) * 44.0 * ring, sin(i * 1.7) * 44.0 * ring);
+      final pt = Vector2(
+        (base.x + offset.x).clamp(64.0, maxW),
+        (base.y + offset.y).clamp(64.0, maxH),
+      );
+      final zombie = ZombieEnemy(position: pt, player: player);
+      scaleZombieForFloor(zombie, floor);
+      enemies.add(zombie);
+      world.add(zombie);
+    }
+  }
+
+  void _spawnSkeletons({int floor = 1}) {
+    final List<Vector2> basePoints;
+    if (currentMapConfig.monsterPortals.length >= 2) {
+      basePoints = [
+        Vector2(
+          (currentMapConfig.monsterPortals.first[0] + 0.5) * 32.0,
+          (currentMapConfig.monsterPortals.first[1] + 1.2) * 32.0,
+        ),
+        Vector2(
+          (currentMapConfig.monsterPortals.last[0] + 0.5) * 32.0,
+          (currentMapConfig.monsterPortals.last[1] - 1.2) * 32.0,
+        ),
+        Vector2(450, 420),
+      ];
+    } else {
+      basePoints = [Vector2(320, 180), Vector2(850, 320), Vector2(450, 560)];
+    }
+
+    final totalCount = basePoints.length + extraSkeletonsForFloor(floor);
+    final maxW = max(
+      200.0,
+      currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 64.0,
+    );
+    final maxH = max(
+      200.0,
+      currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 64.0,
+    );
+
+    for (int i = 0; i < totalCount; i++) {
+      final base = basePoints[i % basePoints.length];
+      final ring = i ~/ basePoints.length;
+      final offset = ring == 0
+          ? Vector2.zero()
+          : Vector2(cos(i * 2.1) * 48.0 * ring, sin(i * 2.1) * 48.0 * ring);
+      final pt = Vector2(
+        (base.x + offset.x).clamp(64.0, maxW),
+        (base.y + offset.y).clamp(64.0, maxH),
+      );
+      final skeleton = SkeletonEnemy(position: pt, player: player);
+      scaleSkeletonForFloor(skeleton, floor);
+      skeletons.add(skeleton);
+      world.add(skeleton);
+    }
+  }
+
+  void _spawnBoss({int floor = 1}) {
+    final bX = currentMapConfig.bossSpawn.isNotEmpty
+        ? currentMapConfig.bossSpawn[0] * 32.0
+        : 920.0;
+    final bY = currentMapConfig.bossSpawn.length > 1
+        ? currentMapConfig.bossSpawn[1] * 32.0
+        : 380.0;
+    final maxW = max(
+      240.0,
+      currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 80.0,
+    );
+    final maxH = max(
+      240.0,
+      currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 80.0,
+    );
+
+    final count = bossCountForFloor(floor);
+    final offsets = <Vector2>[
+      Vector2.zero(),
+      Vector2(-110, -85),
+      Vector2(-110, 85),
+      Vector2(-200, 0),
+    ];
+
+    for (int i = 0; i < count; i++) {
+      final off = offsets[i % offsets.length];
+      final pos = Vector2(
+        (bX + off.x).clamp(80.0, maxW),
+        (bY + off.y).clamp(80.0, maxH),
+      );
+      final spawnedBoss = BossEnemy(position: pos, player: player);
+      spawnedBoss.applyFloorDifficulty(floor);
+      bosses.add(spawnedBoss);
+      world.add(spawnedBoss);
+    }
+    refreshBossHud();
+  }
+
+  void _spawnPickups() {
+    final List<(Vector2, PickupType)> pickupSpawns;
+    if (currentMapConfig.buffNodes.isNotEmpty) {
+      pickupSpawns = [];
+      for (int i = 0; i < currentMapConfig.buffNodes.length; i++) {
+        final node = currentMapConfig.buffNodes[i];
+        final pos = Vector2((node[0] + 0.5) * 32.0, (node[1] + 0.5) * 32.0);
+        final type = i == 0
+            ? PickupType.healthPotion
+            : (i % 2 == 1 ? PickupType.goldCoin : PickupType.expGem);
+        pickupSpawns.add((pos, type));
+      }
+      if (currentMapConfig.buffNodes.length >= 2) {
+        final midNode = currentMapConfig.buffNodes[1];
+        pickupSpawns.add((
+          Vector2((midNode[0] + 2.0) * 32.0, (midNode[1] + 0.5) * 32.0),
+          PickupType.goldCoin,
+        ));
+      }
+    } else {
+      pickupSpawns = [
+        (Vector2(160, 360), PickupType.healthPotion),
+        (Vector2(550, 180), PickupType.expGem),
+        (Vector2(750, 400), PickupType.expGem),
+        (Vector2(350, 420), PickupType.goldCoin),
+        (Vector2(900, 200), PickupType.goldCoin),
+        (Vector2(600, 550), PickupType.goldCoin),
+      ];
+    }
+
+    for (final (pt, type) in pickupSpawns) {
+      final item = PickupItem(position: pt, type: type);
+      pickups.add(item);
+      world.add(item);
+    }
+  }
+
+  // --- ĐIỀU KHIỂN TỪ JOYSTICK & HUD ---
+
+  void setPlayerMoveDirection(Vector2 direction) {
+    if (paused || isVictoryTriggered || isGameOverTriggered || !player.canAct) {
+      player.moveDirection = Vector2.zero();
+      return;
+    }
+    player.moveDirection = direction;
+  }
+
+  void onBasicAttack() {
+    if (paused || isVictoryTriggered || isGameOverTriggered) return;
+    player.performBasicAttack(onStarted: _resolveBasicAttack);
+  }
+
+  void _resolveBasicAttack() {
+    final heroId = player.heroId;
+    final isRanger = heroId == 'ranger';
+    final isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final isValeria = heroId == 'valeria';
+    final isRanged = isRanger || isEmber || isValeria;
+
+    if (isRanged) {
+      // Xác định phương bắn: Ưu tiên quái vật gần nhất trong phạm vi 380px
+      Vector2? targetDir;
+      double closestDist = 380.0;
+
+      for (final enemy in enemies) {
+        if (!enemy.isMounted || enemy.currentHp <= 0) continue;
+        final d = player.position.distanceTo(enemy.position);
+        if (d < closestDist) {
+          closestDist = d;
+          targetDir = (enemy.position - player.position).normalized();
+        }
+      }
+      for (final skel in skeletons) {
+        if (!skel.isMounted || skel.currentHp <= 0) continue;
+        final d = player.position.distanceTo(skel.position);
+        if (d < closestDist) {
+          closestDist = d;
+          targetDir = (skel.position - player.position).normalized();
+        }
+      }
+      for (final b in bosses) {
+        if (!b.isMounted || b.isDefeated) continue;
+        final d = player.position.distanceTo(b.position);
+        if (d < closestDist) {
+          closestDist = d;
+          targetDir = (b.position - player.position).normalized();
+        }
+      }
+
+      // Nếu không có mục tiêu trong tầm: Bắn theo hướng di chuyển hoặc hướng đang nhìn
+      if (targetDir == null) {
+        if (player.moveDirection.length2 > 0) {
+          targetDir = player.moveDirection.normalized();
+        } else {
+          targetDir = Vector2(player.isFacingRight ? 1.0 : -1.0, 0.0);
+        }
+      }
+      player.faceDirection(targetDir);
+
+      final isCombo3 = player.comboStep == 3;
+      final dmg = player.effectiveDamage * (isCombo3 ? 1.4 : 1.0);
+      final pType = isRanger
+          ? HeroProjectileType.arrow
+          : (isEmber
+                ? HeroProjectileType.fireball
+                : HeroProjectileType.frostOrb);
+
+      final projectile = HeroProjectile(
+        position: player.position.clone() + Vector2(0, 2),
+        direction: targetDir,
+        damage: dmg,
+        type: pType,
+        isFromPlayer: true,
+        onHit: (target, hitPos) {
+          // HeroProjectile calls this after applying damage to a live target.
+          if (dmg.isFinite && dmg > 0) _startCombatHitStop();
+          _spawnDamageNumber(
+            hitPos,
+            dmg.toInt(),
+            isCombo3
+                ? CombatTextType.criticalDamage
+                : CombatTextType.normalDamage,
+          );
+        },
+      );
+
+      world.add(projectile);
+      return;
+    }
+
+    // TƯỚNG CẬN CHIẾN: Gây sát thương quái trong phạm vi cận chiến (55px, hoặc 80px ở đòn combo thứ 3)
+    final isCombo3 = player.comboStep == 3;
+    final dmg = player.effectiveDamage;
+
+    for (final enemy in List<ZombieEnemy>.from(enemies)) {
+      if (!enemy.isMounted) {
+        enemies.remove(enemy);
+        continue;
+      }
+      if (enemy.currentHp > 0 && player.canHitBasicAttack(enemy.position)) {
+        _applyPlayerDamage(enemy, dmg);
+        _spawnDamageNumber(
+          enemy.position,
+          dmg.toInt(),
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
+        );
+      }
+    }
+
+    for (final skeleton in List<SkeletonEnemy>.from(skeletons)) {
+      if (!skeleton.isMounted) {
+        skeletons.remove(skeleton);
+        continue;
+      }
+      if (skeleton.currentHp > 0 &&
+          player.canHitBasicAttack(skeleton.position)) {
+        _applyPlayerDamage(skeleton, dmg);
+        _spawnDamageNumber(
+          skeleton.position,
+          dmg.toInt(),
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
+        );
+      }
+    }
+
+    for (final b in bosses) {
+      if (!b.isMounted || b.isDefeated) continue;
+      if (player.canHitBasicAttack(b.position, targetPadding: 15)) {
+        _applyPlayerDamage(b, dmg);
+        _spawnDamageNumber(
+          b.position,
+          dmg.toInt(),
+          isCombo3
+              ? CombatTextType.criticalDamage
+              : CombatTextType.normalDamage,
+        );
+      }
+    }
+  }
+
+  List<SkillTargetAdapter> _buildPveSkillTargets() {
+    final list = <SkillTargetAdapter>[];
+    for (final enemy in List<ZombieEnemy>.from(enemies)) {
+      if (!enemy.isMounted) continue;
+      list.add(
+        SkillTargetAdapter(
+          getPosition: () => enemy.position,
+          isAlive: () => enemy.isMounted && enemy.currentHp > 0,
+          applyDamage: (dmg, textType) {
+            _applyPlayerDamage(enemy, dmg);
+            _spawnDamageNumber(enemy.position, dmg.toInt(), textType);
+          },
+          pushBy: (delta) => enemy.position.add(delta),
+        ),
+      );
+    }
+    for (final skel in List<SkeletonEnemy>.from(skeletons)) {
+      if (!skel.isMounted) continue;
+      list.add(
+        SkillTargetAdapter(
+          getPosition: () => skel.position,
+          isAlive: () => skel.isMounted && skel.currentHp > 0,
+          applyDamage: (dmg, textType) {
+            _applyPlayerDamage(skel, dmg);
+            _spawnDamageNumber(skel.position, dmg.toInt(), textType);
+          },
+          pushBy: (delta) => skel.position.add(delta),
+        ),
+      );
+    }
+    for (final b in List<BossEnemy>.from(bosses)) {
+      if (!b.isMounted || b.isDefeated) continue;
+      list.add(
+        SkillTargetAdapter(
+          getPosition: () => b.position,
+          isAlive: () => b.isMounted && !b.isDefeated,
+          applyDamage: (dmg, textType) {
+            _applyPlayerDamage(b, dmg);
+            _spawnDamageNumber(b.position, dmg.toInt(), textType);
+          },
+          extraHitRadius: 18.0,
+        ),
+      );
+    }
+    return list;
+  }
+
+  void _clampPlayerToDungeon(Vector2 pos) {
+    final maxW =
+        currentMapConfig.cols * currentMapConfig.tileSize.toDouble() - 48.0;
+    final maxH =
+        currentMapConfig.rows * currentMapConfig.tileSize.toDouble() - 48.0;
+    pos.x = pos.x.clamp(48.0, maxW > 48.0 ? maxW : 48.0);
+    pos.y = pos.y.clamp(48.0, maxH > 48.0 ? maxH : 48.0);
+  }
+
+  void _executeHeroSkillSlot(int slot) {
+    final animation = SpriteImageCache.instance.getSkillAnimation(
+      player.heroId,
+      slot,
+    );
+    var launchedProjectile = false;
+    HeroSkillSystem.executeSkill(
+      slot: slot,
+      player: player,
+      world: world,
+      targets: _buildPveSkillTargets(),
+      onDamageText: (position, amount, type) {
+        if (amount > 0) _startCombatHitStop();
+        _spawnDamageNumber(position, amount, type);
+      },
+      onBannerText: (pos, text) {
+        if (isLoaded) {
+          world.add(
+            FloatingCombatText(
+              position: pos,
+              text: text,
+              type: CombatTextType.buff,
+            ),
+          );
+        }
+      },
+      clampPlayerPos: _clampPlayerToDungeon,
+      onProjectileSpawned: (projectile) {
+        launchedProjectile = true;
+        projectile.animation = animation;
+        _skillEffects.removeWhere(
+          (effect) => effect.isRemoving || effect.isRemoved,
+        );
+        _skillEffects.add(projectile);
+      },
+    );
+    if (isLoaded && animation != null && !launchedProjectile) {
+      _addSkillEffect(
+        PlayerSkillArea(
+          position: player.position,
+          radius: player.skillConfig(slot).radius,
+          duration: max(.1, animation.duration),
+          color: player.skillEffectColor,
+          animation: animation,
+          isActive: () =>
+              player.canAct && !isGameOverTriggered && !isVictoryTriggered,
+        ),
+      );
+    }
+  }
+
+  void onSkill1() => _castSkill(1);
+  void onSkill2() => _castSkill(2);
+  void onSkill3() => _castSkill(3);
+  void _castSkill(int slot) {
+    if (paused || isVictoryTriggered || isGameOverTriggered || !player.canAct) {
+      return;
+    }
+    final baseDamage = player.effectiveDamage;
+    final accepted = switch (slot) {
+      1 => player.useSkill1(),
+      2 => player.useSkill2(),
+      3 => player.useSkill3(),
+      _ => false,
+    };
+    if (!accepted) return;
+    if (player.heroId == 'kaelen') {
+      _executeCatalogSkill(slot, baseDamage);
+    } else {
+      _executeHeroSkillSlot(slot);
+    }
+  }
+
+  Iterable<PositionComponent> get _liveTargets sync* {
+    yield* enemies.where((enemy) => enemy.isMounted && enemy.currentHp > 0);
+    yield* skeletons.where((enemy) => enemy.isMounted && enemy.currentHp > 0);
+    yield* bosses.where((b) => b.isMounted && !b.isDefeated);
+  }
+
+  void _executeCatalogSkill(int slot, double baseDamage) {
+    final config = player.skillConfig(slot);
+    final effects = config.effects;
+    final damage = baseDamage * config.damageMultiplier;
+    final facing = player.attackDirection;
+    final color = player.skillEffectColor;
+    final animation = SpriteImageCache.instance.getSkillAnimation(
+      player.heroId,
+      slot,
+    );
+    final origin = player.position.clone();
+    if (effects.dashDistance > 0) {
+      var travelled = 0.0;
+      while (travelled < effects.dashDistance) {
+        final step = (effects.dashDistance - travelled).clamp(0.0, 4.0);
+        final next = player.position + facing * step;
+        if (!_canOccupy(next)) break;
+        player.previousPosition.setFrom(player.position);
+        player.position.setFrom(next);
+        travelled += step;
+      }
+      player.recordDashTrail(origin, player.position);
+    }
+
+    void hit(PositionComponent target, double amount, {Vector2? direction}) {
+      _hitSkillTarget(
+        target,
+        amount,
+        effects,
+        direction ?? target.position - player.position,
+      );
+    }
+
+    void areaPulse(double fraction) {
+      for (final target in _liveTargets.toList()) {
+        final padding = target is BossEnemy ? 15 : 0;
+        if (player.position.distanceTo(target.position) <=
+            config.radius + padding) {
+          hit(target, damage * fraction);
+        }
+      }
+    }
+
+    switch (effects.delivery) {
+      case SkillDelivery.projectile:
+        if (isLoaded) {
+          _addSkillEffect(
+            PlayerSkillProjectile(
+              position: player.position,
+              direction: facing,
+              range: config.radius,
+              piercing: effects.piercing,
+              color: color,
+              animation: animation,
+              targets: () => _liveTargets,
+              canTravel: _isWalkable,
+              onHit: (target) => hit(target, damage, direction: facing),
+            ),
+          );
+        }
+        break;
+      case SkillDelivery.dash:
+        final segment = player.position - origin;
+        for (final target in _liveTargets.toList()) {
+          final t = segment.length2 == 0
+              ? 0.0
+              : ((target.position - origin).dot(segment) / segment.length2)
+                    .clamp(0.0, 1.0);
+          final closest = origin + segment * t;
+          if (closest.distanceTo(target.position) <= 28 + target.size.x / 2) {
+            hit(target, damage);
+          }
+        }
+        break;
+      case SkillDelivery.area:
+        if (effects.tickInterval <= 0) areaPulse(1);
+        break;
+      case SkillDelivery.self:
+        break;
+    }
+
+    if (isLoaded) {
+      if (effects.delivery != SkillDelivery.projectile) {
+        _addSkillEffect(
+          PlayerSkillArea(
+            position: player.position,
+            radius: effects.delivery == SkillDelivery.dash ? 28 : config.radius,
+            duration: effects.tickInterval > 0
+                ? effects.duration
+                : max(.35, animation?.duration ?? 0),
+            tickInterval: effects.tickInterval,
+            color: color,
+            animation: animation,
+            follow: effects.tickInterval > 0 ? player : null,
+            isActive: () =>
+                player.canAct && !isGameOverTriggered && !isVictoryTriggered,
+            onPulse: effects.delivery == SkillDelivery.area ? areaPulse : null,
+          ),
+        );
+      }
+      if (slot == 3) {
+        world.add(
+          FloatingCombatText(
+            position: player.position,
+            text: config.name.toUpperCase(),
+            type: CombatTextType.buff,
+          ),
+        );
+      }
+    }
+  }
+
+  void _addSkillEffect(PositionComponent effect) {
+    _skillEffects.removeWhere(
+      (effect) => effect.isRemoving || effect.isRemoved,
+    );
+    _skillEffects.add(effect);
+    world.add(effect);
+  }
+
+  bool _isWalkable(Vector2 point) {
+    return _isWalkableAt(point.x, point.y);
+  }
+
+  bool _isWalkableAt(double worldX, double worldY) {
+    if (!isLoaded) return false;
+    final x = (worldX / GameConstants.tileSize).floor();
+    final y = (worldY / GameConstants.tileSize).floor();
+    return x >= 0 &&
+        x < walkableGrid.length &&
+        y >= 0 &&
+        y < walkableGrid[x].length &&
+        walkableGrid[x][y];
+  }
+
+  bool _canOccupy(Vector2 point) =>
+      _isWalkableAt(point.x - 12, point.y - 10) &&
+      _isWalkableAt(point.x + 12, point.y - 10) &&
+      _isWalkableAt(point.x - 12, point.y + 18) &&
+      _isWalkableAt(point.x + 12, point.y + 18);
+
+  void _hitSkillTarget(
+    PositionComponent target,
+    double damage,
+    SkillEffects effects,
+    Vector2 direction,
+  ) {
+    if (damage <= 0) return;
+    _applyPlayerDamage(target, damage);
+    if (target is ZombieEnemy) {
+      target.applyControl(
+        stunDuration: effects.stunDuration,
+        knockback: effects.knockback,
+        direction: direction,
+      );
+    } else if (target is SkeletonEnemy) {
+      target.applyControl(
+        stunDuration: effects.stunDuration,
+        knockback: effects.knockback,
+        direction: direction,
+      );
+    } else if (target is BossEnemy) {
+      target.applyControl(
+        stunDuration: effects.stunDuration,
+        knockback: effects.knockback,
+        direction: direction,
+      );
+    } else {
+      return;
+    }
+    _spawnDamageNumber(
+      target.position,
+      damage.round(),
+      CombatTextType.skillDamage,
+    );
+  }
+
+  void _applyPlayerDamage(PositionComponent target, double damage) {
+    final hpBefore = _combatHitStopEnabled ? _combatTargetHp(target) : 0.0;
+    switch (target) {
+      case ZombieEnemy():
+        target.takeDamage(damage);
+      case SkeletonEnemy():
+        target.takeDamage(damage);
+      case BossEnemy():
+        target.takeDamage(damage);
+    }
+    if (_combatHitStopEnabled &&
+        damage > 0 &&
+        _combatTargetHp(target) < hpBefore) {
+      _startCombatHitStop();
+    }
+  }
+
+  double _combatTargetHp(PositionComponent target) => switch (target) {
+    ZombieEnemy() => target.currentHp,
+    SkeletonEnemy() => target.currentHp,
+    BossEnemy() => target.currentHp,
+    _ => 0,
+  };
+
+  void _startCombatHitStop() {
+    if (_combatHitStopEnabled &&
+        !paused &&
+        !isVictoryTriggered &&
+        !isGameOverTriggered) {
+      // Refresh the remaining window rather than adding a window per target.
+      _hitStopRemaining = _hitStopDuration;
+    }
+  }
+
+  /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ (Trường Trọng Lực Hoàng Kim - Aegis-X9)
+  void onCompanionSkill() {
+    if (paused ||
+        activeProfile.selectedCompanionId == null ||
+        !player.canAct ||
+        isGameOverTriggered ||
+        isVictoryTriggered) {
+      return;
+    }
+    companion ??= CompanionComponent(
+      companionId: activeProfile.selectedCompanionId ?? 'aegis_x9',
+      player: player,
+    );
+    if (!companion!.isMounted && isLoaded) {
+      world.add(companion!);
+    }
+    if (companion!.activateSpecialSkill()) {
+      if (isLoaded) {
+        world.add(
+          FloatingCombatText(
+            position: player.position,
+            text: companion!.skillName,
+            type: CombatTextType.buff,
+          ),
+        );
+      }
+    }
+  }
+
+  void _spawnDamageNumber(Vector2 pos, int dmg, CombatTextType type) {
+    if (!isLoaded) return;
+    world.add(FloatingCombatText(position: pos, text: '-$dmg', type: type));
+  }
+}
+
+/// Giữ tương thích ngược cho các module cũ
+typedef GoldRushGame = BigWarGame;

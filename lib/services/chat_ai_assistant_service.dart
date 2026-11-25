@@ -53,7 +53,6 @@ class ChatAiAssistantService {
     'big-war',
     'big war',
     'bigwar',
-    'gold rush',
     'game',
     'tro choi',
     'choi',
@@ -336,13 +335,11 @@ class ChatAiAssistantService {
         'may mắn',
         'may man',
         'jackpot',
-        'kim cương',
-        'kim cuong',
       ],
       answer:
           '🎡 **Vòng Quay May Mắn**:\n'
           '• Mỗi ngày bạn có **1 lượt quay miễn phí**, tự động làm mới vào **00:00 UTC (07:00 sáng giờ Việt Nam)**.\n'
-          '• Bạn cũng có thể dùng Kim Cương để quay thêm và săn giải **Jackpot 2.000 Vàng**!',
+          '• Quay trúng các mốc Xu thưởng để đổi sang Vàng (1 Xu = 1.000 Vàng) và săn giải **Jackpot**!',
     ),
     FaqTopic(
       id: 'custom_assets',

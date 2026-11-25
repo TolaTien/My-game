@@ -62,6 +62,8 @@ void main() {
       expect(cache.getCompanionIdleSheet('pyro_frost_dragon'), isNotNull);
       expect(cache.getCompanionRunSheet('pyro_frost_dragon'), isNull);
       expect(cache.getCompanionImage('gem_tumbler'), isNull);
+      expect(cache.getHeroAnimations('nova'), isNull);
+      await cache.preloadHero('nova');
       expect(cache.getHeroAnimations('nova', facingRow: 0), isNotNull);
       expect(cache.getHeroAnimations('nova', facingRow: 4), isNotNull);
       for (final id in [
@@ -72,6 +74,7 @@ void main() {
         'garrick',
         'kaelen',
       ]) {
+        await cache.preloadHero(id);
         for (var slot = 1; slot <= 3; slot++) {
           expect(
             cache.getSkillAnimation(id, slot),
@@ -328,14 +331,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       for (final entry in {
-        'comp_attack': 500,
-        'comp_defense': 600,
-        'comp_control': 700,
-        'aegis_x9': 800,
-        'cyber_drone': 650,
-        'pyro_frost_dragon': 900,
-        'luna_fox': 750,
-        'orbit_03': 700,
+        'comp_attack': 2000,
+        'comp_defense': 2500,
+        'comp_control': 3000,
+        'cyber_drone': 4000,
+        'luna_fox': 4500,
+        'orbit_03': 5000,
+        'aegis_x9': 8000,
+        'pyro_frost_dragon': 10000,
       }.entries) {
         final preview = find.byWidgetPredicate(
           (widget) =>

@@ -216,64 +216,82 @@ void main() {
     },
   );
 
-  testWidgets('Mounted bot waits, routes around a main pillar, and attacks', (
-    tester,
-  ) async {
-    final game = _MapGame();
-    final map = PvpArenaMapComponent(mapConfig: _map('map_rung_cay'));
-    final target = PlayerComponent(
-      position: Vector2(580, 200),
-      legacyPvpSkills: true,
-    )..currentHp = 10000;
-    var fighting = false;
-    final bot = PvpBotPlayerComponent(
-      position: Vector2(760, 200),
-      opponentInfo: _opponent,
-      targetPlayer: target,
-      random: Random(8),
-      canAct: () => fighting,
-      getWalkableGrid: () => map.walkableGrid,
-      getObstacleRects: () => map.obstacleRects,
-      getInteriorObstacleRects: () => map.pillarRects,
+  for (final dt in [1 / 60, 0.2]) {
+    testWidgets(
+      'Mounted bot waits, routes around a main pillar, and attacks at dt=$dt',
+      (tester) async {
+        final game = _MapGame();
+        final map = PvpArenaMapComponent(mapConfig: _map('map_rung_cay'));
+        final target = PlayerComponent(
+          position: Vector2(580, 200),
+          legacyPvpSkills: true,
+        )..currentHp = 10000;
+        var fighting = false;
+        final bot = PvpBotPlayerComponent(
+          position: Vector2(760, 200),
+          opponentInfo: _opponent,
+          targetPlayer: target,
+          random: Random(8),
+          canAct: () => fighting,
+          getWalkableGrid: () => map.walkableGrid,
+          getObstacleRects: () => map.obstacleRects,
+          getInteriorObstacleRects: () => map.pillarRects,
+        );
+        await tester.pumpWidget(GameWidget(game: game));
+        await tester.pump();
+        await tester.runAsync(() async {
+          await game.toBeLoaded();
+          await game.ready();
+        });
+        await game.world.addAll([map, target, bot]);
+        await tester.runAsync(game.ready);
+        game.pauseEngine();
+        for (var frame = 0; frame < 60; frame++) {
+          game.update(1 / 60);
+        }
+        expect(bot.position, Vector2(760, 200));
+        expect(target.currentHp, 10000);
+        fighting = true;
+        for (var frame = 0; frame < (6 / dt).round(); frame++) {
+          final before = bot.position.clone();
+          game.update(dt);
+          expect(
+            before.distanceTo(bot.position),
+            lessThanOrEqualTo(bot.speed * dt + 0.001),
+          );
+          expect(
+            ChaseNavigation.isBodyPathClear(
+              start: before + Vector2(0, 4),
+              end: bot.position + Vector2(0, 4),
+              halfSize: Vector2(12, 14),
+              grid: map.walkableGrid,
+            ),
+            isTrue,
+            reason: 'Bot body must clear the entire frame segment',
+          );
+          final body = ui.Rect.fromLTRB(
+            bot.position.x - 12,
+            bot.position.y - 10,
+            bot.position.x + 12,
+            bot.position.y + 18,
+          );
+          expect(map.obstacleRects.any(body.overlaps), isFalse);
+        }
+        expect(
+          bot.position.x,
+          lessThan(656),
+          reason: 'bot must route around the pillar: ${bot.position}',
+        );
+        expect(
+          target.currentHp,
+          lessThan(10000),
+          reason:
+              'bot=${bot.position}, move=${bot.moveDirection}, state=${bot.aiController.currentState}, attackCD=${bot.aiController.basicAttackCooldown}',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
     );
-    await tester.pumpWidget(GameWidget(game: game));
-    await tester.pump();
-    await tester.runAsync(() async {
-      await game.toBeLoaded();
-      await game.ready();
-    });
-    await game.world.addAll([map, target, bot]);
-    await tester.runAsync(game.ready);
-    game.pauseEngine();
-    for (var frame = 0; frame < 60; frame++) {
-      game.update(1 / 60);
-    }
-    expect(bot.position, Vector2(760, 200));
-    expect(target.currentHp, 10000);
-    fighting = true;
-    for (var frame = 0; frame < 360; frame++) {
-      game.update(1 / 60);
-      final body = ui.Rect.fromLTRB(
-        bot.position.x - 12,
-        bot.position.y - 10,
-        bot.position.x + 12,
-        bot.position.y + 18,
-      );
-      expect(map.obstacleRects.any(body.overlaps), isFalse);
-    }
-    expect(
-      bot.position.x,
-      lessThan(656),
-      reason: 'bot must route around the pillar: ${bot.position}',
-    );
-    expect(
-      target.currentHp,
-      lessThan(10000),
-      reason:
-          'bot=${bot.position}, move=${bot.moveDirection}, state=${bot.aiController.currentState}, attackCD=${bot.aiController.basicAttackCooldown}',
-    );
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  }
 
   test('Round reset removes cast, stun and speech presentation state', () {
     final target = PlayerComponent(position: Vector2(400, 200));

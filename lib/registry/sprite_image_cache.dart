@@ -50,30 +50,81 @@ class SpriteImageCache {
     return result;
   }
 
-  static const heroPortraitPaths = {
-    'nova_blade': 'assets/images/heroes/nova_blade/nova_blade_portrait.png',
+  static const Map<String, String> heroPortraitPaths = {
+    'george': 'assets/images/heroes/george/portrait.png',
+    'ranger': 'assets/images/heroes/ranger/portrait.png',
+    'tanker': 'assets/images/heroes/tanker/portrait.png',
+    'ninja': 'assets/images/heroes/ninja/portrait.png',
+    'valeria': 'assets/images/heroes/valeria/portrait.png',
+    'garrick': 'assets/images/heroes/garrick/portrait.png',
+    'nova_blade': 'assets/images/heroes/nova/nova_portrait.png',
+    'nova': 'assets/images/heroes/nova/nova_portrait.png',
     'shadow_01': 'assets/images/heroes/shadow/shadow_01_portrait.png',
-    'ember_02': 'assets/images/heroes/ember/ember_02_portrait.png',
-    'valeria': 'assets/images/heroes/valenria/valeria_portrait.png',
-    'garrick': 'assets/images/heroes/garrick/garrick_portrait.png',
+    'shadow': 'assets/images/heroes/shadow/shadow_01_portrait.png',
+    'ember_02': 'assets/images/heroes/ember/ember.png',
+    'ember': 'assets/images/heroes/ember/ember.png',
     'kaelen': 'assets/images/heroes/kaelen/kaelen_portrait.png',
   };
 
-  static const heroIdlePaths = nativeIdlePaths;
-  static const heroRunPaths = nativeRunPaths;
-  static const heroAttackPaths = {
-    ...nativeAttackPaths,
-    'valeria': 'assets/images/heroes/valenria/valeria_attack.png',
-    'garrick': 'assets/images/heroes/garrick/garrick_attack.png',
+  static const Map<String, String> heroIdlePaths = {
+    'george': 'assets/images/heroes/george/idle.png',
+    'ranger': 'assets/images/heroes/ranger/idle.png',
+    'tanker': 'assets/images/heroes/tanker/idle.png',
+    'ninja': 'assets/images/heroes/ninja/idle.png',
+    'valeria': 'assets/images/heroes/valeria/idle.png',
+    'garrick': 'assets/images/heroes/garrick/idle.png',
+    'nova_blade': 'assets/images/heroes/nova/nova.png',
+    'nova': 'assets/images/heroes/nova/nova.png',
+    'ember_02': 'assets/images/heroes/ember/Ember-idle.png',
+    'ember': 'assets/images/heroes/ember/Ember-idle.png',
+    'shadow_01': 'assets/images/heroes/shadow/idle/01.png',
+    'shadow': 'assets/images/heroes/shadow/idle/01.png',
+  };
+  static const Map<String, String> heroRunPaths = {
+    'george': 'assets/images/heroes/george/run.png',
+    'ranger': 'assets/images/heroes/ranger/run.png',
+    'tanker': 'assets/images/heroes/tanker/run.png',
+    'ninja': 'assets/images/heroes/ninja/run.png',
+    'valeria': 'assets/images/heroes/valeria/run.png',
+    'garrick': 'assets/images/heroes/garrick/run.png',
+    'nova_blade': 'assets/images/heroes/nova/nova-run.png',
+    'nova': 'assets/images/heroes/nova/nova-run.png',
+    'ember_02': 'assets/images/heroes/ember/Ember-run.png',
+    'ember': 'assets/images/heroes/ember/Ember-run.png',
+    'shadow_01': 'assets/images/heroes/shadow/run/01.png',
+    'shadow': 'assets/images/heroes/shadow/run/01.png',
+  };
+  static const Map<String, String> heroAttackPaths = {
+    'george': 'assets/images/heroes/george/attack.png',
+    'ranger': 'assets/images/heroes/ranger/attack.png',
+    'tanker': 'assets/images/heroes/tanker/attack.png',
+    'ninja': 'assets/images/heroes/ninja/attack.png',
+    'valeria': 'assets/images/heroes/valeria/attack.png',
+    'garrick': 'assets/images/heroes/garrick/attack.png',
+    'nova_blade': 'assets/images/heroes/nova/nova-attack.png',
+    'nova': 'assets/images/heroes/nova/nova-attack.png',
+    'ember_02': 'assets/images/heroes/ember/Ember-attack.png',
+    'ember': 'assets/images/heroes/ember/Ember-attack.png',
+    'shadow_01': 'assets/images/heroes/shadow/attack/01.png',
+    'shadow': 'assets/images/heroes/shadow/attack/01.png',
     'kaelen': 'assets/images/heroes/kaelen/kaelen_attack.png',
   };
 
-  static const Set<String> proceduralHeroIds = {
+  static const Set<String> proceduralHeroIds = {};
+
+  /// Các tướng sử dụng bộ spritesheet 4-frame ngang (idle/attack: 1024x256)
+  /// và spritesheet chạy 4 hướng (run: 1024x1024 — Down/Up/Left/Right).
+  static const Set<String> stripAnimatedHeroIds = {
     'george',
     'ranger',
     'tanker',
     'ninja',
+    'valeria',
+    'garrick',
   };
+
+  static bool isStripAnimatedHero(String heroId) =>
+      stripAnimatedHeroIds.contains(_canonical(heroId));
 
   static bool isProceduralHero(String heroId) =>
       proceduralHeroIds.contains(_canonical(heroId));
@@ -101,6 +152,27 @@ class SpriteImageCache {
 
   static const companionRunSheetPaths = {
     'luna_fox': 'assets/images/companions/luna_fox_run_v2.png',
+  };
+
+  static const Map<String, String> companionSkillSheetPaths = {
+    'comp_attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'companion_attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'attack': 'assets/images/skills/pet_skill_attack_nova.png',
+    'comp_defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'companion_defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'defense': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'shield': 'assets/images/skills/pet_skill_defense_barrier.png',
+    'comp_control': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'companion_frost': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'control': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'frost': 'assets/images/skills/pet_skill_frost_blizzard.png',
+    'cyber_drone': 'assets/images/skills/pet_skill_cyber_heal.png',
+    'luna_fox': 'assets/images/skills/pet_skill_luna_spirit.png',
+    'orbit_03': 'assets/images/skills/pet_skill_orbit_laser.png',
+    'aegis_x9': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'comp_aegis': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'aegis': 'assets/images/skills/pet_skill_aegis_gravity.png',
+    'pyro_frost_dragon': 'assets/images/skills/pet_skill_dragon_storm.png',
   };
 
   static const skillEffectPaths = {
@@ -133,6 +205,8 @@ class SpriteImageCache {
     ...companionIdleSheetPaths.values,
     ...companionRunSheetPaths.values,
     ...skillEffectPaths.values,
+    ...companionSkillSheetPaths.values,
+    for (final paths in heroSequencePaths.values) ...paths,
     ...mapImagePaths.values,
   };
 
@@ -160,6 +234,9 @@ class SpriteImageCache {
   ui.Image? getCompanionRunSheet(String companionId) =>
       _getLegacy(companionRunSheetPaths[companionId]);
 
+  ui.Image? getCompanionSkillSheet(String companionId) =>
+      _getLegacy(companionSkillSheetPaths[companionId]);
+
   ui.Image? getSkillEffectImage(String heroId, int skillSlot) =>
       _getLegacy(skillEffectPaths['${_canonical(heroId)}_$skillSlot']);
 
@@ -171,7 +248,7 @@ class SpriteImageCache {
   }
 
   ui.Image? getMapImage(String mapId) =>
-      _mapsById[mapId] ?? _images[mapImagePaths[mapId]];
+      _mapsById[mapId] ?? _getLegacy(mapImagePaths[mapId]);
 
   Future<ui.Image?> loadMapImageByPath(String path, {String? mapId}) async {
     if (path.isEmpty) return null;
@@ -192,7 +269,7 @@ class SpriteImageCache {
   ui.Image? getHeroSequenceFrame(String heroId, String action, int frameIndex) {
     final paths = heroSequencePaths['${_canonical(heroId)}_$action'];
     if (paths != null) {
-      final image = _images[paths[frameIndex % paths.length]];
+      final image = _getLegacy(paths[frameIndex % paths.length]);
       if (image != null) return image;
     }
     return _images[heroPortraitPaths[_canonical(heroId)]];
@@ -311,10 +388,8 @@ class SpriteImageCache {
   }
 
   Future<void> preloadAll() async {
-    await Future.wait(_legacyPaths.map(_decode));
-    for (final heroId in {...heroSpriteClips.keys, ...skillSpriteClips.keys}) {
-      await preloadHero(heroId);
-    }
+    final paths = {...heroPortraitPaths.values, ...companionSpritePaths.values};
+    await Future.wait([..._decodes.values, ...paths.map(_decode)]);
   }
 
   Future<ui.Image?> _decode(String path) =>

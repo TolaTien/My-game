@@ -1,9 +1,11 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/ai/astar_pathfinder.dart';
+import 'package:my_game/game/ai/chase_navigation.dart';
 import 'package:my_game/game/ai/pvp_bot_ai.dart';
 import 'package:my_game/game/components/boss_enemy.dart';
 import 'package:my_game/game/components/dungeon_map.dart';
@@ -47,6 +49,20 @@ Future<void> _add(_AiGame game, Component actor, WidgetTester tester) async {
   expect(actor.isMounted, isTrue);
 }
 
+class _FlameLaneCanvas implements Canvas {
+  final lanes = <(Offset, Offset)>[];
+
+  @override
+  void drawLine(Offset start, Offset end, Paint paint) {
+    if (Color(paint.color.toARGB32()) == const Color(0xA6FFB300)) {
+      lanes.add((start, end));
+    }
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
 class _DodgeRandom implements Random {
   @override
   bool nextBool() => false;
@@ -80,100 +96,252 @@ PvpBotPlayerComponent _bot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'Radial windup emits no damage; impact emits eight once then cools down',
-    (tester) async {
-      final game = await _mount(tester, _openGrid());
-      final player = game.player..position = Vector2(380, 300);
-      final boss =
-          BossEnemy(
-              position: Vector2(300, 300),
-              player: player,
-              random: Random(1),
-            )
-            ..phase = 2
-            ..flameBurstCooldownTimer = 0
-            ..groundSlamCooldownTimer = 100;
-      await _add(game, boss, tester);
-      final hp = player.currentHp;
-      boss.update(0);
-      expect(boss.state, BossState.radialFlameBurst);
-      boss.update(BossEnemy.flameBurstTelegraphDuration - 0.001);
-      await tester.runAsync(game.ready);
-      expect(boss.state, BossState.radialFlameBurst);
-      expect(game.world.children.whereType<BossFlameProjectile>(), isEmpty);
-      expect(player.currentHp, hp);
-
-      boss.update(0.002);
-      await tester.runAsync(game.ready);
-      expect(boss.state, BossState.radialFlameImpact);
-      final flames = game.world.children
-          .whereType<BossFlameProjectile>()
-          .toList();
-      expect(flames, hasLength(BossEnemy.flameBurstProjectileCount));
-      expect(player.currentHp, hp, reason: 'Emission alone is not an AoE hit');
-      for (int i = 0; i < flames.length; i++) {
-        expect(flames[i].position, boss.position);
-        expect(flames[i].direction, BossEnemy.flameDirection(i));
-        expect(flames[i].speed, BossEnemy.flameBurstSpeed);
-      }
-      boss.update(0.01);
-      expect(boss.state, BossState.radialFlameCooldown);
-      boss.update(BossEnemy.flameBurstRecoveryDuration);
-      expect(boss.state, BossState.chase);
-      expect(boss.flameBurstCooldownTimer, greaterThan(0));
-      await tester.runAsync(game.ready);
-      expect(
-        game.world.children.whereType<BossFlameProjectile>(),
-        hasLength(8),
-      );
-
-      final flame = flames.first;
-      flame.onCollision({}, player);
-      flame.onCollision({}, player);
-      expect(
-        player.currentHp,
-        hp - BossEnemy.flameBurstDamage,
-        reason: 'One projectile cannot hit twice',
-      );
-      final blocked = flames[1];
-      blocked.onCollision(
-        {},
-        WallBlock(position: Vector2.zero(), size: Vector2.all(32)),
-      );
-      blocked.onCollision({}, player);
-      expect(player.currentHp, hp - BossEnemy.flameBurstDamage);
-    },
-  );
-
-  for (final escaped in [false, true]) {
+  for (final (phase, floor, count) in [
+    (1, 1, 3),
+    (2, 1, 8),
+    (2, 3, 10),
+    (2, 5, 12),
+  ]) {
     testWidgets(
-      'Engine collision hits radial lane; leaving it avoids damage: $escaped',
+      'Phase $phase floor $floor warns and emits $count flames once, then cools down',
       (tester) async {
         final game = await _mount(tester, _openGrid());
-        final player = game.player..position = Vector2(380, 300);
-        final boss = BossEnemy(position: Vector2(300, 300), player: player)
-          ..phase = 2
-          ..flameBurstCooldownTimer = 0
-          ..groundSlamCooldownTimer = 100;
+        final player = game.player
+          ..position = Vector2(500, 300)
+          ..moveDirection = Vector2(0, 1);
+        final boss =
+            BossEnemy(
+                position: Vector2(300, 300),
+                player: player,
+                random: Random(1),
+              )
+              ..phase = phase
+              ..applyFloorDifficulty(floor)
+              ..flameBurstCooldownTimer = 0
+              ..groundSlamCooldownTimer = 100;
         await _add(game, boss, tester);
-        boss.update(0);
         final hp = player.currentHp;
-        if (escaped) player.position = Vector2(380, 340);
-        boss.update(BossEnemy.flameBurstTelegraphDuration);
+        final lead =
+            player.position + player.moveDirection * player.speed * .35 -
+            boss.position;
+        final baseAngle = phase == 2 ? pi / count : atan2(lead.y, lead.x);
+        final speed = boss.flameBurstSpeed * (phase == 2 ? 1 : 1.1);
+        boss.update(0);
+        expect(boss.state, BossState.radialFlameBurst);
+        final warning = _FlameLaneCanvas();
+        boss.render(warning);
+        expect(warning.lanes, hasLength(count));
+        player
+          ..position = Vector2(300, 500)
+          ..moveDirection = Vector2(-1, 0);
+        boss.update(BossEnemy.flameBurstTelegraphDuration - 0.001);
         await tester.runAsync(game.ready);
-        boss.removeFromParent();
+        expect(boss.state, BossState.radialFlameBurst);
+        expect(game.world.children.whereType<BossFlameProjectile>(), isEmpty);
+        expect(player.currentHp, hp);
+
+        boss.update(0.002);
         await tester.runAsync(game.ready);
-        for (int i = 0; i < 50; i++) {
-          game.update(0.02);
+        expect(boss.state, BossState.radialFlameImpact);
+        // The world tick mounts the queued projectiles and enters cooldown.
+        const mountDt = 0.001;
+        game.update(mountDt);
+        expect(boss.state, BossState.radialFlameCooldown);
+        final flames = game.world.children
+            .whereType<BossFlameProjectile>()
+            .toList();
+        expect(flames, hasLength(count));
+        expect(player.currentHp, hp, reason: 'Emission alone is not an AoE hit');
+        for (int i = 0; i < flames.length; i++) {
+          final angle =
+              baseAngle +
+              (phase == 2 ? i * 2 * pi / count : (i - 1) * 16 * pi / 180);
+          final expected = Vector2(cos(angle), sin(angle));
+          final lane = warning.lanes[i].$2 - warning.lanes[i].$1;
+          final warnedDirection = Vector2(lane.dx, lane.dy).normalized();
+          expect(
+            flames[i].position.distanceTo(
+              boss.position + expected * speed * mountDt,
+            ),
+            lessThan(0.000001),
+          );
+          expect(flames[i].direction.distanceTo(expected), lessThan(0.000001));
+          expect(
+            flames[i].direction.distanceTo(warnedDirection),
+            lessThan(0.000001),
+          );
+          expect(
+            lane.distance,
+            closeTo(speed * BossFlameProjectile.lifetime, 0.0001),
+          );
+          expect(flames[i].speed, speed);
         }
+        boss.update(BossEnemy.flameBurstRecoveryDuration);
+        expect(boss.state, BossState.chase);
+        expect(boss.flameBurstCooldownTimer, greaterThan(0));
+        await tester.runAsync(game.ready);
+        expect(
+          game.world.children.whereType<BossFlameProjectile>(),
+          hasLength(count),
+        );
+
+        final flame = flames.first;
+        flame.onCollision({}, player);
+        flame.onCollision({}, player);
         expect(
           player.currentHp,
-          hp - (escaped ? 0 : BossEnemy.flameBurstDamage),
+          hp - boss.flameBurstDamage,
+          reason: 'One projectile cannot hit twice',
         );
+        final blocked = flames[1];
+        blocked.onCollision(
+          {},
+          WallBlock(position: Vector2.zero(), size: Vector2.all(32)),
+        );
+        blocked.onCollision({}, player);
+        expect(player.currentHp, hp - boss.flameBurstDamage);
+
+        for (final flame in flames) {
+          flame.removeFromParent();
+        }
+        await tester.runAsync(game.ready);
+        boss.flameBurstCooldownTimer = 0;
+        boss.update(0);
+        final nextWarning = _FlameLaneCanvas();
+        boss.render(nextWarning);
+        expect(nextWarning.lanes, hasLength(count));
+        boss.update(BossEnemy.flameBurstTelegraphDuration);
+        await tester.runAsync(game.ready);
+        final nextFlames = game.world.children
+            .whereType<BossFlameProjectile>()
+            .toList();
+        expect(nextFlames, hasLength(count));
+        final nextLead =
+            player.position + player.moveDirection * player.speed * .35 -
+            boss.position;
+        final nextBaseAngle = phase == 2
+            ? 2 * pi / count
+            : atan2(nextLead.y, nextLead.x);
+        for (var i = 0; i < count; i++) {
+          final angle =
+              nextBaseAngle +
+              (phase == 2 ? i * 2 * pi / count : (i - 1) * 16 * pi / 180);
+          final lane = nextWarning.lanes[i].$2 - nextWarning.lanes[i].$1;
+          expect(
+            nextFlames[i].direction.distanceTo(Vector2(cos(angle), sin(angle))),
+            lessThan(0.000001),
+          );
+          expect(
+            nextFlames[i].direction.distanceTo(
+              Vector2(lane.dx, lane.dy).normalized(),
+            ),
+            lessThan(0.000001),
+          );
+        }
       },
     );
   }
+
+  for (final phase in [1, 2]) {
+    for (final escaped in [false, true]) {
+      testWidgets(
+        'Engine collision matches phase $phase flame lanes; escaped=$escaped',
+        (tester) async {
+          final game = await _mount(tester, _openGrid());
+          final angle = phase == 2 ? pi / 8 : 0.0;
+          final origin = Vector2(300, 300);
+          final player = game.player
+            ..position = origin + Vector2(cos(angle), sin(angle)) * 160;
+          final boss = BossEnemy(position: origin.clone(), player: player)
+            ..phase = phase
+            ..flameBurstCooldownTimer = 0
+            ..groundSlamCooldownTimer = 100;
+          await _add(game, boss, tester);
+          boss.update(0);
+          expect(boss.state, BossState.radialFlameBurst);
+          final hp = player.currentHp;
+          if (escaped) {
+            final safeAngle = phase == 2 ? 0.0 : pi / 2;
+            player.position =
+                origin + Vector2(cos(safeAngle), sin(safeAngle)) * 160;
+          }
+          boss.update(BossEnemy.flameBurstTelegraphDuration);
+          await tester.runAsync(game.ready);
+          boss.removeFromParent();
+          await tester.runAsync(game.ready);
+          for (int i = 0; i < 50; i++) {
+            game.update(0.02);
+          }
+          expect(
+            player.currentHp,
+            hp - (escaped ? 0 : boss.flameBurstDamage),
+          );
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'A phase change preserves the warned fan until the next attack',
+    (tester) async {
+      final game = await _mount(tester, _openGrid());
+      final boss =
+          BossEnemy(
+              position: Vector2(300, 300),
+              player: game.player..position = Vector2(500, 300),
+            )
+            ..flameBurstCooldownTimer = 0
+            ..groundSlamCooldownTimer = 100
+            ..summonedWave70 = true;
+      await _add(game, boss, tester);
+      boss.update(0);
+      final warning = _FlameLaneCanvas();
+      boss.render(warning);
+      expect(warning.lanes, hasLength(3));
+      boss.update(BossEnemy.flameBurstTelegraphDuration / 2);
+      boss.takeDamage(boss.maxHp / 2);
+      expect(boss.phase, 2);
+      final afterPhaseChange = _FlameLaneCanvas();
+      boss.render(afterPhaseChange);
+      expect(afterPhaseChange.lanes, warning.lanes);
+      boss.update(BossEnemy.flameBurstTelegraphDuration / 2);
+      await tester.runAsync(game.ready);
+      game.update(0.001);
+      final flames = game.world.children
+          .whereType<BossFlameProjectile>()
+          .toList();
+      expect(flames, hasLength(3));
+      for (var i = 0; i < flames.length; i++) {
+        final lane = warning.lanes[i].$2 - warning.lanes[i].$1;
+        expect(
+          flames[i].direction.distanceTo(Vector2(lane.dx, lane.dy).normalized()),
+          lessThan(0.000001),
+        );
+        expect(flames[i].speed, boss.flameBurstSpeed * 1.1);
+        flames[i].removeFromParent();
+      }
+      await tester.runAsync(game.ready);
+      boss.update(0);
+      boss.update(BossEnemy.flameBurstRecoveryDuration);
+      boss.flameBurstCooldownTimer = 0;
+      boss.update(0);
+      final nextWarning = _FlameLaneCanvas();
+      boss.render(nextWarning);
+      expect(nextWarning.lanes, hasLength(8));
+      boss.update(BossEnemy.flameBurstTelegraphDuration);
+      await tester.runAsync(game.ready);
+      game.update(0.001);
+      final nextFlames = game.world.children
+          .whereType<BossFlameProjectile>()
+          .toList();
+      expect(nextFlames, hasLength(8));
+      expect(nextFlames.first.speed, boss.flameBurstSpeed);
+      expect(
+        nextFlames.first.direction.distanceTo(Vector2(cos(pi / 8), sin(pi / 8))),
+        lessThan(0.000001),
+      );
+    },
+  );
 
   for (final escaped in [false, true]) {
     testWidgets(
@@ -204,13 +372,13 @@ void main() {
         expect(boss.state, BossState.groundSlamImpact);
         expect(
           player.currentHp,
-          hp - (escaped ? 0 : BossEnemy.groundSlamDamage),
+          hp - (escaped ? 0 : boss.groundSlamDamage),
         );
         boss.update(0.05);
         boss.update(0.05);
         expect(
           player.currentHp,
-          hp - (escaped ? 0 : BossEnemy.groundSlamDamage),
+          hp - (escaped ? 0 : boss.groundSlamDamage),
         );
       },
     );
@@ -239,14 +407,31 @@ void main() {
       );
       await _add(game, zombie, tester);
       final trace = <String>[];
+      const dt = 0.2;
+      var lungeSteps = 0;
       for (int i = 0; i < 30; i++) {
         final before = zombie.position.clone();
-        game.update(0.2);
+        game.update(dt);
         expect(
           AStarPathfinder.hasLineOfSight(before, zombie.position, grid),
           isTrue,
         );
-        expect(before.distanceTo(zombie.position), lessThanOrEqualTo(13.001));
+        expect(
+          ChaseNavigation.isBodyPathClear(
+            start: before,
+            end: zombie.position,
+            halfSize: Vector2(10, 14),
+            grid: grid,
+          ),
+          isTrue,
+        );
+        final travel = before.distanceTo(zombie.position);
+        // Incoming main adds a 1.65x lunge after its initial 2s cooldown.
+        expect(travel, lessThanOrEqualTo(zombie.speed * 1.65 * dt + 0.001));
+        if (i < 9) {
+          expect(travel, lessThanOrEqualTo(zombie.speed * dt + 0.001));
+        }
+        if (travel > zombie.speed * dt + 0.001) lungeSteps++;
         trace.add('${zombie.position} / ${zombie.navigation.recoveryCount}');
       }
       expect(
@@ -256,6 +441,7 @@ void main() {
       );
       expect(zombie.navigation.recoveryCount, 0);
       expect(zombie.navigation.repathCount, lessThan(20));
+      expect(lungeSteps, greaterThan(0));
     },
   );
 
@@ -311,7 +497,10 @@ void main() {
         position: Vector2(200, 300),
         player: player,
         random: Random(3),
-      )..groundSlamCooldownTimer = 100;
+      )
+        ..groundSlamCooldownTimer = 100
+        ..flameBurstCooldownTimer = 100
+        ..chargeCooldownTimer = 100;
       for (final actor in [zombie, skeleton, boss]) {
         await _add(game, actor, tester);
       }
@@ -376,7 +565,7 @@ void main() {
   );
 
   testWidgets(
-    'Standing archery and boss windup do not accumulate false stalls',
+    'Strafing archery and stationary boss windup do not accumulate false stalls',
     (tester) async {
       final game = await _mount(tester, _openGrid());
       final player = game.player..position = Vector2(400, 300);
@@ -393,14 +582,34 @@ void main() {
       await _add(game, skeleton, tester);
       await _add(game, boss, tester);
       boss.update(0);
-      for (int i = 0; i < 55; i++) {
-        skeleton.update(0.02);
-        boss.update(0.02);
+      final skeletonStart = skeleton.position.clone();
+      final bossStart = boss.position.clone();
+      const dt = 0.02;
+      const ticks = 55;
+      for (int i = 0; i < ticks; i++) {
+        final before = skeleton.position.clone();
+        skeleton.update(dt);
+        boss.update(dt);
+        expect(
+          before.distanceTo(skeleton.position),
+          lessThanOrEqualTo(skeleton.speed * .65 * dt + 0.001),
+        );
+        expect(
+          skeleton.position.distanceTo(player.position),
+          inInclusiveRange(115, 250),
+        );
       }
-      expect(skeleton.position, Vector2(200, 300));
+      expect(skeleton.position.distanceTo(skeletonStart), greaterThan(0));
       expect(skeleton.navigation.recoveryCount, 0);
-      expect(skeleton.navigation.repathCount, 0);
+      expect(
+        skeleton.navigation.repathCount,
+        inInclusiveRange(
+          1,
+          (ticks * dt / skeleton.navigation.repathInterval).ceil(),
+        ),
+      );
       expect(boss.state, BossState.groundSlamTelegraph);
+      expect(boss.position, bossStart);
       expect(boss.navigation.recoveryCount, 0);
       boss.applyControl(stunDuration: 2);
       for (int i = 0; i < 90; i++) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flame/collisions.dart';
@@ -10,6 +11,7 @@ import '../../registry/sprite_image_cache.dart';
 import '../../registry/asset_registry.dart';
 import '../../services/audio_service.dart';
 import '../skill_runtime.dart';
+import '../combat/hero_skill_system.dart';
 import 'dungeon_map.dart';
 import 'hero_sprite_animator.dart';
 
@@ -106,45 +108,116 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   double invulnerabilityTimer = 0;
   Color get skillEffectColor => _heroPrimaryColor;
 
-  double get effectiveDamage =>
-      damage *
-      skillRuntimes.fold<double>(
-        1,
-        (factor, skill) =>
-            factor *
-            (skill.effectRemaining > 0
-                ? skill.config.effects.attackMultiplier
-                : 1),
-      );
+  double stealthTimer = 0.0;
+  double ironShieldTimer = 0.0;
+  double ironShieldAbsorption = 0.0;
+  double speedBoostTimer = 0.0;
+  double speedBoostMultiplier = 1.0;
+  bool get _usesCatalogSkills => heroId == 'kaelen';
+  double get effectiveSpeed =>
+      speed *
+      (_usesCatalogSkills
+          ? skillRuntimes.fold<double>(
+              1,
+              (m, s) =>
+                  m *
+                  (s.effectRemaining > 0
+                      ? s.config.effects.moveSpeedMultiplier
+                      : 1),
+            )
+          : ((isBerserk ? 1.45 : 1) *
+                (stealthTimer > 0 ? 1.45 : 1) *
+                (speedBoostTimer > 0 ? speedBoostMultiplier : 1)));
 
-  double get effectiveSpeed {
-    var factor = 1.0;
-    for (final skill in skillRuntimes) {
-      if (skill.effectRemaining > 0) {
-        factor *= skill.config.effects.moveSpeedMultiplier;
-      }
-    }
-    if (isBerserk && berserkTimer <= 0) factor *= 1.5;
-    return speed * factor;
+  double get currentSkill1MaxCd => _usesCatalogSkills
+      ? skillConfig(1).cooldown
+      : HeroSkillSystem.getSkillMeta(heroId, 1).cooldown;
+  double get currentSkill2MaxCd => _usesCatalogSkills
+      ? skillConfig(2).cooldown
+      : HeroSkillSystem.getSkillMeta(heroId, 2).cooldown;
+  double get currentSkill3MaxCd => _usesCatalogSkills
+      ? skillConfig(3).cooldown
+      : HeroSkillSystem.getSkillMeta(heroId, 3).cooldown;
+  double get currentSkill1KiCost => _usesCatalogSkills
+      ? skillConfig(1).kiCost
+      : HeroSkillSystem.getSkillMeta(heroId, 1).kiCost;
+  double get currentSkill2KiCost => _usesCatalogSkills
+      ? skillConfig(2).kiCost
+      : HeroSkillSystem.getSkillMeta(heroId, 2).kiCost;
+  double get currentSkill3KiCost => _usesCatalogSkills
+      ? skillConfig(3).kiCost
+      : HeroSkillSystem.getSkillMeta(heroId, 3).kiCost;
+
+  void activateStealthVeil({required double duration}) {
+    stealthTimer = max(stealthTimer, duration);
+    onStatsChanged?.call();
   }
 
-  // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Buffs)
+  void activateIronShield({
+    required double duration,
+    required double absorption,
+  }) {
+    ironShieldTimer = max(ironShieldTimer, duration);
+    ironShieldAbsorption = max(ironShieldAbsorption, absorption);
+    onStatsChanged?.call();
+  }
+
+  void activateSpeedBoost({
+    required double duration,
+    required double multiplier,
+  }) {
+    speedBoostTimer = max(speedBoostTimer, duration);
+    speedBoostMultiplier = max(speedBoostMultiplier, multiplier);
+    onStatsChanged?.call();
+  }
+
+  // Khiên hấp thụ sát thương (từ Shield Drone, Aegis-X9 Golden Overdrive hoặc Kỹ năng phòng thủ)
   double _baseDamageAbsorption = 0.0;
   double _companionDamageAbsorption = 0.0;
   double temporaryPetDamageAbsorption = 0.0;
+  Object? passivePetShieldOwner;
   Object? activePetShieldOwner;
+  Object? activePetAttackBuffOwner;
   double get damageAbsorption => max(
-    max(_baseDamageAbsorption, _companionDamageAbsorption),
-    goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0,
+    max(
+      max(_baseDamageAbsorption, _companionDamageAbsorption),
+      goldenShieldTimer > 0 ? temporaryPetDamageAbsorption : 0.0,
+    ),
+    ironShieldTimer > 0 ? ironShieldAbsorption : 0.0,
   );
   set damageAbsorption(double value) => _baseDamageAbsorption = value;
   set companionDamageAbsorption(double value) =>
       _companionDamageAbsorption = value;
   double get effectiveDamageAbsorption => damageAbsorption.clamp(0.0, .9);
   double goldenShieldTimer = 0.0;
-  double get shieldHp => goldenShieldTimer > 0
-      ? 50.0
-      : (damageAbsorption > 0 ? (damageAbsorption * 100.0) : 0.0);
+
+  // Buff sát thương từ kỹ năng đặc biệt của Trợ thủ, Cuồng Nộ & Ẩn Thân
+  double petAttackBuffTimer = 0.0;
+  double petAttackBuffBonus = 0.0;
+  double get effectiveDamage {
+    double mult = 1.0;
+    if (petAttackBuffTimer > 0) mult += petAttackBuffBonus;
+    if (isBerserk) mult += 0.55;
+    if (stealthTimer > 0) mult += 0.40;
+    return damage *
+        mult *
+        (_usesCatalogSkills
+            ? skillRuntimes.fold<double>(
+                1,
+                (m, s) =>
+                    m *
+                    (s.effectRemaining > 0
+                        ? s.config.effects.attackMultiplier
+                        : 1),
+              )
+            : 1);
+  }
+
+  double get shieldHp => ironShieldTimer > 0
+      ? (ironShieldAbsorption * 120.0)
+      : (goldenShieldTimer > 0
+            ? 50.0
+            : (damageAbsorption > 0 ? (damageAbsorption * 100.0) : 0.0));
 
   // Lưu vị trí trước đó để chặn xuyên tường
   Vector2 previousPosition = Vector2.zero();
@@ -201,6 +274,12 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    unawaited(SpriteImageCache.instance.preloadHero(heroId));
+  }
+
+  @override
   void update(double dt) {
     super.update(dt);
     animTime += dt;
@@ -215,10 +294,13 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     );
     _dashTrailTimer = max(0, _dashTrailTimer - dt);
 
-    // Hồi phục Ki theo thời gian
+    // Hồi phục Ki theo thời gian (throttle cập nhật HUD ~8Hz thay vì 60Hz để tránh lag trên máy yếu)
     if (currentKi < maxKi) {
+      final prevIntKi = currentKi.toInt();
       currentKi = min(maxKi, currentKi + 5 * dt);
-      onStatsChanged?.call();
+      if (currentKi.toInt() != prevIntKi || currentKi >= maxKi) {
+        onStatsChanged?.call();
+      }
     }
 
     // Giảm các timer hiệu ứng visual & HUD cooldown
@@ -252,6 +334,26 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
         temporaryPetDamageAbsorption = 0.0;
         activePetShieldOwner = null;
       }
+    }
+
+    if (petAttackBuffTimer > 0) {
+      petAttackBuffTimer -= dt;
+      if (petAttackBuffTimer <= 0) {
+        petAttackBuffTimer = 0.0;
+        petAttackBuffBonus = 0.0;
+      }
+    }
+
+    if (stealthTimer > 0) {
+      stealthTimer = max(0.0, stealthTimer - dt);
+    }
+    if (ironShieldTimer > 0) {
+      ironShieldTimer = max(0.0, ironShieldTimer - dt);
+      if (ironShieldTimer <= 0) ironShieldAbsorption = 0.0;
+    }
+    if (speedBoostTimer > 0) {
+      speedBoostTimer = max(0.0, speedBoostTimer - dt);
+      if (speedBoostTimer <= 0) speedBoostMultiplier = 1.0;
     }
 
     // Xử lý speech bubble timer
@@ -415,47 +517,77 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     clearBasicAttackBuffer();
     _isBasicAttackSwing = false;
     isAttacking = true;
-    attackTimer = -0.3; // Kéo dài đòn xoay
-    skill1TrailTimer = 0.35;
+    attackTimer = 0.0;
+    skill1TrailTimer = 0.42;
     skill1StartOffset = Vector2(isFacingRight ? -55 : 55, 0);
     return true;
   }
 
   bool useSkill2() {
     if (!_tryCastSkill(2)) return false;
-    skill2VortexTimer = max(0.4, skillConfig(2).effects.duration);
+    clearBasicAttackBuffer();
+    skill2VortexTimer = _usesCatalogSkills
+        ? max(0.4, skillConfig(2).effects.duration)
+        : 3.5;
+    _isBasicAttackSwing = false;
+    isAttacking = true;
+    attackTimer = 0;
     return true;
   }
 
   bool useSkill3() {
-    if (isBerserk || !_tryCastSkill(3)) return false;
-    isBerserk = berserkTimer > 0;
-    skill3JudgmentTimer = 3.0;
+    if ((isBerserk && HeroSkillSystem.normalizeHeroId(heroId) == "george") ||
+        !_tryCastSkill(3)) {
+      return false;
+    }
+    clearBasicAttackBuffer();
+    isBerserk = HeroSkillSystem.normalizeHeroId(heroId) == 'george';
+    if (isBerserk) berserkTimer = 6;
+    _isBasicAttackSwing = false;
+    isAttacking = true;
+    attackTimer = 0;
+    skill3JudgmentTimer = _usesCatalogSkills ? 3.0 : 2.6;
     return true;
   }
 
   bool _tryCastSkill(int slot) {
     final runtime = skillRuntime(slot);
-    if (!canAct || !runtime.enabled || runtime.cooldownRemaining > 0) {
+    if (!canAct ||
+        (_usesCatalogSkills && !runtime.enabled) ||
+        runtime.cooldownRemaining > .05) {
       return false;
     }
     final config = runtime.config;
-    if (currentKi < config.kiCost) {
+    final meta = HeroSkillSystem.getSkillMeta(heroId, slot);
+    final cost = _usesCatalogSkills ? config.kiCost : meta.kiCost;
+    if (currentKi < cost) {
       insufficientKiFlashTimer = 0.45;
       onStatsChanged?.call();
       return false;
     }
-    currentKi -= config.kiCost;
-    runtime.cooldownRemaining = config.cooldown;
-    runtime.effectRemaining = config.effects.duration;
+    currentKi -= cost;
+    runtime.cooldownRemaining = _usesCatalogSkills
+        ? config.cooldown
+        : meta.cooldown;
+    runtime.effectRemaining = _usesCatalogSkills ? config.effects.duration : 0;
     visualAnimator.playAction(slot == 1 ? .55 : .45);
     invulnerabilityTimer = max(
       invulnerabilityTimer,
-      config.effects.invulnerabilityDuration,
+      _usesCatalogSkills ? config.effects.invulnerabilityDuration : 0,
     );
     onStatsChanged?.call();
-    if (config.sfxAsset.isNotEmpty) {
-      AudioService.instance.playSfx(config.sfxAsset);
+    final sound = _usesCatalogSkills
+        ? config.sfxAsset
+        : switch (slot) {
+            1 =>
+              HeroSkillSystem.isRangedHero(heroId)
+                  ? SfxSound.attackArrow
+                  : SfxSound.skillHurricane,
+            2 => SfxSound.skillSmash,
+            _ => SfxSound.skillBerserk,
+          };
+    if (!_usesCatalogSkills || config.sfxAsset.isNotEmpty) {
+      AudioService.instance.playSfx(sound);
     }
     return true;
   }
@@ -476,6 +608,8 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     comboResetTimer = 0;
     isBerserk = false;
     invulnerabilityTimer = 0;
+    stealthTimer = ironShieldTimer = ironShieldAbsorption = speedBoostTimer = 0;
+    speedBoostMultiplier = 1;
     skill1TrailTimer = 0;
     skill2VortexTimer = 0;
     skill3JudgmentTimer = 0;
@@ -512,6 +646,18 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     onStatsChanged?.call();
   }
 
+  void restoreKi(double amount) {
+    currentKi = min(maxKi, currentKi + amount);
+    onStatsChanged?.call();
+  }
+
+  void reduceSkillCooldowns(double seconds) {
+    skill1VisualCd = max(0.0, skill1VisualCd - seconds);
+    skill2VisualCd = max(0.0, skill2VisualCd - seconds);
+    skill3VisualCd = max(0.0, skill3VisualCd - seconds);
+    onStatsChanged?.call();
+  }
+
   void say(String text) {
     speechBubbleText = text;
     speechBubbleTimer = 3.0;
@@ -522,11 +668,11 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     final barrierFactor = 1.0 - effectiveDamageAbsorption;
     var skillFactor = 1.0;
     for (final skill in skillRuntimes) {
-      if (skill.effectRemaining > 0 && (skill.config.slot != 3 || isBerserk)) {
+      if (_usesCatalogSkills && skill.effectRemaining > 0) {
         skillFactor *= 1 - skill.config.effects.damageReduction;
       }
     }
-    if (isBerserk && berserkTimer <= 0) skillFactor *= 0.6;
+    if (isBerserk) skillFactor *= 0.6;
     final effectiveDmg = dmg * barrierFactor * skillFactor;
     currentHp = max(0, currentHp - effectiveDmg);
     hitFlashTimer = 0.08;
@@ -595,14 +741,29 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       }
     }
 
+    final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
+    final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
+    final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final bool isStripHero = SpriteImageCache.isStripAnimatedHero(heroId);
+    final bool isCustomAnimated = isNova || isShadow || isEmber || isStripHero;
+
+    // Hiệu ứng nghiêng thân khi chạy, nhún bước chân và lao người khi tấn công
+    final isMoving = canAct && visualAnimator.movementWeight > .02;
+    final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
+    final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
+    final bool stripMultiDirRun = isStripHero && isMoving && !isAttacking;
+
     canvas.save();
-    if (!isFacingRight) {
+    if (!isFacingRight &&
+        !novaMultiDirRun &&
+        !emberMultiDirRun &&
+        !stripMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
 
     // Hiệu ứng nghiêng thân khi chạy, nhún bước chân và lao người khi tấn công
-    final isMoving = canAct && visualAnimator.movementWeight > .02;
+
     final movementWeight = visualAnimator.movementWeight;
     final gaitAngle = visualAnimator.stridePhase * 2 * pi;
     final runBounce =
@@ -625,13 +786,41 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.translate(-size.x / 2, -size.y / 2);
     }
 
-    // Hiệu ứng hào quang Cuồng Nộ / Ultimate Aura theo hệ nhân vật
+    // Hiệu ứng hào quang Cuồng Nộ / Pháo Đài Sắt / Ẩn Thân (vẽ 2 vòng bán trong suốt nhẹ GPU thay cho MaskFilter.blur)
     if (isBerserk) {
-      final auraColor = _heroPrimaryColor.withValues(alpha: 0.42);
-      final auraPaint = Paint()..color = auraColor.withValues(alpha: .12);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 26, auraPaint);
-      auraPaint.color = auraColor.withValues(alpha: .2);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 21, auraPaint);
+      final centerPt = Offset(size.x / 2, size.y / 2);
+      canvas.drawCircle(
+        centerPt,
+        30,
+        Paint()..color = _heroPrimaryColor.withValues(alpha: 0.16),
+      );
+      canvas.drawCircle(
+        centerPt,
+        24,
+        Paint()..color = _heroPrimaryColor.withValues(alpha: 0.30),
+      );
+    }
+    if (ironShieldTimer > 0) {
+      canvas.drawCircle(
+        Offset(size.x / 2, size.y / 2),
+        25,
+        Paint()..color = _heroPrimaryColor.withValues(alpha: 0.22),
+      );
+      canvas.drawCircle(
+        Offset(size.x / 2, size.y / 2),
+        25,
+        Paint()
+          ..color = _heroPrimaryColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.4,
+      );
+    }
+    if (stealthTimer > 0) {
+      canvas.drawCircle(
+        Offset(size.x / 2, size.y / 2),
+        24,
+        Paint()..color = const Color(0xFF8E24AA).withValues(alpha: 0.22),
+      );
     }
 
     // Khiên Hoàng Kim từ Aegis-X9
@@ -661,7 +850,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       shadowPaint,
     );
 
-    if (sprites != null) {
+    if (sprites != null && !isCustomAnimated) {
       canvas.save();
       final pivotX = size.x / 2;
       final pivotY = size.y - 2;
@@ -674,8 +863,311 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
       canvas.rotate(strideTilt);
       visualAnimator.render(canvas, sprites, Offset.zero);
       canvas.restore();
-    } else if (heroId == 'kaelen' || heroId == 'nova_blade') {
+    } else if (heroId == 'kaelen') {
       _renderKaelenThunderblade(canvas, breathOffset, legSwing);
+    } else if (isStripHero) {
+      final strip = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+                SpriteImageCache.instance.getHeroIdleImage(heroId))
+          : (isMoving
+                ? (SpriteImageCache.instance.getHeroRunImage(heroId) ??
+                      SpriteImageCache.instance.getHeroIdleImage(heroId))
+                : SpriteImageCache.instance.getHeroIdleImage(heroId));
+      if (strip != null && strip.width >= 512) {
+        final bool is4DirRunSheet =
+            !isAttacking && isMoving && strip.height >= 1000;
+        final int cols = is4DirRunSheet
+            ? 4
+            : max(1, (strip.width / strip.height).round());
+        final int row;
+        if (is4DirRunSheet) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          if (my.abs() > mx.abs()) {
+            row = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else {
+            row = mx < 0 ? 2 : 3; // 2: Left, 3: Right
+          }
+        } else {
+          row = 0;
+        }
+
+        final int col;
+        if (isAttacking) {
+          final progress = (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(
+            0.0,
+            0.999,
+          );
+          col = (progress * cols).floor().clamp(0, cols - 1);
+        } else if (isMoving) {
+          col = (animTime * 10.5).floor() % cols;
+        } else {
+          col = (animTime * 5.5).floor() % cols;
+        }
+        final cellW = strip.width / cols;
+        final cellH = is4DirRunSheet
+            ? strip.height / 4.0
+            : strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+        const dstW = 54.0;
+        const dstH = 54.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+        final spritePaint = Paint()..filterQuality = FilterQuality.none;
+        if (stealthTimer > 0) {
+          spritePaint.color = const Color(0x88FFFFFF);
+        }
+        canvas.drawImageRect(strip, srcRect, dstRect, spritePaint);
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
+    } else if (isShadow) {
+      final String action = isAttacking
+          ? 'attack'
+          : (isMoving ? 'run' : 'idle');
+      final int frameIndex;
+      if (isAttacking) {
+        final progress = (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(
+          0.0,
+          0.999,
+        );
+        frameIndex = (progress * 16).floor().clamp(0, 15);
+      } else if (isMoving) {
+        frameIndex = (animTime * 14.0).floor() % 16;
+      } else {
+        frameIndex = (animTime * 11.0).floor() % 16;
+      }
+
+      final shadowImg = SpriteImageCache.instance.getHeroSequenceFrame(
+        'shadow_01',
+        action,
+        frameIndex,
+      );
+      if (shadowImg != null) {
+        const dstW = 52.0;
+        const dstH = 52.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - dstH;
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+        final srcRect = Rect.fromLTWH(
+          0,
+          0,
+          shadowImg.width.toDouble(),
+          shadowImg.height.toDouble(),
+        );
+        canvas.drawImageRect(
+          shadowImg,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
+    } else if (isNova) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('nova_blade') ??
+                SpriteImageCache.instance.getHeroImage('nova_blade'))
+          : (isMoving
+                ? (SpriteImageCache.instance.getHeroRunImage('nova_blade') ??
+                      SpriteImageCache.instance.getHeroImage('nova_blade'))
+                : (SpriteImageCache.instance.getHeroIdleImage('nova_blade') ??
+                      SpriteImageCache.instance.getHeroImage('nova_blade')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          final absX = mx.abs();
+          final absY = my.abs();
+
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = mx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = mx > 0 ? 5 : 4; // 5: Diagonal Right, 4: Diagonal Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect = Rect.fromLTWH(
+            col * cellW,
+            runRow * cellH,
+            cellW,
+            cellH,
+          );
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final int row;
+          final int col;
+          if (isAttacking) {
+            final progress = (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(
+              0.0,
+              0.999,
+            );
+            final comboRow = comboStep == 2 ? 2 : (comboStep == 3 ? 3 : 1);
+            row = comboRow.clamp(0, 4);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            final idx = (animTime * 12.0).floor() % 25;
+            row = idx ~/ 5;
+            col = idx % 5;
+          } else {
+            final idx = (animTime * 8.0).floor() % 25;
+            row = idx ~/ 5;
+            col = idx % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (477.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (229.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
+    } else if (isEmber) {
+      final heroSprite = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage('ember_02') ??
+                SpriteImageCache.instance.getHeroAttackImage('ember') ??
+                SpriteImageCache.instance.getHeroImage('ember_02'))
+          : (isMoving
+                ? (SpriteImageCache.instance.getHeroRunImage('ember_02') ??
+                      SpriteImageCache.instance.getHeroRunImage('ember') ??
+                      SpriteImageCache.instance.getHeroImage('ember_02'))
+                : (SpriteImageCache.instance.getHeroIdleImage('ember_02') ??
+                      SpriteImageCache.instance.getHeroIdleImage('ember') ??
+                      SpriteImageCache.instance.getHeroImage('ember_02')));
+      if (heroSprite != null) {
+        if (!isAttacking && isMoving && heroSprite.width >= 1500) {
+          final mx = moveDirection.x;
+          final my = moveDirection.y;
+          final absX = mx.abs();
+          final absY = my.abs();
+
+          final int runRow;
+          if (absX < 0.001 && absY < 0.001) {
+            runRow = isFacingRight ? 3 : 2;
+          } else if (absX < 0.414 * absY) {
+            runRow = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else if (absY < 0.414 * absX) {
+            runRow = mx > 0 ? 3 : 2; // 3: Right, 2: Left
+          } else {
+            runRow = mx > 0 ? 5 : 4; // 5: Diag Right, 4: Diag Left
+          }
+
+          final col = (animTime * 14.0).floor() % 8;
+          const cellW = 256.0;
+          const cellH = 256.0;
+          final srcRect = Rect.fromLTWH(
+            col * cellW,
+            runRow * cellH,
+            cellW,
+            cellH,
+          );
+
+          const dstW = 48.0;
+          const dstH = 48.0;
+          final dstLeft = (size.x - dstW) / 2;
+          final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+          final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        } else {
+          final int row;
+          final int col;
+          if (isAttacking) {
+            final progress = (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(
+              0.0,
+              0.999,
+            );
+            final comboRow = comboStep == 2 ? 2 : (comboStep == 3 ? 3 : 1);
+            row = comboRow.clamp(0, 4);
+            col = (progress * 5).floor().clamp(0, 4);
+          } else if (isMoving) {
+            final idx = (animTime * 12.0).floor() % 25;
+            row = idx ~/ 5;
+            col = idx % 5;
+          } else {
+            final idx = (animTime * 8.0).floor() % 25;
+            row = idx ~/ 5;
+            col = idx % 5;
+          }
+
+          final cellW = heroSprite.width / 5.0;
+          final cellH = heroSprite.height / 5.0;
+          final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+          final Rect dstRect;
+          if (cellH >= 500) {
+            const dstW = 96.0;
+            const dstH = 96.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (472.0 / 512.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          } else {
+            const dstW = 48.0;
+            const dstH = 48.0;
+            final dstLeft = (size.x - dstW) / 2;
+            final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+            dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+          }
+
+          canvas.drawImageRect(
+            heroSprite,
+            srcRect,
+            dstRect,
+            Paint()..filterQuality = FilterQuality.none,
+          );
+        }
+      } else {
+        _renderClassicHero(canvas, breathOffset, legSwing);
+      }
     } else {
       final heroSprite = SpriteImageCache.isProceduralHero(heroId)
           ? null
@@ -727,39 +1219,56 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
     if (isAttacking && !_isBasicAttackSwing && sprites == null) {
       final slashColor = _heroPrimaryColor;
       final secondarySlash = _heroSecondaryColor;
-      final sweepStart = comboStep == 2 ? -pi / 1.4 : -pi / 2.2;
-      final sweepAngle = comboStep == 3 ? pi * 1.45 : pi * 0.95;
+      if (HeroSkillSystem.isRangedHero(heroId)) {
+        final castAlpha = (1.0 - (attackTimer.clamp(0.0, 0.25) / 0.25)).clamp(
+          0.0,
+          1.0,
+        );
+        canvas.drawCircle(
+          Offset(size.x / 2 + 16, size.y / 2 - 2),
+          11 * (1.2 - castAlpha * 0.4),
+          Paint()..color = slashColor.withValues(alpha: castAlpha * 0.35),
+        );
+        canvas.drawCircle(
+          Offset(size.x / 2 + 16, size.y / 2 - 2),
+          5 * castAlpha,
+          Paint()..color = secondarySlash.withValues(alpha: castAlpha * 0.9),
+        );
+      } else if (!isStripHero) {
+        final sweepStart = comboStep == 2 ? -pi / 1.4 : -pi / 2.2;
+        final sweepAngle = comboStep == 3 ? pi * 1.45 : pi * 0.95;
 
-      canvas.drawArc(
-        Rect.fromCenter(
-          center: Offset(size.x / 2 + 10, size.y / 2),
-          width: 46,
-          height: 40,
-        ),
-        sweepStart,
-        sweepAngle,
-        false,
-        Paint()
-          ..color = slashColor.withValues(alpha: 0.82)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = comboStep == 3 ? 5.0 : 3.5
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawArc(
-        Rect.fromCenter(
-          center: Offset(size.x / 2 + 10, size.y / 2),
-          width: 38,
-          height: 32,
-        ),
-        sweepStart + 0.1,
-        sweepAngle * 0.8,
-        false,
-        Paint()
-          ..color = secondarySlash.withValues(alpha: 0.85)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.8
-          ..strokeCap = StrokeCap.round,
-      );
+        canvas.drawArc(
+          Rect.fromCenter(
+            center: Offset(size.x / 2 + 10, size.y / 2),
+            width: 46,
+            height: 40,
+          ),
+          sweepStart,
+          sweepAngle,
+          false,
+          Paint()
+            ..color = slashColor.withValues(alpha: 0.82)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = comboStep == 3 ? 5.0 : 3.5
+            ..strokeCap = StrokeCap.round,
+        );
+        canvas.drawArc(
+          Rect.fromCenter(
+            center: Offset(size.x / 2 + 10, size.y / 2),
+            width: 38,
+            height: 32,
+          ),
+          sweepStart + 0.1,
+          sweepAngle * 0.8,
+          false,
+          Paint()
+            ..color = secondarySlash.withValues(alpha: 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.8
+            ..strokeCap = StrokeCap.round,
+        );
+      }
     }
 
     // Nháy trắng khi trúng đòn (Hit Flash 0.08s)
@@ -1528,8 +2037,76 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = const Color(0xFFFFEA00).withValues(alpha: alpha),
           );
         }
-      } else if (heroId == 'shadow_01' || heroId == 'ninja') {
-        // Shadow-01 / Ninja Skill 1: Plasma Shot / Phi tiêu 3 hướng
+      } else if (heroId == 'ranger') {
+        // Lyra Skill 1: Tiễn Vũ Liên Châu (Cung năng lượng lục bảo tỏa 5 vệt gió)
+        for (int i = -2; i <= 2; i++) {
+          final a = (isFacingRight ? 0.0 : pi) + i * 0.22;
+          canvas.drawLine(
+            center + Offset(cos(a) * 10, sin(a) * 10),
+            center +
+                Offset(
+                  cos(a) * (34 + progress * 42),
+                  sin(a) * (34 + progress * 42),
+                ),
+            Paint()
+              ..color = const Color(0xFF00E676).withValues(alpha: alpha)
+              ..strokeWidth = 2.6
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else if (heroId == 'tanker') {
+        // Braum Skill 1: Húc Khiên Xung Kích (Vệt xung kích xanh lam thép)
+        if (skill1StartOffset != null) {
+          final start =
+              center + Offset(skill1StartOffset!.x, skill1StartOffset!.y);
+          canvas.drawLine(
+            start,
+            center,
+            Paint()
+              ..color = const Color(0xFF00B0FF).withValues(alpha: alpha * 0.7)
+              ..strokeWidth = 14.0
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+        canvas.drawArc(
+          Rect.fromCenter(
+            center: center + Offset(dirSign * 14, 0),
+            width: 32,
+            height: 48,
+          ),
+          isFacingRight ? -pi / 2.2 : pi / 1.8,
+          pi * 0.9,
+          false,
+          Paint()
+            ..color = const Color(0xFF80D8FF).withValues(alpha: alpha)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4.5,
+        );
+      } else if (heroId == 'ninja') {
+        // Hayate Skill 1: Phi Tiêu Lướt Ảnh (Vệt lướt huyết ảnh + 3 vệt phi tiêu)
+        if (skill1StartOffset != null) {
+          final start =
+              center + Offset(skill1StartOffset!.x, skill1StartOffset!.y);
+          canvas.drawLine(
+            start,
+            center,
+            Paint()
+              ..color = const Color(0xFFE91E63).withValues(alpha: alpha * 0.85)
+              ..strokeWidth = 6.0
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+        for (final spreadY in [-14.0, 0.0, 14.0]) {
+          final px = center.dx + dirSign * (20.0 + progress * 65.0);
+          final py = center.dy + spreadY * (0.4 + progress);
+          canvas.drawCircle(
+            Offset(px, py),
+            5.0 * alpha,
+            Paint()..color = const Color(0xFFFF1744).withValues(alpha: alpha),
+          );
+        }
+      } else if (heroId == 'shadow_01' || heroId == 'shadow') {
+        // Shadow-01 Skill 1: Plasma Shot (3 lưỡi dao năng lượng tím)
         for (final spreadY in [-16.0, 0.0, 16.0]) {
           final px = center.dx + dirSign * (22.0 + progress * 75.0);
           final py = center.dy + spreadY * (0.4 + progress);
@@ -1544,41 +2121,24 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
               ..strokeWidth = 3.0,
           );
         }
-      } else if (skill1StartOffset != null) {
-        // George Búa Cuồng Phong / Lướt
-        final start =
-            center + Offset(skill1StartOffset!.x, skill1StartOffset!.y);
-        final mid1 = Offset.lerp(start, center, 0.33)! + const Offset(0, -10);
-        final mid2 = Offset.lerp(start, center, 0.66)! + const Offset(0, 10);
-
-        final boltPath = Path()
-          ..moveTo(start.dx, start.dy)
-          ..lineTo(mid1.dx, mid1.dy)
-          ..lineTo(mid2.dx, mid2.dy)
-          ..lineTo(center.dx, center.dy);
-
-        canvas.drawPath(
-          boltPath,
-          Paint()
-            ..color = primary.withValues(alpha: alpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 5.0,
-        );
-        canvas.drawPath(
-          boltPath,
-          Paint()
-            ..color = Colors.white.withValues(alpha: alpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0,
-        );
-        canvas.drawCircle(
-          center,
-          36 * (1.0 - alpha * 0.5),
-          Paint()
-            ..color = secondary.withValues(alpha: alpha * 0.7)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.5,
-        );
+      } else {
+        // George Skill 1: Búa Cuồng Phong (Vòng xoáy búa vàng rực 360°)
+        for (int i = 0; i < 3; i++) {
+          final r = 24.0 + i * 16.0;
+          canvas.drawArc(
+            Rect.fromCenter(center: center, width: r * 2, height: r * 2),
+            animTime * 14.0 + i * 2.0,
+            pi * 1.15,
+            false,
+            Paint()
+              ..color =
+                  (i.isEven ? const Color(0xFFFFD700) : const Color(0xFFFF6D00))
+                      .withValues(alpha: alpha * 0.85)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4.0 - i * 0.8
+              ..strokeCap = StrokeCap.round,
+          );
+        }
       }
     }
 
@@ -1616,7 +2176,7 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = orbColor,
           );
         }
-      } else if (heroId == 'garrick' || heroId == 'tanker') {
+      } else if (heroId == 'garrick') {
         // Garrick Skill 2: Hộ Thể Hoàng Kim (Giáp đá vàng kim rực rỡ + 6 khiên đá xoay)
         canvas.drawCircle(center, 42, Paint()..color = const Color(0x33FFD700));
         canvas.drawCircle(
@@ -1664,41 +2224,140 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
             Paint()..color = const Color(0xFFFFEA00),
           );
         }
-      } else {
-        // Nova Blade / Shadow-01 / George: 4 Thanh Kiếm Ánh Sáng xoay 360 độ + Đuôi sáng
+      } else if (heroId == 'ranger') {
+        // Lyra Skill 2: Nhào Lộn Bẫy Gai (Vòng gai lục bảo & 6 gai nhọn phát sáng)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
         canvas.drawCircle(
           center,
-          45,
+          44,
           Paint()
-            ..color = secondary.withValues(alpha: 0.45)
+            ..color = const Color(0xFF00E676).withValues(alpha: alpha * 0.55)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.2,
+            ..strokeWidth = 3.0,
         );
-
+        for (int i = 0; i < 6; i++) {
+          final a = i * (pi / 3) + animTime * 3.0;
+          final p1 = Offset(center.dx + cos(a) * 34, center.dy + sin(a) * 34);
+          final p2 = Offset(center.dx + cos(a) * 52, center.dy + sin(a) * 52);
+          canvas.drawLine(
+            p1,
+            p2,
+            Paint()
+              ..color = const Color(0xFFEEFF41).withValues(alpha: alpha)
+              ..strokeWidth = 3.2
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else if (heroId == 'tanker') {
+        // Braum Skill 2: Pháo Đài Sắt (Mái vòm thép xanh lam + 4 khiên thép xoay)
+        canvas.drawCircle(center, 44, Paint()..color = const Color(0x2A00B0FF));
+        canvas.drawCircle(
+          center,
+          44,
+          Paint()
+            ..color = const Color(0xFF40C4FF)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3.2,
+        );
         for (int i = 0; i < 4; i++) {
-          final angle = animTime * 6.5 + i * (pi / 2);
-          final bx = center.dx + cos(angle) * 45;
-          final by = center.dy + sin(angle) * 45;
-
-          canvas.save();
-          canvas.translate(bx, by);
-          canvas.rotate(angle + pi / 2);
-          // Chuôi kiếm
-          canvas.drawRect(
-            const Rect.fromLTWH(-12, -1.5, 5, 3),
-            Paint()..color = const Color(0xFFFFD700),
+          final a = animTime * 4.0 + i * (pi / 2);
+          final sx = center.dx + cos(a) * 44;
+          final sy = center.dy + sin(a) * 44;
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: Offset(sx, sy), width: 10, height: 14),
+              const Radius.circular(3),
+            ),
+            Paint()..color = const Color(0xFF00B0FF),
           );
-          // Lưỡi kiếm phát sáng
-          final swordPath = Path()
-            ..moveTo(-7, -3)
-            ..lineTo(14, 0)
-            ..lineTo(-7, 3)
-            ..close();
-          canvas.drawPath(
-            swordPath,
-            Paint()..color = i.isEven ? primary : secondary,
+        }
+      } else if (heroId == 'ninja') {
+        // Hayate Skill 2: Khói Ẩn Thân (Vòng khói tím-đỏ huyền ảo xoay quanh)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        for (int i = 0; i < 6; i++) {
+          final a = animTime * 4.5 + i * (pi / 3);
+          final cx = center.dx + cos(a) * 36;
+          final cy = center.dy + sin(a) * 36;
+          canvas.drawCircle(
+            Offset(cx, cy),
+            9.0,
+            Paint()
+              ..color =
+                  (i.isEven ? const Color(0xFF8E24AA) : const Color(0xFFE91E63))
+                      .withValues(alpha: alpha * 0.45),
           );
-          canvas.restore();
+        }
+      } else if (heroId == 'nova_blade' || heroId == 'nova') {
+        // Nova Blade Skill 2: Shadow Dash (Dải plasma tím-cyan cao tốc)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          center,
+          42,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.6)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        for (int i = 0; i < 3; i++) {
+          final a = animTime * 9.0 + i * (2 * pi / 3);
+          canvas.drawArc(
+            Rect.fromCenter(center: center, width: 76, height: 76),
+            a,
+            0.85,
+            false,
+            Paint()
+              ..color = const Color(0xFFE040FB).withValues(alpha: alpha * 0.85)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3.5
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else if (heroId == 'shadow_01' || heroId == 'shadow') {
+        // Shadow-01 Skill 2: Cyber Spin (Lốc xoáy lưỡi hái hư không 360°)
+        canvas.drawCircle(
+          center,
+          46,
+          Paint()
+            ..color = const Color(0xFFE040FB).withValues(alpha: 0.45)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        for (int i = 0; i < 4; i++) {
+          final a = animTime * 8.5 + i * (pi / 2);
+          canvas.drawArc(
+            Rect.fromCenter(center: center, width: 88, height: 88),
+            a,
+            0.95,
+            false,
+            Paint()
+              ..color = i.isEven
+                  ? const Color(0xFFE040FB)
+                  : const Color(0xFF00E5FF)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4.2
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+      } else {
+        // George Skill 2: Nện Đất Chấn Động (Sóng chấn động nứt đất vàng-cam)
+        final alpha = (skill2VortexTimer / 3.5).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          center,
+          48 * (1.15 - alpha * 0.2),
+          Paint()
+            ..color = const Color(0xFFFF9800).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4.0,
+        );
+        for (int i = 0; i < 6; i++) {
+          final a = i * (pi / 3);
+          canvas.drawLine(
+            center + Offset(cos(a) * 14, sin(a) * 14),
+            center + Offset(cos(a) * 46, sin(a) * 46),
+            Paint()
+              ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.85)
+              ..strokeWidth = 2.5,
+          );
         }
       }
     }
@@ -1766,6 +2425,70 @@ class PlayerComponent extends PositionComponent with CollisionCallbacks {
           ),
           Paint()
             ..color = const Color(0xFFE040FB).withValues(alpha: progress * 0.8),
+        );
+      } else if (heroId == 'ranger') {
+        // Lyra Skill 3: Mưa Sao Băng (Vòng sao vàng lục bảo rực sáng)
+        canvas.drawCircle(center, 64, Paint()..color = const Color(0x2200E676));
+        for (int i = 0; i < 8; i++) {
+          final a = i * (pi / 4) + animTime * 3.0;
+          final sx = center.dx + cos(a) * 46;
+          final sy = center.dy + sin(a) * 46;
+          canvas.drawCircle(
+            Offset(sx, sy),
+            6.5 * progress,
+            Paint()
+              ..color = const Color(0xFFFFD700).withValues(alpha: progress),
+          );
+          canvas.drawCircle(
+            Offset(sx, sy),
+            3.0 * progress,
+            Paint()..color = Colors.white.withValues(alpha: progress),
+          );
+        }
+      } else if (heroId == 'tanker') {
+        // Braum Skill 3: Địa Chấn Phán Quyết (3 vòng địa chấn xanh lam lan tỏa)
+        for (int i = 0; i < 3; i++) {
+          final r = (24.0 + i * 24.0) * (1.25 - progress * 0.25);
+          canvas.drawCircle(
+            center,
+            r,
+            Paint()
+              ..color = const Color(0xFF00B0FF)
+                  .withValues(alpha: progress * 0.85)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3.5,
+          );
+        }
+      } else if (heroId == 'ninja') {
+        // Hayate Skill 3: Ảnh Sát Liên Hoàn (Chém chữ X huyết ảnh khổng lồ)
+        final slashLen = 52.0 * (1.15 - progress * 0.15);
+        final xPaint = Paint()
+          ..color = const Color(0xFFFF1744).withValues(alpha: progress)
+          ..strokeWidth = 6.5
+          ..strokeCap = StrokeCap.round;
+        final corePaint = Paint()
+          ..color = Colors.white.withValues(alpha: progress)
+          ..strokeWidth = 2.4
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(
+          Offset(center.dx - slashLen, center.dy - slashLen),
+          Offset(center.dx + slashLen, center.dy + slashLen),
+          xPaint,
+        );
+        canvas.drawLine(
+          Offset(center.dx + slashLen, center.dy - slashLen),
+          Offset(center.dx - slashLen, center.dy + slashLen),
+          xPaint,
+        );
+        canvas.drawLine(
+          Offset(center.dx - slashLen * 0.8, center.dy - slashLen * 0.8),
+          Offset(center.dx + slashLen * 0.8, center.dy + slashLen * 0.8),
+          corePaint,
+        );
+        canvas.drawLine(
+          Offset(center.dx + slashLen * 0.8, center.dy - slashLen * 0.8),
+          Offset(center.dx - slashLen * 0.8, center.dy + slashLen * 0.8),
+          corePaint,
         );
       } else {
         // Ember-02 Thái Dương Bộc Phá / George Cuồng Nộ

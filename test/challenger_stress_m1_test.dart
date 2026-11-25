@@ -419,50 +419,16 @@ void main() {
         expect(boss.currentHp, 0.0);
         expect(boss.isDefeated, isTrue);
 
-        // Defeat drops exactly 12 coins and 3 potions (total 15 pickups)
-        final newPickups = game.pickups.sublist(initialPickups);
-        expect(
-          newPickups.length,
-          15,
-          reason: 'Boss must drop exactly 15 pickups',
-        );
-
-        final coins = newPickups
-            .where((p) => p.type == PickupType.goldCoin)
-            .toList();
-        final potions = newPickups
-            .where((p) => p.type == PickupType.healthPotion)
-            .toList();
-
-        expect(
-          coins.length,
-          12,
-          reason: 'Boss must drop exactly 12 Gold Coins',
-        );
-        expect(
-          potions.length,
-          3,
-          reason: 'Boss must drop exactly 3 Health Potions',
-        );
-
-        // Verify geometry: All 15 pickups arranged in a 68px radius ring
-        for (final pickup in newPickups) {
-          final dist = pickup.position.distanceTo(boss.position);
-          expect(
-            dist,
-            closeTo(68.0, 0.01),
-            reason:
-                'Pickup position must form a circle of radius 68px around boss',
-          );
+        final loot = game.pickups.sublist(initialPickups);
+        expect(loot.map((p) => p.type), unorderedEquals([
+          PickupType.goldCoin, PickupType.goldCoin, PickupType.goldCoin,
+          PickupType.healthPotion, PickupType.expGem,
+        ]));
+        for (final pickup in loot) {
+          expect(pickup.position.distanceTo(boss.position), closeTo(54, .01));
         }
-
-        // Verify wallet conversion rule: 12 coins = 12,000 Gold
-        final totalGold = coins.length * GameConstants.goldPerCoinPickup;
-        expect(
-          totalGold,
-          12000,
-          reason: '12 coins at 1000 gold/coin must equal 12,000 Gold',
-        );
+        final coins = loot.where((p) => p.type == PickupType.goldCoin);
+        expect(coins.length * GameConstants.goldPerCoinPickup, 3000);
 
         // Verify victory portal is created in game world
         final portals = game.world.children

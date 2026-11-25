@@ -57,7 +57,10 @@ Future<GoldRushGame> _scene(WidgetTester tester, int zombies, int skeletons,
   for (final actor in [...game.enemies, ...game.skeletons, ...game.pickups]) {
     actor.removeFromParent();
   }
-  game.boss?.removeFromParent();
+  for (final boss in game.bosses) {
+    boss.removeFromParent();
+  }
+  game.bosses.clear();
   game.enemies.clear();
   game.skeletons.clear();
   game.pickups.clear();
@@ -95,12 +98,13 @@ Future<GoldRushGame> _scene(WidgetTester tester, int zombies, int skeletons,
     game.skeletons.add(enemy);
     await game.world.add(enemy);
   }
-  game.boss = BossEnemy(
+  final boss = BossEnemy(
     position: Vector2(700, 380),
     player: game.player,
     random: Random(3000),
   )..currentHp = 1000000;
-  await game.world.add(game.boss!);
+  game.bosses.add(boss);
+  await game.world.add(boss);
   const ids = ['aegis_x9', 'orbit_03', 'cyber_drone', 'luna_fox'];
   for (var i = 0; i < companions; i++) {
     final companion = CompanionComponent(
@@ -115,6 +119,8 @@ Future<GoldRushGame> _scene(WidgetTester tester, int zombies, int skeletons,
   expect(game.player.isMounted, isTrue);
   expect(game.enemies.every((e) => e.isMounted), isTrue);
   expect(game.skeletons.every((e) => e.isMounted), isTrue);
+  expect(game.bosses, [boss]);
+  expect(boss.isMounted, isTrue);
   game.isVictoryTriggered = false;
   game.isGameOverTriggered = false;
   game.resumeEngine();

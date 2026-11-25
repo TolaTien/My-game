@@ -12,7 +12,7 @@ void main() {
     test('Hồ sơ mặc định khởi tạo chuẩn xác', () {
       final profile = PlayerProfile.defaultProfile();
 
-      expect(profile.gold, 2000);
+      expect(profile.gold, 500);
       expect(profile.diamonds, 50);
       expect(profile.rankPoints, 1000);
       expect(profile.rankTier, 'Đồng');
@@ -129,32 +129,32 @@ void main() {
 
     test('Lưu và đọc profile qua PlayerStorage', () async {
       await PlayerStorage.loadProfile();
-      expect(PlayerStorage.currentProfile.gold, 2000);
+      expect(PlayerStorage.currentProfile.gold, 500);
 
       // Thử cộng vàng
       await PlayerStorage.addGold(5000);
-      expect(PlayerStorage.currentProfile.gold, 7000);
+      expect(PlayerStorage.currentProfile.gold, 5500);
 
       // Thử trừ vàng
       final spendSuccess = await PlayerStorage.spendGold(3000);
       expect(spendSuccess, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 4000);
+      expect(PlayerStorage.currentProfile.gold, 2500);
 
       // Trừ quá số dư
       final overSpend = await PlayerStorage.spendGold(99999);
       expect(overSpend, isFalse);
-      expect(PlayerStorage.currentProfile.gold, 4000);
+      expect(PlayerStorage.currentProfile.gold, 2500);
 
       // Mở khóa tướng Ranger (giá 100 vàng)
       final unlockRanger = await PlayerStorage.unlockHero('ranger', 100);
       expect(unlockRanger, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 3900);
+      expect(PlayerStorage.currentProfile.gold, 2400);
       expect(PlayerStorage.currentProfile.unlockedHeroIds, contains('ranger'));
       expect(PlayerStorage.currentProfile.selectedHeroId, 'ranger');
 
       // Ghi nhận vòng quay
       await PlayerStorage.recordSpin(20000);
-      expect(PlayerStorage.currentProfile.gold, 23900);
+      expect(PlayerStorage.currentProfile.gold, 22400);
       expect(PlayerStorage.currentProfile.canSpinToday(), isFalse);
     });
   });

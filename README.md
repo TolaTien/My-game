@@ -1,11 +1,12 @@
-# 🏆 Big-War (Gold Rush Mobile) — 2D Pixel-Art Action RPG
+# 🏆 Big-War — 2D Pixel-Art Action RPG Mobile
 
 > **Học phần:** `INT1449 · Lập trình di động`  
-> **Nhóm chủ đề:** **Nhóm A — Game 2D với Flame** *(phát triển mở rộng từ project mẫu **Gold Rush**: Chủ đề #1 Thu thập vàng trên bản đồ ô, #2 Quái đuổi bằng tìm đường A\*, #4 Game nhiều màn đọc từ JSON)* kết hợp mở rộng **Nhóm B — Trợ lý AI qua máy chủ Proxy giữ khóa + Chế độ Demo offline**.
+> **Chủ đề chính:** **Nhóm A — Game 2D với Flame · Chủ đề #2 (Quái đuổi bằng tìm đường A\*)** *(tích hợp trọn vẹn tính năng cốt lõi của #1 Thu thập tài nguyên trên bản đồ ô)*  
+> **Mở rộng nổi bật:** 5 bản đồ đọc từ JSON, Boss 2 pha, Đấu trường PvP 1v1/2v2/4v4 + Bot AI 3 bậc, Kết bạn/Tổ đội realtime, Âm thanh BGM/SFX, Bảng xếp hạng, 9 Tướng Level 1–100, 6 Trợ thủ AI và **Trợ lý AI theo mẫu Nhóm B (Máy chủ Proxy giữ khóa + Chế độ Demo offline)**.
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.24%2B%20(Dart%20%5E3.13.5)-02569B?logo=flutter)
 ![Flame](https://img.shields.io/badge/Flame%20Engine-1.38.2-FF6F00)
-![Tests](https://img.shields.io/badge/Tests-36%2F36%20Passed-2E7D32)
+![Tests](https://img.shields.io/badge/Tests-60%2F60%20Passed-2E7D32)
 ![Analyze](https://img.shields.io/badge/flutter%20analyze-0%20Issues-2E7D32)
 ![CI](https://img.shields.io/badge/GitHub%20Actions-CI%20Enabled-2088FF?logo=githubactions)
 
@@ -31,7 +32,7 @@
 
 ## 1. Mục đích & Tổng quan dự án
 
-**Big-War (Gold Rush Mobile)** là tựa game **2D Pixel-Art Action RPG** đa nền tảng (**Android & Web**) được xây dựng bằng **Flutter** và **Flame Engine (`1.38.2`)**, phát triển mở rộng toàn diện từ dự án mẫu **Gold Rush** của học phần `INT1449 · Lập trình di động`.
+**Big-War** là tựa game **2D Pixel-Art Action RPG** đa nền tảng (**Android & Web**) được xây dựng bằng **Flutter** và **Flame Engine (`1.38.2`)** của học phần `INT1449 · Lập trình di động`.
 
 Mục tiêu của dự án là xây dựng một sản phẩm game di động hoàn chỉnh theo kiến trúc tách tầng rõ ràng, chạy mượt **60 FPS** trên điện thoại Android thật, hỗ trợ chơi **Offline-First** (không phụ thuộc mạng khi chơi PvE, Cửa hàng, Vòng quay, PvP với Bot và Trợ lý AI Demo) đồng thời mở rộng mượt mà sang **Online Realtime** (Đăng nhập Firebase Auth, Bảng xếp hạng, Kết bạn, Tổ đội Party 2v2/4v4, PvP thời gian thực và Trợ lý AI kết nối Gemini qua máy chủ FastAPI riêng).
 
@@ -39,7 +40,7 @@ Mục tiêu của dự án là xây dựng một sản phẩm game di động ho
 
 | Nhóm khối kiến thức | Ứng dụng cụ thể trong Big-War |
 |---|---|
-| **1. Dart · 16. Kiểm thử** | Thuật toán tìm đường **A\*** (Binary Min-Heap tự cài đặt), **PvP Bot AI FSM 3 bậc**, công thức tăng trưởng cấp độ 1–100, công thức Rank Sao/Elo và **36 test case** tự động. |
+| **1. Dart · 16. Kiểm thử** | Thuật toán tìm đường **A\*** (Binary Min-Heap tự cài đặt), **PvP Bot AI FSM 3 bậc**, công thức tăng trưởng cấp độ 1–100, công thức Rank Sao/Elo và **60 test case** tự động (13 tệp). |
 | **4. Bố cục · 6. Thích ứng · 10. Hoạt ảnh · 11. Trợ năng** | Màn ngang `sensorLandscape` fullscreen immersive, responsive `LayoutBuilder` cho màn nhỏ/lớn, hoạt ảnh Sprite & `CustomPainter`, kiểm thử trợ năng `meetsGuideline` (`>= 48 dp`, có nhãn). |
 | **7. Tương tác · 8. Tài nguyên · 9. Điều hướng** | Virtual Joystick 360° + cụm nút kỹ năng cho Mobile, bộ phím `WASD/Arrows + 1/2/3/E/Space` cho Web/Desktop; kho tài nguyên Data-Driven (`assets/data/*.json`, ảnh sprite, 4 BGM, 11 SFX). |
 | **12. Quản lý trạng thái · 13. Dữ liệu & Backend · 14. Kiến trúc** | Tách 3 tầng UI / Engine-Logic / Data-Services; reactive state bằng `ValueNotifier`; lưu trữ 2 lớp `SharedPreferences` (offline) + `Firebase Realtime Database` (online) có fallback an toàn. |
@@ -102,16 +103,16 @@ Mục tiêu của dự án là xây dựng một sản phẩm game di động ho
 | **2. Giao diện & Trải nghiệm (15đ)** | Đủ 3 trạng thái **Đang tải**, **Lỗi**, **Chưa có dữ liệu**, mỗi trạng thái có lối ra (thử lại / hủy / fallback offline); bố cục thích ứng màn nhỏ & lớn (`LayoutBuilder`, `SafeArea`); vùng chạm `>= 48 dp` được kiểm thử tự động. | [auth_screen.dart](lib/screens/auth_screen.dart), [pvp_arena_screen.dart](lib/screens/pvp_arena_screen.dart), [chat_ai_dialog.dart](lib/screens/chat_ai_dialog.dart), [accessibility_guideline_test.dart](test/accessibility_guideline_test.dart) |
 | **3. Kiến trúc & Quản lý trạng thái (15đ)** | Tách rõ 3 tầng UI (`screens/`, `game/hud/`), Logic/Engine (`game/`, `core/`, `registry/`), Dữ liệu (`models/`, `services/`); hỗ trợ inject mock/fake (`DatabaseService.setInstance`, `AudioService.setInstance`, `BgmPlayback`, `http.Client`); không gọi mạng trong `build()`; `dispose()` đầy đủ controller/subscription/timer. | [database_service.dart](lib/services/database_service.dart), [audio_service.dart](lib/services/audio_service.dart), [chat_ai_assistant_service.dart](lib/services/chat_ai_assistant_service.dart) |
 | **4. Dữ liệu, mạng & xử lý lỗi (10đ)** | `SharedPreferences` (offline) + `Firebase Realtime Database` (online) + JSON cấu hình; mọi gọi mạng có timeout (`12s` AI Proxy, `500ms`/`20s` matchmaking) và thông báo tiếng Việt thân thiện (`AuthService._mapAuthError`); JSON hỏng / mất mạng tự fallback an toàn, không crash app. | [player_storage.dart](lib/services/player_storage.dart), [auth_service.dart](lib/services/auth_service.dart), [firebase_database_service.dart](lib/services/firebase_database_service.dart) |
-| **5. Kiểm thử (10đ)** | **36 test case có ý nghĩa (36/36 pass)** vượt yêu cầu `>= 15`, bao gồm nhiều unit test cho A\*, Bot AI, AI Proxy, Audio race-condition, Companion, Rank và **7 widget test** cho luồng chính (`LobbyScreen`, `PvpArenaScreen`, `EditProfileDialog`, `ChatAiDialog`, `GameWidget`). | [test/](test/) (8 tệp kiểm thử) |
-| **6. Bảo mật & Quyền riêng tư (10đ)** | `GEMINI_API_KEY` **chỉ nằm ở máy chủ** `server/ai_proxy/.env`, không đóng gói `.env` vào APK; Android chỉ xin 2 quyền tối thiểu (`INTERNET`, `ACCESS_NETWORK_STATE`); `database.rules.json` phân quyền chặt theo `auth.uid`; README mô tả rõ nơi lưu từng loại dữ liệu. | [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), [database.rules.json](database.rules.json), [server/ai_proxy/main.py](server/ai_proxy/main.py) |
+| **5. Kiểm thử (10đ)** | **60 test case có ý nghĩa (60/60 pass)** vượt xa yêu cầu `>= 15`, bao gồm unit test cho A\*, Bot AI, AI Proxy, Audio race-condition, Companion, Kinh tế PvE, Rank và **13 widget test** cho luồng chính (`AuthScreen`, `LobbyScreen`, `PvpArenaScreen`, `EditProfileDialog`, `ChatAiDialog`, `OrientationGuard`, `GameWidget`). | [test/](test/) (13 tệp kiểm thử) |
+| **6. Bảo mật & Quyền riêng tư (10đ)** | Không hardcode bất kỳ khóa API/mật khẩu nào trong mã nguồn (`EnvConfig` mặc định rỗng, được kiểm chứng bằng unit test); `GEMINI_API_KEY` **chỉ nằm ở máy chủ** `server/ai_proxy/.env`; `.env`, `google-services.json`, `*.jks`, `android/key.properties` đều được `.gitignore`; Android chỉ xin 2 quyền tối thiểu (`INTERNET`, `ACCESS_NETWORK_STATE`); `database.rules.json` phân quyền chặt theo `auth.uid`. | [env_config.dart](lib/core/env_config.dart), [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), [database.rules.json](database.rules.json), [server/ai_proxy/main.py](server/ai_proxy/main.py) |
 | **7. Tài liệu & Quy trình làm việc (10đ)** | README đầy đủ giúp cài và chạy trong `< 15 phút`; `flutter analyze` đạt **0 lỗi / 0 cảnh báo**; lịch sử Git có commit đều đặn từ các thành viên kèm Pull Request. | [README.md](README.md), `git log` |
-| **8. Trình bày, Demo & Vấn đáp (10đ)** | Có kịch bản demo máy thật (luồng chính + lỗi + rỗng) và tài liệu giải thích kiến trúc / trả lời 6 câu hỏi vấn đáp ở Mục 12. | Mục 12 bên dưới |
+| **8. Trình bày, Demo & Vấn đáp (10đ)** | Có kịch bản demo máy thật (luồng chính + lỗi + rỗng) và tài liệu giải thích kiến trúc / trả lời 6 câu hỏi vấn đáp ở Mục 12. | [Mục 12](#12-kịch-bản-demo--chuẩn-bị-vấn-đáp-15-phút) |
 
 ### Các hạng mục Điểm cộng đã tích hợp
 - **+3 điểm — Mở rộng AI đúng mẫu máy chủ giữ khóa + Chế độ Demo**: Máy chủ FastAPI ([server/ai_proxy/main.py](server/ai_proxy/main.py)) giữ `GEMINI_API_KEY` + rate-limit; ứng dụng Flutter chỉ gọi `/api/chat` qua `AI_PROXY_URL` và tự chạy **Demo Mode** khi không có khóa/server.
-- **+2 điểm — CI tự chạy `flutter analyze` và `flutter test`**: Cấu hình tại [.github/workflows/ci.yml](.github/workflows/ci.yml) kích hoạt tự động trên mỗi lần `push` và `pull_request` vào `main`/`master` (kèm workflow build iOS tại [.github/workflows/ios_build.yml](.github/workflows/ios_build.yml)).
+- **+2 điểm — CI tự chạy `flutter analyze` và `flutter test`**: Cấu hình tại [.github/workflows/ci.yml](.github/workflows/ci.yml) kích hoạt tự động trên mỗi lần `push` và `pull_request` vào `main`/`master` (kèm workflow deploy Web tại [.github/workflows/deploy_web.yml](.github/workflows/deploy_web.yml) và build iOS tại [.github/workflows/ios_build.yml](.github/workflows/ios_build.yml)).
 - **+2 điểm — Kiểm thử trợ năng bằng `meetsGuideline`**: [test/accessibility_guideline_test.dart](test/accessibility_guideline_test.dart) kiểm chứng cả `androidTapTargetGuideline` (`>= 48×48 dp`) và `labeledTapTargetGuideline`.
-- **+2 điểm — Phát hành bản cài thử APK Release**: Tích hợp script [build_apk.bat](build_apk.bat) xuất tệp cài đặt Android tại `build/app/outputs/flutter-apk/app-release.apk` và hỗ trợ Web PWA trên Firebase Hosting ([firebase.json](firebase.json)).
+- **+2 điểm — Phát hành bản cài thử APK Release ký bằng khóa riêng & Web Hosting**: [android/app/build.gradle.kts](android/app/build.gradle.kts) cấu hình ký release bằng keystore riêng (`android/key.properties`, mẫu tại [android/key.properties.example](android/key.properties.example)), script [build_apk.bat](build_apk.bat) xuất `build/app/outputs/flutter-apk/app-release.apk`, đồng thời tự động phát hành bản Web tại **Firebase Hosting** (`https://my-game-ec4fa.web.app`) và **GitHub Pages**.
 
 ---
 
@@ -130,7 +131,7 @@ flowchart TB
     end
 
     subgraph Logic["Tầng Logic & Flame Engine (Domain / Engine Layer)"]
-        GRG["GoldRushGame<br/>(Vòng lặp PvE, Va chạm, Loot)"]
+        BWG["BigWarGame<br/>(Vòng lặp PvE, Va chạm, Loot)"]
         PAG["PvpArenaGame<br/>(Vòng lặp PvP Bo3, Sync)"]
         AI["AStarPathfinder (Min-Heap)<br/>PvpBotAi (FSM 3 bậc)"]
         Reg["GameAssetRegistry & SpriteImageCache<br/>(Data-Driven JSON + Preload)"]
@@ -171,6 +172,7 @@ flowchart TB
 my-game/
 ├── .github/workflows/
 │   ├── ci.yml                        # GitHub Actions: tự chạy flutter analyze & flutter test
+│   ├── deploy_web.yml                # Tự động build & deploy Web lên GitHub Pages & Firebase Hosting
 │   └── ios_build.yml                 # Workflow đóng gói iOS IPA trên macOS runner
 ├── assets/
 │   ├── audio/                        # 4 BGM (.mp3) & 11 SFX (.wav)
@@ -183,7 +185,7 @@ my-game/
 │   ├── models/                       # PlayerProfile, PvpMatch/PvpRankSystem, DatabaseModels, FriendPartyModels
 │   ├── registry/                     # GameAssetRegistry (đọc JSON), SpriteImageCache (preload nền)
 │   ├── game/
-│   │   ├── gold_rush_game.dart       # Engine màn chơi PvE
+│   │   ├── big_war_game.dart         # Engine màn chơi PvE (BigWarGame)
 │   │   ├── pvp_arena_game.dart       # Engine Đấu trường PvP 1v1 / 2v2 / 4v4
 │   │   ├── ai/                       # astar_pathfinder.dart, pvp_bot_ai.dart
 │   │   ├── components/               # Player, Zombie, Skeleton, Boss, Companion, Map, Projectiles, Pickups
@@ -196,9 +198,10 @@ my-game/
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── README.md
-├── test/                             # 8 tệp kiểm thử (36 unit test, widget test & accessibility test)
+├── test/                             # 13 tệp kiểm thử (60 unit test, widget test & accessibility test)
 ├── tool/                             # Công cụ sinh asset âm thanh & bản đồ
-├── android/ & ios/ & web/            # Mã cấu hình từng nền tảng
+├── android/                          # Cấu hình Android + key.properties.example (ký APK release)
+├── ios/ & web/                       # Mã cấu hình iOS & Web PWA
 ├── database.rules.json               # Quy tắc bảo mật Firebase Realtime Database
 ├── firebase.json                     # Cấu hình Firebase Hosting (Web PWA) & RTDB rules
 ├── .env.example                      # Mẫu biến môi trường (KHÔNG chứa khóa thật)
@@ -209,7 +212,7 @@ my-game/
 
 ### 4.3. Quản lý trạng thái, Khả năng thay thế phụ thuộc & Xử lý 3 trạng thái UX
 
-- **Quản lý trạng thái tập trung**: dùng `ValueNotifier` (`PlayerStorage.profileNotifier`, `FriendPartyService.partyNotifier` / `friendsNotifier` / `incomingInviteNotifier`, `AudioService.*Notifier`, `GameSettingsService.*Notifier`, `GoldRushGame.bossHpNotifier`) giúp UI cập nhật phản ứng tức thì, không gọi mạng trong `build()` và `dispose()` đầy đủ mọi controller/subscription/timer.
+- **Quản lý trạng thái tập trung**: dùng `ValueNotifier` (`PlayerStorage.profileNotifier`, `FriendPartyService.partyNotifier` / `friendsNotifier` / `incomingInviteNotifier`, `AudioService.*Notifier`, `GameSettingsService.*Notifier`, `BigWarGame.bossHpNotifier`) giúp UI cập nhật phản ứng tức thì, không gọi mạng trong `build()` và `dispose()` đầy đủ mọi controller/subscription/timer.
 - **Thay thế phụ thuộc bằng đồ giả (Testable Architecture)**:
   - `DatabaseService.setInstance(MockDatabaseService())`
   - `AudioService.setInstance(MockAudioService())` và `FlameAudioService(bgmPlayback: fakePlayback)`
@@ -343,7 +346,12 @@ flutter run -d chrome --dart-define=AI_PROXY_URL=http://localhost:8000
 
 > **Mẹo test PvP Online 2 người trên 1 máy tính**: mở 2 tab Chrome với 2 tài khoản khác nhau (`FirebaseAuth` trên Web dùng `Persistence.SESSION` tách biệt theo từng tab), cả 2 cùng bấm **TÌM TRẬN RANK** hoặc tạo **Tổ đội (Party)** để đấu trực tiếp thời gian thực.
 
-### 7.4. Đóng gói tệp APK Release cho Android
+### 7.4. Đóng gói tệp APK Release ký bằng khóa riêng cho Android
+
+Để ký APK release bằng khóa riêng (keystore — không commit lên Git):
+1. Sao chép [android/key.properties.example](android/key.properties.example) thành `android/key.properties` và điền thông tin keystore của bạn (tạo mới bằng `keytool -genkeypair ...`).
+2. Nếu chưa tạo `android/key.properties` trên máy mới, Gradle tự fallback sang `debug` key để vẫn build thử được mà không lỗi.
+
 ```bash
 # Đóng gói có nạp cấu hình từ .env (nếu có)
 flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env
@@ -370,25 +378,31 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 # 1. Phân tích tĩnh toàn dự án (kết quả hiện tại: No issues found!)
 flutter analyze
 
-# 2. Chạy toàn bộ 36 unit test, widget test & accessibility test
+# 2. Chạy toàn bộ 60 unit test, widget test & accessibility test
 flutter test --reporter expanded
 ```
 
-### 8.2. Danh sách 8 bộ kiểm thử tự động (36/36 test case đạt)
+### 8.2. Danh sách 13 bộ kiểm thử tự động (60/60 test case đạt)
 
 | STT | Tệp kiểm thử | Loại test | Nội dung kiểm chứng trọng tâm |
 |:---:|---|---|---|
-| 1 | [test/accessibility_guideline_test.dart](test/accessibility_guideline_test.dart) | Widget + Accessibility | Kiểm chứng `ChatAiDialog` đạt chuẩn `androidTapTargetGuideline` (`>= 48dp`) và `labeledTapTargetGuideline` qua `meetsGuideline`. |
-| 2 | [test/bgm_settings_regression_test.dart](test/bgm_settings_regression_test.dart) | Unit (6 tests) | Xử lý race-condition khi bật/tắt BGM lúc đang tải nhạc, kéo thanh âm lượng về `0`, lưu trạng thái mute qua `SharedPreferences`, `stopBgm` không bị ghi đè bởi tác vụ cũ. |
-| 3 | [test/chat_ai_assistant_test.dart](test/chat_ai_assistant_test.dart) | Unit (5 tests) | Kiểm chứng `EnvConfig` không đóng gói key, lọc từ khóa tiếng Việt không dấu (0 token), chặn câu hỏi ngoài lề (0 token), gọi `/api/chat` không gửi `x-goog-api-key`, tự fallback **Demo Mode** khi lỗi/rỗng URL. |
-| 4 | [test/companion_regression_test.dart](test/companion_regression_test.dart) | Unit + Widget (7 tests) | Khiên trợ thủ hết hạn giữ nguyên phòng thủ bị động (4 trợ thủ), reset khi đổi tầng/gỡ bỏ, không gọi miễn phí khi chưa trang bị, kiểm chứng render tia laser & sát thương đạn Plasma trên `GameWidget`. |
-| 5 | [test/party_invite_popup_test.dart](test/party_invite_popup_test.dart) | Unit + Widget (2 tests) | Gửi lời mời tổ đội không tự ý thêm người chưa đồng ý; kiểm chứng popup lời mời tổ đội xuất hiện trên `LobbyScreen` và tự đóng sau 5 giây. |
-| 6 | [test/pvp_bot_and_lobby_test.dart](test/pvp_bot_and_lobby_test.dart) | Unit + Widget (8 tests) | Lưới đi được PvP (`30×20`, tường & 4 trụ), **A\* vòng qua cột trụ**, Bot chờ hết `roundIntro` rồi tránh trụ & tấn công, chuyển mục tiêu khi địch bị hạ, sinh đội hình tất định theo seed, kiểm chứng UI `LobbyScreen` & `PvpArenaScreen` (tự ghép Bot offline, khách sẵn sàng & vào cùng phòng chủ phòng). |
-| 7 | [test/pvp_start_responsiveness_test.dart](test/pvp_start_responsiveness_test.dart) | Unit (3 tests) | Đồng bộ cùng bản đồ giữa 2 người chơi theo `roomId` (FNV-1a), chia sẻ chung danh sách vật cản, giữ phím di chuyển trong `roundIntro` kích hoạt ngay ở frame đầu của `fighting`. |
-| 8 | [test/rank_assets_and_profile_test.dart](test/rank_assets_and_profile_test.dart) | Unit + Widget (4 tests) | Tồn tại đủ 7 tệp ảnh huy hiệu Rank PNG, ánh xạ `PlayerProfile.rankAssetPath`, hiển thị đúng huy hiệu/sao/RP/Top #1 Thách Đấu trên `EditProfileDialog`. |
+| 1 | [test/accessibility_guideline_test.dart](test/accessibility_guideline_test.dart) | Widget + Accessibility (1) | Kiểm chứng `ChatAiDialog` đạt chuẩn `androidTapTargetGuideline` (`>= 48dp`) và `labeledTapTargetGuideline` qua `meetsGuideline`. |
+| 2 | [test/auth_screen_layout_test.dart](test/auth_screen_layout_test.dart) | Widget (2) | Kiểm chứng bố cục `AuthScreen` trên màn hình nhỏ/lớn không tràn viền (`overflow`), hiển thị đủ trạng thái đăng nhập/đăng ký. |
+| 3 | [test/bgm_settings_regression_test.dart](test/bgm_settings_regression_test.dart) | Unit (6) | Xử lý race-condition khi bật/tắt BGM lúc đang tải nhạc, kéo thanh âm lượng về `0`, lưu trạng thái mute qua `SharedPreferences`, `stopBgm` không bị ghi đè bởi tác vụ cũ. |
+| 4 | [test/chat_ai_assistant_test.dart](test/chat_ai_assistant_test.dart) | Unit (6) | Kiểm chứng `EnvConfig` **không hardcode khóa Firebase/AI**, lọc từ khóa tiếng Việt không dấu (0 token), chặn câu hỏi ngoài lề (0 token), gọi `/api/chat` không gửi `x-goog-api-key`, tự fallback **Demo Mode** khi lỗi/rỗng URL. |
+| 5 | [test/companion_regression_test.dart](test/companion_regression_test.dart) | Unit + Widget (8) | Khiên trợ thủ hết hạn giữ nguyên phòng thủ bị động (4 trợ thủ), reset khi đổi tầng/gỡ bỏ, không gọi miễn phí khi chưa trang bị, kiểm chứng render tia laser & sát thương đạn Plasma trên `GameWidget`. |
+| 6 | [test/lobby_companion_animation_test.dart](test/lobby_companion_animation_test.dart) | Unit + Widget (9) | Kiểm chứng hoạt ảnh bay lơ lửng, hiệu ứng hạt và hiển thị từng trợ thủ trên `LobbyScreen`. |
+| 7 | [test/orientation_guard_test.dart](test/orientation_guard_test.dart) | Widget (2) | Kiểm chứng `OrientationGuard` hiển thị nhắc xoay ngang khi thiết bị ở chế độ dọc (`portrait`) và mở khóa khi xoay ngang (`landscape`). |
+| 8 | [test/party_invite_popup_test.dart](test/party_invite_popup_test.dart) | Unit + Widget (2) | Gửi lời mời tổ đội không tự ý thêm người chưa đồng ý; kiểm chứng popup lời mời tổ đội xuất hiện trên `LobbyScreen` và tự đóng sau 5 giây. |
+| 9 | [test/pve_coin_reward_test.dart](test/pve_coin_reward_test.dart) | Unit (6) | Kiểm chứng công thức thưởng Xu/Vàng PvE, tỷ lệ quy đổi `1 Xu = 1.000 Vàng`, cộng dồn hồ sơ người chơi không âm/không thất thoát. |
+| 10 | [test/pvp_bot_and_lobby_test.dart](test/pvp_bot_and_lobby_test.dart) | Unit + Widget (8) | Lưới đi được PvP (`30×20`, tường & 4 trụ), **A\* vòng qua cột trụ**, Bot chờ hết `roundIntro` rồi tránh trụ & tấn công, chuyển mục tiêu khi địch bị hạ, sinh đội hình tất định theo seed, kiểm chứng UI `LobbyScreen` & `PvpArenaScreen` (tự ghép Bot offline, khách sẵn sàng & vào cùng phòng chủ phòng). |
+| 11 | [test/pvp_start_responsiveness_test.dart](test/pvp_start_responsiveness_test.dart) | Unit (3) | Đồng bộ cùng bản đồ giữa 2 người chơi theo `roomId` (FNV-1a), chia sẻ chung danh sách vật cản, giữ phím di chuyển trong `roundIntro` kích hoạt ngay ở frame đầu của `fighting`. |
+| 12 | [test/rank_assets_and_profile_test.dart](test/rank_assets_and_profile_test.dart) | Unit + Widget (4) | Tồn tại đủ 7 tệp ảnh huy hiệu Rank PNG, ánh xạ `PlayerProfile.rankAssetPath`, hiển thị đúng huy hiệu/sao/RP/Top #1 Thách Đấu trên `EditProfileDialog`. |
+| 13 | [test/removed_companion_test.dart](test/removed_companion_test.dart) | Unit (3) | Kiểm chứng tương thích ngược hồ sơ cũ khi một trợ thủ bị gỡ khỏi danh mục, không làm crash app khi đọc `SharedPreferences`. |
 
-### 8.3. Tích hợp liên tục (GitHub Actions CI)
+### 8.3. Tích hợp liên tục (GitHub Actions CI/CD)
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): Tự động cài Flutter, chạy `flutter pub get`, `flutter analyze --no-fatal-infos` và `flutter test --reporter expanded` mỗi lần `push` hoặc mở `Pull Request` vào `main`/`master`.
+- [.github/workflows/deploy_web.yml](.github/workflows/deploy_web.yml): Tự động kiểm thử, biên dịch bản Web với `FIREBASE_API_KEY` lấy từ **GitHub Secrets** và triển khai lên **GitHub Pages** & **Firebase Hosting** (`https://my-game-ec4fa.web.app`).
 - [.github/workflows/ios_build.yml](.github/workflows/ios_build.yml): Hỗ trợ biên dịch tự động bản iOS trên macOS runner.
 
 ---
@@ -399,9 +413,9 @@ flutter test --reporter expanded
 
 | Loại dữ liệu | Vị trí lưu trữ | Mục đích & Vòng đời |
 |---|---|---|
-| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Kim Cương, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `gold_rush_player_profile` hoặc `gold_rush_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
+| **Hồ sơ người chơi cục bộ** (tên, mã `GRxxxx`, Vàng, Xu, Tỉ lệ thắng, Rank Sao/RP, tướng & trợ thủ đã mở, cấp độ tướng 1–100, mốc quay thưởng `lastSpinTimestamp`) | Thiết bị người dùng — `SharedPreferences` (khóa `big_war_player_profile` hoặc `big_war_player_profile_<uid>`) | Chơi Offline-First không mất tiến trình khi tắt app; tách riêng từng tài khoản để không lẫn dữ liệu khi đổi tài khoản. |
 | **Cài đặt âm thanh & đồ họa/điều khiển** (`targetFps`, `graphicsQuality`, bật/tắt số sát thương, auto-aim, rung haptic, rung màn hình, âm lượng/tắt BGM & SFX) | Thiết bị người dùng — `SharedPreferences` | Khôi phục ngay khi mở lại ứng dụng (`AudioService`, `GameSettingsService`). |
-| **Bộ nhớ đệm BXH & Tổ đội cục bộ** | Thiết bị người dùng — `SharedPreferences` (`gold_rush_mock_leaderboard`, `gold_rush_shared_*`) | Dự phòng mượt mà khi tắt mạng hoặc chạy test/offline. |
+| **Bộ nhớ đệm BXH & Tổ đội cục bộ** | Thiết bị người dùng — `SharedPreferences` (`big_war_mock_leaderboard`, `big_war_shared_*`) | Dự phòng mượt mà khi tắt mạng hoặc chạy test/offline. |
 | **Tài khoản đăng nhập** (Email, UID, DisplayName) | **Firebase Authentication** | Xác thực đăng nhập/đăng ký, hỗ trợ quên mật khẩu; phiên trên Web dùng `Persistence.SESSION`. |
 | **Dữ liệu Online Realtime** (`players/{uid}`, `leaderboard`, `matchmaking`, `rooms/{roomId}`, `directory`, `parties`, `invitations`, `friend_requests`, `friendships`) | **Firebase Realtime Database** (bảo vệ bởi [database.rules.json](database.rules.json)) | Đồng bộ hồ sơ đám mây (debounce `800ms`), BXH Top server, kết bạn, tổ đội và phòng PvP thời gian thực. |
 | **Cấu hình game tĩnh** (tướng, kỹ năng, trợ thủ, quái vật, 5 bản đồ) | Đóng gói chỉ đọc trong ứng dụng (`assets/data/*.json`) | Tách dữ liệu khỏi code engine (`GameAssetRegistry`), có fallback mặc định nếu JSON lỗi. |
@@ -429,12 +443,64 @@ Nhờ kiến trúc `GameAssetRegistry` ([lib/registry/asset_registry.dart](lib/r
 
 ---
 
-## 11. Danh sách nộp bài & Nhóm thực hiện
+## 11. Mục "Dùng AI"
+
+Trong quá trình thực hiện dự án, nhóm có sử dụng các trợ lý AI hỗ trợ phát triển phần mềm theo đúng quy định của học phần:
+
+| Công cụ AI | Phạm vi hỗ trợ cụ thể |
+|---|---|
+| **Google Antigravity / Gemini** | Tư vấn tái cấu trúc kiến trúc 3 tầng (UI / Engine / Data), tối ưu thuật toán tìm đường **A\*** (Binary Min-Heap + chống cắt góc chéo) và **PvP Bot AI**, thiết kế máy chủ **FastAPI AI Proxy** giữ `GEMINI_API_KEY`, viết các bộ kiểm thử tự động (`unit`, `widget`, `accessibility`), rà soát bảo mật/khóa API, cấu hình ký APK Release & GitHub Actions CI/CD, hoàn thiện tài liệu `README.md`. |
+| **AI tạo ảnh / sinh asset hỗ trợ** | Tạo bản nháp hình ảnh bản đồ pixel-art, huy hiệu bậc Rank và minh họa trợ thủ (sau đó được nhóm chỉnh sửa, cắt chuẩn kích thước và kiểm tra hiển thị thực tế trong game). |
+
+### Nguyên tắc kiểm soát & minh bạch
+- **Không nộp mã chưa tự chạy thử:** Mọi đoạn mã có AI hỗ trợ đều được thành viên nhóm đọc hiểu, tự chỉnh sửa phù hợp kiến trúc và kiểm chứng bằng `flutter analyze` (`0 lỗi`), `flutter test` (`60/60 pass`) và chạy trực tiếp trên điện thoại Android thật / trình duyệt Web.
+- **Giải thích được toàn bộ mã nguồn:** Mỗi thành viên chịu trách nhiệm nắm rõ logic các tệp mình phụ trách để trả lời vấn đáp.
+- **Lưu vết hội thoại:** Các đoạn hội thoại quan trọng với trợ lý AI được lưu tại thư mục `docs/ai/`.
+
+---
+
+## 12. Kịch bản Demo & Chuẩn bị vấn đáp (15 phút)
+
+### 12.1. Phần 1 — Demo trên điện thoại Android thật (5 phút)
+1. **Luồng chính (Happy Path):**
+   - Mở app → màn `AuthScreen` (chế độ ngang `sensorLandscape`) → Đăng nhập (hoặc Chơi ngay Offline) vào `LobbyScreen`.
+   - Mở **Cửa hàng / Nâng cấp Tướng / Chọn Trợ thủ**, quay **Vòng quay may mắn**, mở **Bảng xếp hạng**.
+   - Vào **PvE Vượt Ải Hầm Ngục**: di chuyển bằng Virtual Joystick, tung 3 kỹ năng + kỹ năng Trợ thủ, cho thấy Zombie/Skeleton tìm đường **A\*** vòng qua cột đá và hạ gục **Boss 2 pha** nhận vàng/EXP.
+   - Vào **PvP Rank (1v1/2v2/4v4)**: ghép trận đấu Bo3 với người chơi khác hoặc Bot AI, dùng Quick Chat và xem cập nhật Rank Sao/RP.
+   - Mở **Trợ lý Chat AI**: hỏi câu FAQ trong game (phản hồi tức thì `< 1ms`, 0 token) và hỏi câu ngoài lề (bị từ chối tại client).
+2. **Trạng thái lỗi (Error State):**
+   - Nhập sai mật khẩu hoặc tắt Wi-Fi/4G khi đăng nhập → hiển thị thông báo lỗi tiếng Việt thân thiện, cho phép sửa/thử lại ngay, không crash app.
+   - Tắt máy chủ AI Proxy (hoặc tắt mạng) khi hỏi câu chiến thuật → tự động chuyển về **Chế độ Demo Offline** mượt mà.
+3. **Trạng thái chưa có dữ liệu (Empty State):**
+   - Mở hộp thoại **Bạn bè / Tổ đội** với tài khoản mới → hiển thị trạng thái rỗng rõ ràng kèm hướng dẫn nhập mã `GRxxxx` để kết bạn/mời tổ đội.
+
+### 12.2. Phần 2 — Giải thích mã nguồn ngẫu nhiên (5 phút)
+Mỗi thành viên sẵn sàng mở và giải thích trực tiếp luồng dữ liệu, vòng đời widget (`initState`/`dispose`) và thuật toán trong các tệp mình phụ trách (`lib/game/ai/astar_pathfinder.dart`, `lib/game/big_war_game.dart`, `lib/game/pvp_arena_game.dart`, `lib/services/player_storage.dart`, `lib/services/chat_ai_assistant_service.dart`, `server/ai_proxy/main.py`...).
+
+### 12.3. Phần 3 — Trả lời nhanh 6 câu hỏi gợi ý vấn đáp (5 phút)
+1. **Nếu tắt mạng giữa lúc đang lưu, app xử lý thế nào?**  
+   `PlayerStorage` luôn lưu **cục bộ vào `SharedPreferences` trước** (Offline-First), sau đó mới đồng bộ nền lên Firebase Realtime Database (có debounce `800ms` và bắt lỗi `try/catch`). Nếu mất mạng giữa chừng, dữ liệu cục bộ không bị mất, app không crash và sẽ tự đồng bộ lại ở lần lưu có mạng tiếp theo.
+2. **Trạng thái của màn hình này nằm ở đâu, ai được thay đổi nó?**  
+   Trạng thái dùng chung nằm tập trung ở tầng dịch vụ qua `ValueNotifier` (`PlayerStorage.profileNotifier`, `FriendPartyService.partyNotifier`, `AudioService.*Notifier`, `GameSettingsService.*Notifier`). UI chỉ lắng nghe (`ValueListenableBuilder`) và gọi hàm nghiệp vụ của service để thay đổi trạng thái — không tự sửa dữ liệu phân tán bằng `setState` chéo màn hình.
+3. **Muốn đổi cách lưu trữ sang một cơ sở dữ liệu khác, nhóm phải sửa những tệp nào?**  
+   Nhờ tách interface trừu tượng [DatabaseService](lib/services/database_service.dart), chỉ cần viết 1 lớp triển khai mới (ví dụ `SupabaseDatabaseService` hoặc `SqliteDatabaseService`) kế thừa `DatabaseService` và đổi điểm đăng ký tại `main.dart` / `DatabaseService.setInstance(...)` — **không cần sửa bất kỳ màn hình UI hay vòng lặp game Flame nào**.
+4. **Test nào bắt được lỗi thật trong quá trình làm? Kể một lần như vậy.**  
+   - [test/bgm_settings_regression_test.dart](test/bgm_settings_regression_test.dart) bắt được lỗi **race-condition**: người dùng bấm tắt nhạc ngay khi file BGM đang tải bất đồng bộ khiến nhạc tự phát lại sau khi tải xong; đã sửa bằng hàng đợi đồng bộ trạng thái âm thanh.
+   - [test/companion_regression_test.dart](test/companion_regression_test.dart) bắt được lỗi khiên trợ thủ hết thời gian bị xóa nhầm luôn chỉ số phòng thủ bị động gốc của nhân vật.
+5. **App xin những quyền gì, vào lúc nào, vì sao?**  
+   Ứng dụng chỉ khai báo đúng **2 quyền mạng tối thiểu** trong [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) là `INTERNET` (kết nối Firebase & AI Proxy) và `ACCESS_NETWORK_STATE` (nhận biết trạng thái mạng để fallback offline). Không xin bất kỳ quyền nhạy cảm runtime nào (Camera, Vị trí, Danh bạ, Bộ nhớ ngoài).
+6. **Khoá API (nếu có) nằm ở đâu? Nếu ai đó giải nén APK thì thấy gì?**  
+   - Khóa bí mật `GEMINI_API_KEY` **chỉ nằm trên máy chủ backend** `server/ai_proxy/.env` — giải nén APK hoàn toàn **không thấy khóa Gemini** (client chỉ biết URL proxy hoặc chạy Demo Mode).
+   - File `.env` không được khai báo trong `pubspec.yaml` (`assets:`) nên không tồn tại tệp `.env` văn bản trong APK. Cấu hình Firebase runtime truyền qua `--dart-define-from-file=.env` lúc biên dịch, và dữ liệu Firebase được bảo vệ bằng **Firebase Auth + [database.rules.json](database.rules.json)** (`auth.uid == $uid`).
+
+---
+
+## 13. Danh sách nộp bài & Nhóm thực hiện
 
 ### Checklist 8 hạng mục nộp bài cuối kỳ
 - [x] Link repo Git công khai / cấp quyền đọc cho giảng viên: `https://github.com/TolaTien/My-game`
-- [x] `README.md` đầy đủ: mục đích, cài đặt, cấu hình không chứa khóa, cách chạy, cách chạy test, dữ liệu lưu ở đâu, mục "Dùng AI"
-- [x] Tệp APK cài đặt Android (`build/app/outputs/flutter-apk/app-release.apk`)
+- [x] `README.md` đầy đủ: mục đích, cài đặt, cấu hình không chứa khóa, cách chạy, cách chạy test, dữ liệu lưu ở đâu, mục "Dùng AI", kịch bản Demo & Vấn đáp
+- [x] Tệp APK cài đặt Android ký bằng khóa riêng (`build/app/outputs/flutter-apk/app-release.apk`)
 - [ ] Video demo 3–5 phút quay trên điện thoại Android thật (luồng chính + trạng thái lỗi + trạng thái rỗng)
 - [ ] Báo cáo cuối kỳ (tối đa 10 trang)
 - [ ] Slide trình bày (tối đa 10 trang)

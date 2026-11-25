@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================================
-echo   GOLD RUSH - CHAY THU TREN TRINH DUYET CHROME
+echo   BIG-WAR - CHAY THU TREN TRINH DUYET CHROME
 echo ========================================================
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"

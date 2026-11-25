@@ -44,36 +44,36 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
       icon: Icons.sentiment_dissatisfied_rounded,
     ),
     WheelReward(
-      coins: 10,
-      label: '10 Xu',
+      coins: 1,
+      label: '1 Xu',
       primaryColor: Color(0xFF1E88E5),
       secondaryColor: Color(0xFF1565C0),
       icon: Icons.monetization_on_outlined,
     ),
     WheelReward(
-      coins: 20,
-      label: '20 Xu',
+      coins: 2,
+      label: '2 Xu',
       primaryColor: Color(0xFF8E24AA),
       secondaryColor: Color(0xFF6A1B9A),
       icon: Icons.monetization_on_rounded,
     ),
     WheelReward(
-      coins: 40,
-      label: '40 Xu',
+      coins: 3,
+      label: '3 Xu',
       primaryColor: Color(0xFF00ACC1),
       secondaryColor: Color(0xFF00838F),
       icon: Icons.stars_rounded,
     ),
     WheelReward(
-      coins: 50,
-      label: '50 Xu',
+      coins: 5,
+      label: '5 Xu',
       primaryColor: Color(0xFF43A047),
       secondaryColor: Color(0xFF2E7D32),
-      icon: Icons.diamond_rounded,
+      icon: Icons.auto_awesome_rounded,
     ),
     WheelReward(
-      coins: 100,
-      label: '100 Xu',
+      coins: 10,
+      label: '10 Xu',
       primaryColor: Color(0xFFFFB300),
       secondaryColor: Color(0xFFFF8F00),
       icon: Icons.military_tech_rounded,
@@ -129,21 +129,21 @@ class _LuckyWheelDialogState extends State<LuckyWheelDialog>
     });
 
     // Chọn ngẫu nhiên ô trúng thưởng với tỉ lệ hợp lý
-    // Trọng số: 0 xu (15%), 10 xu (35%), 20 xu (25%), 40 xu (15%), 50 xu (8%), 100 xu (2%)
+    // Trọng số: 0 xu (20%), 1 xu (35%), 2 xu (25%), 3 xu (12%), 5 xu (6%), 10 xu JACKPOT (2%)
     final rand = Random().nextInt(100);
     int targetIndex = 1;
-    if (rand < 15) {
+    if (rand < 20) {
       targetIndex = 0; // 0 xu
-    } else if (rand < 50) {
-      targetIndex = 1; // 10 xu
-    } else if (rand < 75) {
-      targetIndex = 2; // 20 xu
-    } else if (rand < 90) {
-      targetIndex = 3; // 40 xu
+    } else if (rand < 55) {
+      targetIndex = 1; // 1 xu
+    } else if (rand < 80) {
+      targetIndex = 2; // 2 xu
+    } else if (rand < 92) {
+      targetIndex = 3; // 3 xu
     } else if (rand < 98) {
-      targetIndex = 4; // 50 xu
+      targetIndex = 4; // 5 xu
     } else {
-      targetIndex = 5; // 100 xu JACKPOT
+      targetIndex = 5; // 10 xu JACKPOT
     }
 
     final targetReward = rewards[targetIndex];

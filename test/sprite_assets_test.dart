@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_game/registry/asset_registry.dart';
+import 'package:my_game/registry/sprite_animation_catalog.dart';
 import 'package:my_game/registry/sprite_image_cache.dart';
 
 void main() {
@@ -32,6 +34,24 @@ void main() {
     }
   });
 
+  test('Ember run paths use the bundled case-sensitive asset path', () async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final bundledPaths = manifest.listAssets();
+    final runPath = nativeRunPaths['ember_02']!;
+    expect(bundledPaths, contains(runPath));
+    expect(SpriteImageCache.heroRunPaths['ember_02'], runPath);
+    expect(SpriteImageCache.heroRunPaths['ember'], runPath);
+
+    final data = jsonDecode(
+      await rootBundle.loadString('assets/data/heroes.json'),
+    ) as Map<String, dynamic>;
+    final heroes = data['heroes'] as List<dynamic>;
+    final ember = heroes.cast<Map<String, dynamic>>().singleWhere(
+      (hero) => hero['id'] == 'ember_02',
+    );
+    expect((ember['sprites'] as Map<String, dynamic>)['runSheet'], runPath);
+  });
+
   test(
     'Heroes with supplied art use bundled portrait and animation paths',
     () async {
@@ -42,10 +62,14 @@ void main() {
 
       for (final entry in SpriteImageCache.heroPortraitPaths.entries) {
         final hero = heroes.cast<Map<String, dynamic>>().singleWhere(
-          (hero) => hero['id'] == entry.key,
+          (hero) => hero['id'] == GameAssetRegistry.canonicalHeroId(entry.key),
         );
         final sprites = hero['sprites'] as Map<String, dynamic>;
-        expect(sprites['idleSheet'], entry.value, reason: entry.key);
+        expect(
+          sprites['portrait'] ?? sprites['idleSheet'],
+          entry.value,
+          reason: entry.key,
+        );
         for (final field in [
           'idleSheet',
           'runSheet',

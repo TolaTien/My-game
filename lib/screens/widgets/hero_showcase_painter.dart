@@ -170,6 +170,39 @@ class _HeroCanvasPainter extends CustomPainter {
       }
     }
 
+    // 4.5 CÁC TƯỚNG DÙNG SPRITE STRIP 4-FRAME NGANG (George, Hayate/Ninja, ...)
+    if (SpriteImageCache.isStripAnimatedHero(heroId)) {
+      final strip = SpriteImageCache.instance.getHeroIdleImage(heroId);
+      if (strip != null && strip.width >= 512) {
+        final auraPaint = Paint()
+          ..color = themeColor.withValues(alpha: 0.30 + 0.12 * sin(time * 3))
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+        canvas.drawCircle(Offset(cx, daisCenter.dy - 78), 68, auraPaint);
+
+        final frameCount = max(1, (strip.width / strip.height).round());
+        final col = (animProgress * frameCount).floor() % frameCount;
+        final cellW = strip.width / frameCount;
+        final cellH = strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, 0, cellW, cellH);
+
+        final scale = (size.height / 270.0).clamp(0.65, 1.05);
+        final dstSize = 196.0 * scale;
+        final dstRect = Rect.fromLTWH(
+          cx - dstSize / 2,
+          (daisCenter.dy - 4.0) - (236.0 / 256.0 * dstSize),
+          dstSize,
+          dstSize,
+        );
+        canvas.drawImageRect(
+          strip,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        return;
+      }
+    }
+
     // 4 tướng hệ thống cũ (george, ranger, tanker, ninja) luôn dùng hoạt ảnh đa lớp thay vì 1 avatar tĩnh trong Shop
     if (!SpriteImageCache.isProceduralHero(heroId)) {
       final spriteImg = SpriteImageCache.instance.getHeroImage(heroId);

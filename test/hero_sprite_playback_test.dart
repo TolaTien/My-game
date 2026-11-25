@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flame/game.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_game/game/components/hero_projectile.dart';
 import 'package:my_game/game/components/hero_sprite_animator.dart';
 import 'package:my_game/game/components/player.dart';
 import 'package:my_game/game/components/pvp_bot_player.dart';
@@ -229,6 +230,7 @@ void main() {
           expect(
             game.world.children.any(
               (child) =>
+                  child is HeroProjectile && identical(child.animation, clip) ||
                   child is PlayerSkillProjectile &&
                       identical(child.animation, clip) ||
                   child is PlayerSkillArea && identical(child.animation, clip),

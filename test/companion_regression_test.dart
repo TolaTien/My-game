@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/components/companion_component.dart';
 import 'package:my_game/game/components/player.dart';
-import 'package:my_game/game/gold_rush_game.dart';
+import 'package:my_game/game/big_war_game.dart';
 import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/registry/asset_registry.dart';
 import 'package:my_game/registry/sprite_image_cache.dart';
@@ -65,32 +65,95 @@ void main() {
     },
   );
   for (final entry in {
-    'orbit_03': 0.0,
-    'luna_fox': 0.0,
-    'aegis_x9': .2,
-    'cyber_drone': .3,
+    'comp_defense': (passive: .3, active: .55, duration: 5.1),
+    'cyber_drone': (passive: .3, active: .45, duration: 4.6),
+    'aegis_x9': (passive: .2, active: .35, duration: 4.1),
   }.entries) {
     test(
       'Temporary PET shield expires and preserves ${entry.key} passive defense',
       () {
         final player = PlayerComponent(position: Vector2.zero());
-        player.damageAbsorption = entry.value;
+        player.damageAbsorption = entry.value.passive;
         final pet = CompanionComponent(companionId: entry.key, player: player);
         expect(pet.activateSpecialSkill(), isTrue);
-        expect(player.damageAbsorption, entry.value > .25 ? entry.value : .25);
+        expect(player.damageAbsorption, closeTo(entry.value.active, .001));
         final cooldown = pet.specialSkillCooldown;
         expect(pet.activateSpecialSkill(), isFalse);
         expect(pet.specialSkillCooldown, cooldown);
-        player.update(4.1);
-        pet.update(4.1);
+        player.update(entry.value.duration);
+        pet.update(entry.value.duration);
         expect(player.goldenShieldTimer, 0);
-        expect(player.damageAbsorption, entry.value);
+        expect(player.damageAbsorption, closeTo(entry.value.passive, .001));
         final hp = player.currentHp;
         player.takeDamage(40);
-        expect(hp - player.currentHp, closeTo(40 * (1 - entry.value), .001));
+        expect(
+          hp - player.currentHp,
+          closeTo(40 * (1 - entry.value.passive), .001),
+        );
       },
     );
   }
+  test('All 8 companions have unique special skill names and distinct effects', () {
+    final ids = [
+      'comp_attack',
+      'comp_defense',
+      'comp_control',
+      'cyber_drone',
+      'luna_fox',
+      'orbit_03',
+      'aegis_x9',
+      'pyro_frost_dragon',
+    ];
+    final names = <String>{};
+    for (final id in ids) {
+      final p = PlayerComponent(position: Vector2.zero());
+      final pet = CompanionComponent(companionId: id, player: p);
+      names.add(pet.skillName);
+    }
+    expect(names.length, ids.length);
+
+    // Cyber Drone heals 25% max HP + grants 45% shield
+    final pCyber = PlayerComponent(position: Vector2.zero());
+    pCyber.currentHp = pCyber.maxHp * 0.5;
+    final cyber = CompanionComponent(companionId: 'cyber_drone', player: pCyber);
+    expect(cyber.activateSpecialSkill(), isTrue);
+    expect(pCyber.currentHp, closeTo(pCyber.maxHp * 0.75, 0.01));
+    expect(pCyber.damageAbsorption, closeTo(0.45, 0.001));
+
+    // Luna Fox restores 40% Ki + reduces all 3 skill cooldowns by 3s
+    final pLuna = PlayerComponent(position: Vector2.zero());
+    pLuna.currentKi = 10;
+    pLuna.skill1VisualCd = 4.0;
+    pLuna.skill2VisualCd = 6.0;
+    pLuna.skill3VisualCd = 10.0;
+    final luna = CompanionComponent(companionId: 'luna_fox', player: pLuna);
+    expect(luna.activateSpecialSkill(), isTrue);
+    expect(pLuna.currentKi, closeTo(10 + pLuna.maxKi * 0.40, 0.01));
+    expect(pLuna.skill1VisualCd, closeTo(1.0, 0.01));
+    expect(pLuna.skill2VisualCd, closeTo(3.0, 0.01));
+    expect(pLuna.skill3VisualCd, closeTo(7.0, 0.01));
+
+    // ORBIT-03 activates rapid fire overdrive for 4s
+    final pOrbit = PlayerComponent(position: Vector2.zero());
+    final orbit = CompanionComponent(companionId: 'orbit_03', player: pOrbit);
+    expect(orbit.isRapidFireActive, isFalse);
+    expect(orbit.activateSpecialSkill(), isTrue);
+    expect(orbit.isRapidFireActive, isTrue);
+    orbit.update(4.1);
+    expect(orbit.isRapidFireActive, isFalse);
+
+    // Pyro-Frost Dragon grants +30% attack buff for 5s & clears on cleanup
+    final pDragon = PlayerComponent(position: Vector2.zero());
+    final baseDmg = pDragon.damage;
+    final dragon = CompanionComponent(
+      companionId: 'pyro_frost_dragon',
+      player: pDragon,
+    );
+    expect(dragon.activateSpecialSkill(), isTrue);
+    expect(pDragon.effectiveDamage, closeTo(baseDmg * 1.30, 0.01));
+    dragon.cleanup();
+    expect(pDragon.effectiveDamage, closeTo(baseDmg, 0.01));
+  });
   test(
     'Unequip and floor reset remove temporary shield and stale targeting',
     () {
@@ -114,7 +177,7 @@ void main() {
   test(
     'PET hotkey cannot summon a free companion when nothing is equipped',
     () {
-      final game = GoldRushGame(playerProfile: const PlayerProfile());
+      final game = BigWarGame(playerProfile: const PlayerProfile());
       game.onCompanionSkill();
       expect(game.companion, isNull);
     },
@@ -132,7 +195,7 @@ void main() {
           }
         }
       });
-      final game = GoldRushGame(
+      final game = BigWarGame(
         playerProfile: const PlayerProfile(selectedCompanionId: 'aegis_x9'),
         selectedMapConfig: GameAssetRegistry.defaultSanctumMap,
       );

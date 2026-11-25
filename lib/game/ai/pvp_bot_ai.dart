@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../models/pvp_match.dart';
+import '../components/hero_projectile.dart';
 import '../components/player.dart';
 import '../components/pvp_bot_player.dart';
 import 'astar_pathfinder.dart';
@@ -56,20 +57,26 @@ class PvpBotAi extends Component {
   double _unstuckTimer = 0.0;
   Vector2 _unstuckDirection = Vector2.zero();
 
+  // Strafe rhythm for natural orb-walking / circle-strafing
+  double _strafeSwitchTimer = 0.0;
+  double _strafeSign = 1.0;
+
   // Cooldown chuẩn của các chiêu
   static const double cooldownSkill1 = 4.0;
   static const double cooldownSkill2 = 7.0;
   static const double cooldownSkill3 = 12.0;
-  static const double cooldownBasicAttack = 0.8;
+  static const double cooldownBasicAttack = 0.68;
 
   // Chi phí Ki chuẩn
-  static const double kiCostSkill1 = 25.0;
-  static const double kiCostSkill2 = 35.0;
-  static const double kiCostSkill3 = 40.0;
+  static const double kiCostSkill1 = 20.0;
+  static const double kiCostSkill2 = 30.0;
+  static const double kiCostSkill3 = 45.0;
 
-  static const double _pathRecalcInterval = 0.25;
-  static const double _waypointReachRadius = 1.0;
-  static const double _rangedAttackRange = 230.0;
+  static const double _pathRecalcInterval = 0.22;
+  // Turn only within the tile-center body clearance; travel is waypoint-bounded.
+  static const double _waypointReachRadius = 2.0;
+  static const double _agentClearanceRadius = 12.5;
+  static const double _rangedAttackRange = 240.0;
 
   PvpBotAi({
     required this.difficulty,
@@ -82,11 +89,11 @@ class PvpBotAi extends Component {
   double get decisionInterval {
     switch (difficulty) {
       case BotDifficulty.bronzeSilver:
-        return 0.6;
+        return 0.35;
       case BotDifficulty.goldPlatinum:
-        return 0.3;
+        return 0.20;
       case BotDifficulty.diamondChallenger:
-        return 0.1;
+        return 0.08;
     }
   }
 
@@ -94,9 +101,9 @@ class PvpBotAi extends Component {
   double get aimErrorRate {
     switch (difficulty) {
       case BotDifficulty.bronzeSilver:
-        return 0.50; // 50% error
+        return 0.24; // 24% error
       case BotDifficulty.goldPlatinum:
-        return 0.15; // 15% error
+        return 0.10; // 10% error
       case BotDifficulty.diamondChallenger:
         return 0.0; // 0% error (khóa mục tiêu chính xác)
     }
@@ -104,20 +111,32 @@ class PvpBotAi extends Component {
 
   /// Góc lệch nhắm bắn tối đa (radians)
   double get maxAimErrorAngle {
-    // 50% -> pi/4 (~45 độ), 15% -> ~13.5 độ, 0% -> 0 độ
     return aimErrorRate * (pi / 2);
   }
 
-  /// Xác suất né chiêu telegraphed skills
+  /// Xác suất né chiêu / đạn bay tới
   double get dodgeChance {
     switch (difficulty) {
       case BotDifficulty.bronzeSilver:
-        return 0.0; // Không bao giờ né
+        return 0.25;
       case BotDifficulty.goldPlatinum:
-        return 0.70; // 70% né đòn telegraphed
+        return 0.72;
       case BotDifficulty.diamondChallenger:
-        return 0.90; // 90% né hoàn hảo
+        return 0.92;
     }
+  }
+
+  double _skill1RangeFor(PvpBotPlayerComponent b) {
+    final id = b.opponentInfo.heroId;
+    if (b.isRangedHero ||
+        id == 'ninja' ||
+        id == 'nova_blade' ||
+        id == 'nova' ||
+        id == 'shadow_01' ||
+        id == 'shadow') {
+      return 215.0;
+    }
+    return 95.0;
   }
 
   @override
@@ -248,6 +267,11 @@ class PvpBotAi extends Component {
     }
     if (dodgeTimer > 0) dodgeTimer = max(0, dodgeTimer - dt);
     decisionTimer += dt;
+    _strafeSwitchTimer += dt;
+    if (_strafeSwitchTimer >= 1.35) {
+      _strafeSwitchTimer = 0.0;
+      _strafeSign = -_strafeSign;
+    }
   }
 
   /// Tính toán vector ngắm / di chuyển đón đầu (Predictive Aiming Vector)
@@ -300,19 +324,50 @@ class PvpBotAi extends Component {
 
   /// Kiểm tra có thể tung chiêu hay không dựa trên Ki và Cooldown
   bool canCastSkill1(double currentKi) =>
-      currentKi >= kiCostSkill1 && skill1Cooldown <= 0;
+      currentKi >= (bot?.kaelenSkillConfig(1)?.kiCost ?? kiCostSkill1) &&
+      skill1Cooldown <= 0;
 
   bool canCastSkill2(double currentKi) =>
-      currentKi >= kiCostSkill2 && skill2Cooldown <= 0;
+      currentKi >= (bot?.kaelenSkillConfig(2)?.kiCost ?? kiCostSkill2) &&
+      skill2Cooldown <= 0;
 
   bool canCastSkill3(double currentKi) =>
-      currentKi >= kiCostSkill3 && skill3Cooldown <= 0;
+      currentKi >= (bot?.kaelenSkillConfig(3)?.kiCost ?? kiCostSkill3) &&
+      skill3Cooldown <= 0;
 
   bool canBasicAttack() => basicAttackCooldown <= 0;
 
   PositionComponent? _resolveActiveTarget() {
     final b = bot;
     if (b == null) return null;
+    // Trong 2v2/4v4, ưu tiên dứt điểm kẻ địch yếu máu (< 35% HP) trong tầm gần
+    if (b.getHostileTargets != null) {
+      final alive = b.getHostileTargets!().where((c) {
+        if (c is PlayerComponent) return c.currentHp > 0;
+        if (c is PvpBotPlayerComponent) return c.currentHp > 0;
+        return false;
+      }).toList();
+      if (alive.isNotEmpty) {
+        alive.sort((a, c) {
+          double score(PositionComponent comp) {
+            final dist = b.position.distanceTo(comp.position);
+            double hpRatio = 1.0;
+            if (comp is PlayerComponent && comp.maxHp > 0) {
+              hpRatio = comp.currentHp / comp.maxHp;
+            } else if (comp is PvpBotPlayerComponent && comp.maxHp > 0) {
+              hpRatio = comp.currentHp / comp.maxHp;
+            }
+            final lowHpBonus = hpRatio < 0.35
+                ? -110.0
+                : (hpRatio < 0.6 ? -35.0 : 0.0);
+            return dist + lowHpBonus;
+          }
+
+          return score(a).compareTo(score(c));
+        });
+        return alive.first;
+      }
+    }
     final candidate = b.primaryTarget ?? targetPlayer;
     if (candidate == null) return null;
     if (candidate is PlayerComponent && candidate.currentHp <= 0) return null;
@@ -320,6 +375,31 @@ class PvpBotAi extends Component {
       return null;
     }
     return candidate;
+  }
+
+  /// Quét đạn địch đang lao thẳng về phía Bot để né ngang (Projectile Sidestep).
+  HeroProjectile? _findIncomingThreatProjectile(PvpBotPlayerComponent b) {
+    final parent = b.parent;
+    if (parent == null) return null;
+    for (final proj in parent.children.whereType<HeroProjectile>()) {
+      if (!proj.isMounted) continue;
+      // Bot địch né đạn của phe người chơi; đồng minh né đạn của phe địch
+      final isHostileProj = b.opponentInfo.isAlly
+          ? !proj.isFromPlayer
+          : proj.isFromPlayer;
+      if (!isHostileProj) continue;
+      final toBot = b.position - proj.position;
+      final dist = toBot.length;
+      if (dist > 145.0 || dist < 4.0) continue;
+      final forwardDot = toBot.normalized().dot(proj.direction);
+      if (forwardDot < 0.72) continue;
+      final perpDist =
+          (toBot - proj.direction * toBot.dot(proj.direction)).length;
+      if (perpDist <= 34.0) {
+        return proj;
+      }
+    }
+    return null;
   }
 
   bool _hasClearPath(Vector2 from, Vector2 to) {
@@ -338,7 +418,7 @@ class PvpBotAi extends Component {
       return ChaseNavigation.isBodyPathClear(
         start: from + Vector2(0, 4),
         end: to + Vector2(0, 4),
-        halfSize: Vector2(12, 14),
+        halfSize: Vector2(_agentClearanceRadius, 14),
         grid: grid,
       );
     }
@@ -377,9 +457,9 @@ class PvpBotAi extends Component {
     final obstacles = b.getObstacleRects?.call();
     if (obstacles != null) {
       final padded = Rect.fromLTRB(
-        point.x - 12,
+        point.x - _agentClearanceRadius,
         point.y - 10,
-        point.x + 12,
+        point.x + _agentClearanceRadius,
         point.y + 18,
       );
       for (final obs in obstacles) {
@@ -548,7 +628,7 @@ class PvpBotAi extends Component {
 
   Vector2 _boundedDirection(Vector2 offset, PvpBotPlayerComponent b) {
     final distance = offset.length;
-    final travel = b.speed * (b.isBerserk ? 1.5 : 1.0) * _frameDt;
+    final travel = b.effectiveSpeed * _frameDt;
     if (!distance.isFinite || distance <= 0 || travel <= 0) {
       return Vector2.zero();
     }
@@ -620,6 +700,19 @@ class PvpBotAi extends Component {
       targetVelocity: targetVel,
       projectileSpeed: b.isRangedHero ? 330.0 : b.speed,
     );
+
+    // 1. KIỂM TRA NÉ ĐẠN ĐANG BAY TỚI (PROJECTILE SIDESTEP)
+    final threatProj = _findIncomingThreatProjectile(b);
+    if (threatProj != null && random.nextDouble() < dodgeChance) {
+      final perpA = Vector2(-threatProj.direction.y, threatProj.direction.x);
+      final perpB = -perpA;
+      final sideDir = _isPointSafe(b.position + perpA * 38) ? perpA : perpB;
+      currentState = BotCombatState.dodging;
+      dodgeTimer = 0.34;
+      dodgeDirection = _pickSafeDirection(b.position, sideDir);
+      b.moveDirection = dodgeDirection;
+      return;
+    }
 
     // 1. KIỂM TRA NÉ CHIÊU (DODGE TELEGRAPHED SKILLS)
     final threatAge = _threatAge;
@@ -698,17 +791,28 @@ class PvpBotAi extends Component {
     bool clearSight,
     Vector2 aimDir,
   ) {
-    final attackRange = b.isRangedHero ? _rangedAttackRange : 45.0;
+    final attackRange = b.isRangedHero ? _rangedAttackRange : 48.0;
+    final skill1Range = _skill1RangeFor(b);
     final canHitNow = dist <= attackRange && (!b.isRangedHero || clearSight);
 
     if (!canHitNow || !clearSight) {
       currentState = BotCombatState.approaching;
       b.moveDirection = _steerTowardTarget(b, targetPos, aimDir);
     } else {
-      currentState = BotCombatState.approaching;
-      b.moveDirection = Vector2.zero();
       _faceTarget(b, targetPos);
-      if (canBasicAttack()) {
+      // Di chuyển lách nhẹ thay vì đứng chết 1 chỗ
+      if (b.isRangedHero && dist < 105) {
+        b.moveDirection = _pickSafeDirection(b.position, -aimDir);
+      } else {
+        final strafe = Vector2(-aimDir.y * _strafeSign, aimDir.x * _strafeSign);
+        b.moveDirection = _pickSafeDirection(b.position, strafe * 0.55);
+      }
+      if (canCastSkill1(b.currentKi) && dist <= skill1Range) {
+        currentState = BotCombatState.executingCombo;
+        skill1Cooldown = b.kaelenSkillConfig(1)?.cooldown ?? cooldownSkill1;
+        b.executeSkill1();
+      } else if (canBasicAttack()) {
+        currentState = BotCombatState.approaching;
         basicAttackCooldown = cooldownBasicAttack;
         b.performBasicAttack(aimDirection: aimDir);
       }
@@ -724,15 +828,27 @@ class PvpBotAi extends Component {
     bool clearSight,
     Vector2 aimDir,
   ) {
-    // Punish visible recovery instead of reading hidden target Ki/cooldowns.
+    final skill1Range = _skill1RangeFor(b);
+
+    // Kích hoạt Skill 3 khi máu dưới 70% hoặc áp sát tốt
+    if (clearSight &&
+        canCastSkill3(b.currentKi) &&
+        dist <= 185 &&
+        (b.currentHp < b.maxHp * 0.72)) {
+      currentState = BotCombatState.executingCombo;
+      _faceTarget(b, targetPos);
+      skill3Cooldown = b.kaelenSkillConfig(3)?.cooldown ?? cooldownSkill3;
+      b.executeSkill3();
+    }
+
+    // Nếu mục tiêu cạn Ki (< 20): Combo Chiêu 1 -> Đánh thường
     if (clearSight &&
         targetRecovering &&
         canCastSkill1(b.currentKi) &&
-        dist <= 85) {
+        dist <= skill1Range) {
       currentState = BotCombatState.executingCombo;
-      b.moveDirection = Vector2.zero();
       _faceTarget(b, targetPos);
-      skill1Cooldown = cooldownSkill1;
+      skill1Cooldown = b.kaelenSkillConfig(1)?.cooldown ?? cooldownSkill1;
       b.executeSkill1();
       if (canBasicAttack()) {
         basicAttackCooldown = cooldownBasicAttack;
@@ -742,7 +858,7 @@ class PvpBotAi extends Component {
     }
 
     // Nếu mục tiêu bật cuồng nộ và bot không cuồng nộ: tạm lùi theo hướng an toàn
-    if (clearSight && targetBerserk && dist < 130) {
+    if (clearSight && targetBerserk && !b.isBerserk && dist < 130) {
       currentState = BotCombatState.retreating;
       b.moveDirection = _pickSafeDirection(b.position, -aimDir);
       return;
@@ -755,16 +871,23 @@ class PvpBotAi extends Component {
       currentState = BotCombatState.approaching;
       b.moveDirection = _steerTowardTarget(b, targetPos, aimDir);
     } else {
-      b.moveDirection = Vector2.zero();
       _faceTarget(b, targetPos);
-      // Ưu tiên dùng skill nếu đủ Ki và hết cooldown
-      if (canCastSkill2(b.currentKi) && dist <= 110) {
+      // Vừa đánh vừa lách ngang / thả diều
+      if (b.isRangedHero && dist < 120) {
+        currentState = BotCombatState.kiting;
+        b.moveDirection = _pickSafeDirection(b.position, -aimDir);
+      } else {
+        final strafe = Vector2(-aimDir.y * _strafeSign, aimDir.x * _strafeSign);
+        b.moveDirection = _pickSafeDirection(b.position, strafe);
+      }
+      // Ưu tiên dùng skill đúng tầm (cả cận chiến lẫn tầm xa)
+      if (canCastSkill2(b.currentKi) && dist <= 115) {
         currentState = BotCombatState.executingCombo;
-        skill2Cooldown = cooldownSkill2;
+        skill2Cooldown = b.kaelenSkillConfig(2)?.cooldown ?? cooldownSkill2;
         b.executeSkill2();
-      } else if (canCastSkill1(b.currentKi) && dist <= 85) {
+      } else if (canCastSkill1(b.currentKi) && dist <= skill1Range) {
         currentState = BotCombatState.executingCombo;
-        skill1Cooldown = cooldownSkill1;
+        skill1Cooldown = b.kaelenSkillConfig(1)?.cooldown ?? cooldownSkill1;
         b.executeSkill1();
       } else if (canBasicAttack()) {
         currentState = BotCombatState.executingCombo;
@@ -782,23 +905,23 @@ class PvpBotAi extends Component {
     bool clearSight,
     Vector2 aimDir,
   ) {
+    final skill1Range = _skill1RangeFor(b);
+
     // 1. Quản lý khoảng cách Thả diều (Kiting Distance Management)
-    // Nếu Bot cạn Ki (< 40) & thấp máu hoặc mục tiêu đang Berserk: giữ cự ly an toàn 130-180px
     if (clearSight &&
-        ((b.currentKi < 40 && b.currentHp < 70) ||
+        ((b.currentKi < 30 && b.currentHp < b.maxHp * 0.30) ||
             (targetBerserk && !b.isBerserk))) {
       currentState = BotCombatState.kiting;
-      if (dist < 130) {
+      if (dist < 135) {
         b.moveDirection = _pickSafeDirection(b.position, -aimDir);
-      } else if (dist > 180) {
+      } else if (dist > 195) {
         b.moveDirection = _steerTowardTarget(b, targetPos, aimDir);
       } else {
         b.moveDirection = _pickSafeDirection(
           b.position,
-          Vector2(-aimDir.y, aimDir.x),
+          Vector2(-aimDir.y * _strafeSign, aimDir.x * _strafeSign),
         );
       }
-      // Tướng đánh xa vẫn vừa thả diều vừa bắn cấu rỉa
       if (b.isRangedHero && dist <= _rangedAttackRange && canBasicAttack()) {
         _faceTarget(b, targetPos);
         basicAttackCooldown = cooldownBasicAttack;
@@ -808,15 +931,15 @@ class PvpBotAi extends Component {
     }
 
     // 2. Combo 3 chiêu dồn sát thương cực hạn (3-skill burst):
-    if (b.currentKi >= 40 &&
-        !b.isBerserk &&
+    if (clearSight &&
         canCastSkill3(b.currentKi) &&
-        dist <= 220) {
-      skill3Cooldown = cooldownSkill3;
+        dist <= (b.isRangedHero ? 235.0 : 185.0)) {
+      _faceTarget(b, targetPos);
+      skill3Cooldown = b.kaelenSkillConfig(3)?.cooldown ?? cooldownSkill3;
       b.executeSkill3();
     }
 
-    final attackRange = b.isRangedHero ? _rangedAttackRange : 45.0;
+    final attackRange = b.isRangedHero ? _rangedAttackRange : 48.0;
     final canHitNow = dist <= attackRange && (!b.isRangedHero || clearSight);
 
     if (!canHitNow || !clearSight) {
@@ -824,20 +947,26 @@ class PvpBotAi extends Component {
       b.moveDirection = _steerTowardTarget(b, targetPos, aimDir);
     } else {
       _faceTarget(b, targetPos);
-      // Tướng đánh xa giữ cự ly tối ưu thay vì đứng im nếu mục tiêu áp sát quá gần
-      if (b.isRangedHero && dist < 95) {
+      // Luôn giữ chuyển động linh hoạt: tướng đánh xa thả diều 130-210px, cận chiến lách vòng cung
+      if (b.isRangedHero && dist < 130) {
         currentState = BotCombatState.kiting;
-        b.moveDirection = _pickSafeDirection(b.position, -aimDir);
+        final kiteVec =
+            (-aimDir * 0.75 +
+                    Vector2(-aimDir.y * _strafeSign, aimDir.x * _strafeSign) *
+                        0.65)
+                .normalized();
+        b.moveDirection = _pickSafeDirection(b.position, kiteVec);
       } else {
-        b.moveDirection = Vector2.zero();
         currentState = BotCombatState.executingCombo;
+        final strafe = Vector2(-aimDir.y * _strafeSign, aimDir.x * _strafeSign);
+        b.moveDirection = _pickSafeDirection(b.position, strafe);
       }
 
-      if (canCastSkill2(b.currentKi) && dist <= 110) {
-        skill2Cooldown = cooldownSkill2;
+      if (canCastSkill2(b.currentKi) && dist <= 115) {
+        skill2Cooldown = b.kaelenSkillConfig(2)?.cooldown ?? cooldownSkill2;
         b.executeSkill2();
-      } else if (canCastSkill1(b.currentKi) && dist <= 85) {
-        skill1Cooldown = cooldownSkill1;
+      } else if (canCastSkill1(b.currentKi) && dist <= skill1Range) {
+        skill1Cooldown = b.kaelenSkillConfig(1)?.cooldown ?? cooldownSkill1;
         b.executeSkill1();
       } else if (canBasicAttack()) {
         basicAttackCooldown = cooldownBasicAttack;

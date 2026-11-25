@@ -52,7 +52,7 @@ void main() {
       expect(synced.single.selectedSkinId, 'skin_george_gold');
       final prefs = await SharedPreferences.getInstance();
       final stored = jsonDecode(
-        prefs.getString('gold_rush_player_profile_merge_fixture')!,
+        prefs.getString('big_war_player_profile_merge_fixture')!,
       ) as Map<String, dynamic>;
       expect(stored['unlockedSkinIds'], ['skin_george_gold']);
       expect(stored['rankStars'], 8);

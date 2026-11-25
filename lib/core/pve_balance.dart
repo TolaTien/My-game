@@ -10,23 +10,25 @@ class PveBalance {
 
   static double enemyScale(int floor) {
     _validateFloor(floor);
-    return 1.0 + (floor - 1) * 0.2;
+    return 1.0 + (floor - 1) * 0.30;
   }
 
   static double zombieMaxHp(int floor) => 60.0 * enemyScale(floor);
 
-  static double zombieDamage(int floor) => 10.0 * enemyScale(floor);
+  static double zombieDamage(int floor) {
+    _validateFloor(floor);
+    return 12.0 * (1.0 + (floor - 1) * .25);
+  }
 
   static double skeletonMaxHp(int floor) => 45.0 * enemyScale(floor);
 
   static double bossMaxHp(int floor) {
     _validateFloor(floor);
-    return floor == 1 ? 600.0 : 500.0 * (1.0 + (floor - 1) * 0.25);
+    return 600.0 * (1.0 + (floor - 1) * 0.35);
   }
 
-  /// The existing reward is indexed by the floor entered, not the floor cleared.
-  static int floorCompletionGold(int destinationFloor) {
-    _validateFloor(destinationFloor);
-    return 50 * destinationFloor;
+  static int floorCompletionGold(int clearedFloor) {
+    _validateFloor(clearedFloor);
+    return 200 * clearedFloor;
   }
 }

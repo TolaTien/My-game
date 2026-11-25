@@ -40,17 +40,15 @@ class EnvConfig {
         const String.fromEnvironment('AI_PROXY_URL'),
       );
 
-  // --- Firebase Configuration ---
+  // --- Firebase Configuration (không hardcode khóa; truyền qua --dart-define-from-file=.env) ---
   static String get firebaseApiKey => _read(
         'FIREBASE_API_KEY',
         const String.fromEnvironment('FIREBASE_API_KEY'),
-        'AIzaSyCwSFGtB6oYr1hbPU51WF5YngM5nwlzpdw',
       );
 
   static String get firebaseAuthDomain => _read(
         'FIREBASE_AUTH_DOMAIN',
         const String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
-        'my-game-ec4fa.firebaseapp.com',
       );
 
   static String get firebaseAppIdWeb {
@@ -59,31 +57,26 @@ class EnvConfig {
     return _read(
       'FIREBASE_APP_ID_WEB',
       primary.isNotEmpty ? primary : legacy,
-      '1:419437402803:web:b473a96092ad7cd3e72ec6',
     );
   }
 
   static String get firebaseAppIdAndroid => _read(
         'FIREBASE_APP_ID_ANDROID',
         const String.fromEnvironment('FIREBASE_APP_ID_ANDROID'),
-        '1:419437402803:android:20575160792c1660e72ec6',
       );
 
   static String get firebaseDatabaseUrl => _read(
         'FIREBASE_DATABASE_URL',
         const String.fromEnvironment('FIREBASE_DATABASE_URL'),
-        'https://my-game-ec4fa-default-rtdb.asia-southeast1.firebasedatabase.app',
       );
 
   static String get firebaseProjectId => _read(
         'FIREBASE_PROJECT_ID',
         const String.fromEnvironment('FIREBASE_PROJECT_ID'),
-        'my-game-ec4fa',
       );
 
   static String get firebaseMessagingSenderId => _read(
         'FIREBASE_MESSAGING_SENDER_ID',
         const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
-        '419437402803',
       );
 }

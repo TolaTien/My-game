@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flame/collisions.dart';
@@ -5,6 +6,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/pvp_match.dart';
+import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../ai/pvp_bot_ai.dart';
@@ -13,6 +15,7 @@ import 'floating_combat_text.dart';
 import 'hero_projectile.dart';
 import 'hero_sprite_animator.dart';
 import 'player.dart';
+import 'player_skill_effect.dart';
 
 class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   final PvpOpponentInfo opponentInfo;
@@ -49,6 +52,26 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
 
   bool isBerserk = false;
   double berserkTimer = 0.0;
+  double _kaelenVortexRemaining = 0;
+  double _kaelenJudgmentRemaining = 0;
+  double _kaelenInvulnerabilityRemaining = 0;
+  // The arena combines enemy clocks so overlapping stuns cannot unlock early.
+  double kaelenPlayerStunTimer = 0;
+  int _kaelenRound = 0;
+
+  SkillAssetConfig? kaelenSkillConfig(int slot) => opponentInfo.heroId == 'kaelen'
+      ? GameAssetRegistry.instance.getSkillForHeroSlot('kaelen', slot)
+      : null;
+
+  double get effectiveSpeed =>
+      speed *
+      (isBerserk ? 1.5 : 1) *
+      (_kaelenVortexRemaining > 0
+          ? kaelenSkillConfig(2)!.effects.moveSpeedMultiplier
+          : 1) *
+      (_kaelenJudgmentRemaining > 0
+          ? kaelenSkillConfig(3)!.effects.moveSpeedMultiplier
+          : 1);
 
   Vector2 moveDirection = Vector2.zero();
   Vector2 previousPosition = Vector2.zero();
@@ -195,6 +218,12 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    unawaited(SpriteImageCache.instance.preloadHero(opponentInfo.heroId));
+  }
+
+  @override
   void update(double dt) {
     if (!dt.isFinite || dt <= 0) return;
     super.update(dt);
@@ -212,15 +241,22 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     );
     _skillVisualRemaining = max(0, _skillVisualRemaining - dt);
     stunTimer = max(0, stunTimer - dt);
+    _kaelenVortexRemaining = max(0, _kaelenVortexRemaining - dt);
+    _kaelenJudgmentRemaining = max(0, _kaelenJudgmentRemaining - dt);
+    _kaelenInvulnerabilityRemaining = max(0, _kaelenInvulnerabilityRemaining - dt);
+    kaelenPlayerStunTimer = max(0, kaelenPlayerStunTimer - dt);
 
     if (!canPerformActions) return;
 
     animTime += dt;
 
-    // Hồi Ki (+5 Ki/s)
+    // Hồi Ki (+5 Ki/s — chỉ báo UI khi Ki nguyên đổi để không gọi setState 60 lần/giây)
     if (currentKi < maxKi) {
+      final prevIntKi = currentKi.toInt();
       currentKi = min(maxKi, currentKi + 5 * dt);
-      onStatsChanged?.call();
+      if (currentKi.toInt() != prevIntKi || currentKi >= maxKi) {
+        onStatsChanged?.call();
+      }
     }
 
     // Cuồng nộ timer
@@ -252,7 +288,6 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     // Di chuyển cho bot AI cục bộ
     if (!moveDirection.isZero()) {
       previousPosition = position.clone();
-      final effectiveSpeed = isBerserk ? speed * 1.5 : speed;
       final stepDir = moveDirection.length2 > 1.0001
           ? moveDirection.normalized()
           : moveDirection;
@@ -430,45 +465,294 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     return true;
   }
 
+  Vector2 _resolveBotAimDirection() {
+    if (primaryTarget != null && primaryTarget!.position != position) {
+      final dir = (primaryTarget!.position - position).normalized();
+      if (dir.x.abs() > 0.05) isFacingRight = dir.x > 0;
+      return dir;
+    }
+    return Vector2(isFacingRight ? 1.0 : -1.0, 0.0);
+  }
+
+  Vector2 _rotateDir(Vector2 v, double radians) {
+    final c = cos(radians);
+    final s = sin(radians);
+    return Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
+  }
+
+  void _spawnBotProjectile(
+    Vector2 dir,
+    HeroProjectileType type,
+    double dmg, {
+    bool piercing = false,
+    double splashRadius = 0.0,
+  }) {
+    if (parent == null || !isMounted) return;
+    parent!.add(
+      HeroProjectile(
+        position: position.clone() + dir * 10,
+        direction: dir,
+        damage: dmg,
+        type: type,
+        isFromPlayer: opponentInfo.isAlly,
+        piercing: piercing,
+        splashRadius: splashRadius,
+        onHit: (target, hitPos) => _spawnCombatText(hitPos, dmg, isCrit: true),
+      ),
+    );
+  }
+
   void executeSkill1({bool force = false}) {
+    if (opponentInfo.heroId == 'kaelen') {
+      _executeKaelenSkill(1, force: force);
+      return;
+    }
     if (currentHp <= 0) return;
-    if (!force && (!canPerformActions || currentKi < 25)) return;
-    currentKi = max(0, currentKi - 25);
+    if (!force && (!canPerformActions || currentKi < 20)) return;
+    currentKi = max(0, currentKi - 20);
     _playSkillVisual(1);
     isAttacking = true;
-    attackTimer = -0.3;
-    _damageTargetsInRange(damage * 1.8, 85, isCrit: true);
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    final aim = _resolveBotAimDirection();
+
+    if (id == 'ranger') {
+      for (final deg in [-20.0, 0.0, 20.0]) {
+        _spawnBotProjectile(
+          _rotateDir(aim, deg * pi / 180),
+          HeroProjectileType.arrow,
+          damage * 1.15,
+        );
+      }
+    } else if (id == 'ninja') {
+      for (final deg in [-15.0, 0.0, 15.0]) {
+        _spawnBotProjectile(
+          _rotateDir(aim, deg * pi / 180),
+          HeroProjectileType.shuriken,
+          damage * 1.25,
+          piercing: true,
+        );
+      }
+    } else if (id == 'nova_blade' || id == 'nova') {
+      _spawnBotProjectile(
+        aim,
+        HeroProjectileType.energyWave,
+        damage * 1.65,
+        piercing: true,
+      );
+    } else if (id == 'shadow_01' || id == 'shadow') {
+      for (final deg in [-12.0, 0.0, 12.0]) {
+        _spawnBotProjectile(
+          _rotateDir(aim, deg * pi / 180),
+          HeroProjectileType.voidBlade,
+          damage * 1.25,
+        );
+      }
+    } else if (id == 'ember_02' || id == 'ember') {
+      for (final deg in [-16.0, 0.0, 16.0]) {
+        _spawnBotProjectile(
+          _rotateDir(aim, deg * pi / 180),
+          HeroProjectileType.fireball,
+          damage * 1.35,
+          splashRadius: 40,
+        );
+      }
+    } else if (id == 'valeria') {
+      _spawnBotProjectile(
+        aim,
+        HeroProjectileType.frostOrb,
+        damage * 1.4,
+        piercing: true,
+      );
+      _spawnBotProjectile(
+        aim,
+        HeroProjectileType.fireball,
+        damage * 1.4,
+        splashRadius: 40,
+      );
+    } else {
+      _damageTargetsInRange(damage * 1.85, 95, isCrit: true);
+    }
     onStatsChanged?.call();
   }
 
   void executeSkill2({bool force = false}) {
+    if (opponentInfo.heroId == 'kaelen') {
+      _executeKaelenSkill(2, force: force);
+      return;
+    }
     if (currentHp <= 0) return;
-    if (!force && (!canPerformActions || currentKi < 35)) return;
-    currentKi = max(0, currentKi - 35);
+    if (!force && (!canPerformActions || currentKi < 30)) return;
+    currentKi = max(0, currentKi - 30);
     _playSkillVisual(2);
-    _damageTargetsInRange(damage * 2.5, 110, isCrit: true);
+    isAttacking = true;
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    if (id == 'tanker' || id == 'garrick') {
+      currentHp = min(maxHp, currentHp + maxHp * 0.10);
+      _damageTargetsInRange(damage * 1.6, 115, isCrit: true);
+    } else {
+      _damageTargetsInRange(damage * 2.2, 115, isCrit: true);
+    }
     onStatsChanged?.call();
   }
 
   void executeSkill3({bool force = false}) {
+    if (opponentInfo.heroId == 'kaelen') {
+      _executeKaelenSkill(3, force: force);
+      return;
+    }
     if (currentHp <= 0) return;
-    if (!force && (!canPerformActions || currentKi < 40 || isBerserk)) return;
-    currentKi = max(0, currentKi - 40);
+    if (!force && (!canPerformActions || currentKi < 45 || isBerserk)) return;
+    currentKi = max(0, currentKi - 45);
     _playSkillVisual(3);
-    isBerserk = true;
-    berserkTimer = 8.0;
-    if (opponentInfo.heroId != 'george' &&
-        opponentInfo.heroId != 'ranger' &&
-        opponentInfo.heroId != 'tanker' &&
-        opponentInfo.heroId != 'ninja') {
-      _damageTargetsInRange(damage * 2.2, 140, isCrit: true);
+    isAttacking = true;
+    attackTimer = 0.0;
+    final id = opponentInfo.heroId;
+    final aim = _resolveBotAimDirection();
+    if (id == 'george') {
+      isBerserk = true;
+      berserkTimer = 6.0;
+      _damageTargetsInRange(damage * 2.1, 145, isCrit: true);
+    } else if (id == 'ranger') {
+      for (int i = 0; i < 6; i++) {
+        final spread = (i - 2.5) * 14.0 * pi / 180.0;
+        _spawnBotProjectile(
+          _rotateDir(aim, spread),
+          HeroProjectileType.starArrow,
+          damage * 1.15,
+          piercing: true,
+        );
+      }
+    } else if (id == 'ember_02' || id == 'ember') {
+      _damageTargetsInRange(damage * 2.4, 160, isCrit: true);
+      for (int i = 0; i < 6; i++) {
+        final a = i * (pi / 3);
+        _spawnBotProjectile(
+          Vector2(cos(a), sin(a)),
+          HeroProjectileType.fireball,
+          damage * 1.15,
+        );
+      }
+    } else {
+      _damageTargetsInRange(damage * 2.8, 165, isCrit: true);
+    }
+    onStatsChanged?.call();
+  }
+
+  void _executeKaelenSkill(int slot, {required bool force}) {
+    final config = kaelenSkillConfig(slot);
+    if (config == null ||
+        currentHp <= 0 ||
+        (!force && (!canPerformActions || currentKi < config.kiCost))) {
+      return;
+    }
+    currentKi = max(0, currentKi - config.kiCost);
+    _playSkillVisual(slot);
+    isAttacking = true;
+    attackTimer = 0;
+    final effects = config.effects;
+    final amount = damage * config.damageMultiplier;
+    final origin = position.clone();
+    final round = _kaelenRound;
+
+    void hit(PositionComponent target, double fraction) {
+      if (target is PlayerComponent && target.currentHp > 0) {
+        target.takeDamage(amount * fraction);
+        if (effects.stunDuration > 0) {
+          kaelenPlayerStunTimer = max(kaelenPlayerStunTimer, effects.stunDuration);
+          target.actionsEnabled = false;
+          target.moveDirection = Vector2.zero();
+        }
+      } else if (target is PvpBotPlayerComponent && target.currentHp > 0) {
+        target.takeDamage(amount * fraction);
+        if (effects.stunDuration > 0) {
+          target.applyControl(stunDuration: effects.stunDuration);
+        }
+      } else {
+        return;
+      }
+      _spawnCombatText(target.position, amount * fraction, isCrit: true);
+    }
+
+    Iterable<PositionComponent> targets() =>
+        getHostileTargets?.call() ?? <PositionComponent>[targetPlayer];
+
+    void pulse(double fraction) {
+      for (final target in targets()) {
+        if (position.distanceTo(target.position) <= config.radius) {
+          hit(target, fraction);
+        }
+      }
+    }
+
+    if (slot == 1) {
+      final direction = _resolveBotAimDirection();
+      final obstacles = getObstacleRects?.call() ?? const <Rect>[];
+      var travelled = 0.0;
+      while (travelled < effects.dashDistance) {
+        final step = min(4.0, effects.dashDistance - travelled);
+        final next = position + direction * step;
+        final body = _hitboxAt(next.x, next.y);
+        if (next.x < 52 ||
+            next.x > 908 ||
+            next.y < 52 ||
+            next.y > 588 ||
+            obstacles.any((obstacle) => body.overlaps(obstacle))) {
+          break;
+        }
+        previousPosition.setFrom(position);
+        position.setFrom(next);
+        travelled += step;
+      }
+      final segment = position - origin;
+      for (final target in targets()) {
+        final t = segment.length2 == 0
+            ? 0.0
+            : ((target.position - origin).dot(segment) / segment.length2)
+                  .clamp(0.0, 1.0);
+        if ((origin + segment * t).distanceTo(target.position) <=
+            28 + target.size.x / 2) {
+          hit(target, 1);
+        }
+      }
+    } else if (slot == 2) {
+      _kaelenVortexRemaining = effects.duration;
+      parent?.add(
+        PlayerSkillArea(
+          position: position,
+          radius: config.radius,
+          duration: effects.duration,
+          tickInterval: effects.tickInterval,
+          color: const Color(0xFF00F0FF),
+          follow: this,
+          isActive: () =>
+              currentHp > 0 &&
+              _kaelenRound == round &&
+              (canAct?.call() ?? true),
+          onPulse: pulse,
+        ),
+      );
+    } else if (slot == 3) {
+      _kaelenJudgmentRemaining = effects.duration;
+      _kaelenInvulnerabilityRemaining = effects.invulnerabilityDuration;
+      pulse(1);
     }
     onStatsChanged?.call();
   }
 
   void takeDamage(double dmg) {
     if (!dmg.isFinite || dmg <= 0 || currentHp <= 0) return;
-    final effectiveDmg = isBerserk ? dmg * 0.6 : dmg;
+    if (_kaelenInvulnerabilityRemaining > 0) return;
+    final effectiveDmg =
+        dmg *
+        (isBerserk ? 0.6 : 1) *
+        (_kaelenVortexRemaining > 0
+            ? 1 - kaelenSkillConfig(2)!.effects.damageReduction
+            : 1) *
+        (_kaelenJudgmentRemaining > 0
+            ? 1 - kaelenSkillConfig(3)!.effects.damageReduction
+            : 1);
     currentHp = max(0, currentHp - effectiveDmg);
     onStatsChanged?.call();
 
@@ -486,6 +770,11 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   }
 
   void resetRound(Vector2 spawnPos) {
+    _kaelenRound++;
+    _kaelenVortexRemaining = 0;
+    _kaelenJudgmentRemaining = 0;
+    _kaelenInvulnerabilityRemaining = 0;
+    kaelenPlayerStunTimer = 0;
     visualAnimator.reset();
     _visualPosition = null;
     _skillVisualRemaining = 0;
@@ -583,7 +872,8 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       opponentInfo.heroId,
       facingRow: facingRow,
     );
-    if (sprites != null) {
+    if (sprites != null &&
+        !SpriteImageCache.isStripAnimatedHero(opponentInfo.heroId)) {
       canvas.save();
       if (currentHp <= 0) canvas.translate(0, 6);
       if (!isFacingRight) {
@@ -626,27 +916,31 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
     final bool isNova = heroId == 'nova_blade' || heroId == 'nova';
     final bool isShadow = heroId == 'shadow_01' || heroId == 'shadow';
     final bool isEmber = heroId == 'ember_02' || heroId == 'ember';
+    final bool isStripHero = SpriteImageCache.isStripAnimatedHero(heroId);
     final isMoving =
         !moveDirection.isZero() || (!enableAi && !targetVelocity.isZero());
     final bool novaMultiDirRun = isNova && isMoving && !isAttacking;
     final bool emberMultiDirRun = isEmber && isMoving && !isAttacking;
+    final bool stripMultiDirRun = isStripHero && isMoving && !isAttacking;
 
     canvas.save();
     if (currentHp <= 0) {
       // Mờ đi khi bị hạ gục trong 2v2 / 4v4
       canvas.translate(0, 6);
     }
-    if (!isFacingRight && !novaMultiDirRun && !emberMultiDirRun) {
+    if (!isFacingRight &&
+        !novaMultiDirRun &&
+        !emberMultiDirRun &&
+        !stripMultiDirRun) {
       canvas.scale(-1, 1);
       canvas.translate(-size.x, 0);
     }
 
-    // Hiệu ứng Cuồng nộ nếu có
+    // Hiệu ứng Cuồng nộ nếu có (nhẹ GPU, không dùng MaskFilter.blur)
     if (isBerserk && currentHp > 0) {
-      final aura = Paint()
-        ..color = const Color(0x669C27B0)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(size.x / 2, size.y / 2), 26, aura);
+      final centerPt = Offset(size.x / 2, size.y / 2);
+      canvas.drawCircle(centerPt, 30, Paint()..color = const Color(0x289C27B0));
+      canvas.drawCircle(centerPt, 24, Paint()..color = const Color(0x449C27B0));
     }
 
     // 1. Bóng đổ
@@ -659,6 +953,74 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
       ),
       shadowPaint,
     );
+
+    if (isStripHero) {
+      final strip = isAttacking
+          ? (SpriteImageCache.instance.getHeroAttackImage(heroId) ??
+                SpriteImageCache.instance.getHeroIdleImage(heroId))
+          : (isMoving
+                ? (SpriteImageCache.instance.getHeroRunImage(heroId) ??
+                      SpriteImageCache.instance.getHeroIdleImage(heroId))
+                : SpriteImageCache.instance.getHeroIdleImage(heroId));
+      if (strip != null && strip.width >= 512) {
+        final bool is4DirRunSheet =
+            !isAttacking && isMoving && strip.height >= 1000;
+        final int cols = is4DirRunSheet
+            ? 4
+            : max(1, (strip.width / strip.height).round());
+        final int row;
+        if (is4DirRunSheet) {
+          final mx = !moveDirection.isZero()
+              ? moveDirection.x
+              : targetVelocity.x;
+          final my = !moveDirection.isZero()
+              ? moveDirection.y
+              : targetVelocity.y;
+          if (my.abs() > mx.abs()) {
+            row = my > 0 ? 0 : 1; // 0: Down, 1: Up
+          } else {
+            row = mx < 0 ? 2 : 3; // 2: Left, 3: Right
+          }
+        } else {
+          row = 0;
+        }
+        final int col;
+        if (isAttacking) {
+          final progress = (attackTimer.clamp(0.0, 0.25) / 0.25).clamp(
+            0.0,
+            0.999,
+          );
+          col = (progress * cols).floor().clamp(0, cols - 1);
+        } else if (isMoving) {
+          col = (animTime * 10.5).floor() % cols;
+        } else {
+          col = (animTime * 5.5).floor() % cols;
+        }
+        final cellW = strip.width / cols;
+        final cellH = is4DirRunSheet
+            ? strip.height / 4.0
+            : strip.height.toDouble();
+        final srcRect = Rect.fromLTWH(col * cellW, row * cellH, cellW, cellH);
+
+        const dstW = 54.0;
+        const dstH = 54.0;
+        final dstLeft = (size.x - dstW) / 2;
+        final dstTop = size.y - 2 - (236.0 / 256.0 * dstH);
+        final dstRect = Rect.fromLTWH(dstLeft, dstTop, dstW, dstH);
+
+        canvas.drawImageRect(
+          strip,
+          srcRect,
+          dstRect,
+          Paint()..filterQuality = FilterQuality.none,
+        );
+        canvas.restore();
+        if (speechBubbleText != null) {
+          _renderSpeechBubble(canvas, speechBubbleText!);
+        }
+        return;
+      }
+    }
 
     if (isShadow) {
       final String action = isAttacking

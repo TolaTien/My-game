@@ -12,6 +12,8 @@ class PlayerProfile {
   final int gold;
   final int xu;
   final int diamonds;
+  final int totalMatches;
+  final int totalWins;
   final int rankPoints;
   final int? _rankStars;
   final bool? _isChallengerTop10;
@@ -26,6 +28,8 @@ class PlayerProfile {
   final Map<String, int> heroLevels;
   final Map<String, int> heroExp;
   final List<String> friendIds;
+  final int pveCurrentFloor;
+  final int pveHighestFloor;
 
   /// Tỷ giá quy đổi chuẩn trong lộ trình: 1 Xu = 1000 Vàng
   static const int goldPerXu = 1000;
@@ -33,9 +37,11 @@ class PlayerProfile {
   const PlayerProfile({
     this.playerName = 'Chiến Binh #88',
     this.playerCode = 'GR8899',
-    this.gold = 2000,
-    this.xu = 5,
+    this.gold = 500,
+    this.xu = 1,
     this.diamonds = 50,
+    this.totalMatches = 0,
+    this.totalWins = 0,
     this.rankPoints = 1000,
     int? rankStars,
     bool? isChallengerTop10,
@@ -51,6 +57,8 @@ class PlayerProfile {
     this.heroExp = const {'george': 0},
     this.friendIds = const [],
     Map<String, dynamic> extraFields = const {},
+    this.pveCurrentFloor = 1,
+    this.pveHighestFloor = 1,
     // ignore: prefer_initializing_formals
   }) : _extraFields = extraFields,
        // ignore: prefer_initializing_formals
@@ -134,6 +142,21 @@ class PlayerProfile {
 
   /// Tổng giá trị tài sản quy đổi ra Vàng (1 Xu = 1000 Vàng)
   int get totalWealthInGold => gold + (xu * goldPerXu);
+
+  /// Tỉ lệ thắng (%) tính trên tổng số trận đã đấu
+  double get winRate => totalMatches <= 0
+      ? 0.0
+      : (totalWins.clamp(0, totalMatches) / totalMatches) * 100.0;
+
+  /// Chuỗi hiển thị gọn gàng cho Tỉ lệ thắng (VD: "0%", "75%", "66.7%")
+  String get winRateDisplay {
+    if (totalMatches <= 0) return '0%';
+    final rate = winRate;
+    if ((rate - rate.roundToDouble()).abs() < 0.05) {
+      return '${rate.round()}%';
+    }
+    return '${rate.toStringAsFixed(1)}%';
+  }
 
   /// Bậc rank theo hệ thống Sao (Đồng -> Bạc -> Vàng -> Bạch Kim -> Kim Cương -> Huyền Thoại -> Thách Đấu Top 10)
   String get rankTier {
@@ -233,6 +256,8 @@ class PlayerProfile {
     int? gold,
     int? xu,
     int? diamonds,
+    int? totalMatches,
+    int? totalWins,
     int? rankPoints,
     int? rankStars,
     bool? isChallengerTop10,
@@ -249,6 +274,8 @@ class PlayerProfile {
     Map<String, int>? heroLevels,
     Map<String, int>? heroExp,
     List<String>? friendIds,
+    int? pveCurrentFloor,
+    int? pveHighestFloor,
   }) {
     final int resolvedRp;
     final int? resolvedStars;
@@ -269,6 +296,8 @@ class PlayerProfile {
       gold: gold ?? this.gold,
       xu: xu ?? this.xu,
       diamonds: diamonds ?? this.diamonds,
+      totalMatches: totalMatches ?? this.totalMatches,
+      totalWins: totalWins ?? this.totalWins,
       rankPoints: resolvedRp,
       rankStars: resolvedStars,
       isChallengerTop10: isChallengerTop10 ?? _isChallengerTop10,
@@ -288,6 +317,11 @@ class PlayerProfile {
       heroExp: heroExp ?? this.heroExp,
       friendIds: friendIds ?? this.friendIds,
       extraFields: _extraFields,
+      pveCurrentFloor: (pveCurrentFloor ?? this.pveCurrentFloor).clamp(1, 9999),
+      pveHighestFloor: max(
+        (pveHighestFloor ?? this.pveHighestFloor).clamp(1, 9999),
+        (pveCurrentFloor ?? this.pveCurrentFloor).clamp(1, 9999),
+      ),
     );
   }
 
@@ -299,6 +333,8 @@ class PlayerProfile {
       'gold': gold,
       'xu': xu,
       'diamonds': diamonds,
+      'totalMatches': totalMatches,
+      'totalWins': totalWins,
       'rankPoints': rankPoints,
       'rankStars': rankStars,
       'isChallengerTop10': isChallengerTop10,
@@ -313,6 +349,8 @@ class PlayerProfile {
       'heroLevels': heroLevels,
       'heroExp': heroExp,
       'friendIds': friendIds,
+      'pveCurrentFloor': pveCurrentFloor,
+      'pveHighestFloor': pveHighestFloor,
     };
   }
 
@@ -347,12 +385,23 @@ class PlayerProfile {
     final parsedChallenger = json['isChallengerTop10'] as bool?;
     final parsedServerRank = (json['serverRank'] as num?)?.toInt();
 
+    final parsedMatches = ((json['totalMatches'] as num?)?.toInt() ?? 0).clamp(
+      0,
+      1000000000,
+    );
+    final parsedWins = ((json['totalWins'] as num?)?.toInt() ?? 0).clamp(
+      0,
+      parsedMatches,
+    );
+
     return PlayerProfile(
       playerName: json['playerName'] as String? ?? 'Chiến Binh #88',
       playerCode: json['playerCode'] as String? ?? 'GR8899',
-      gold: (json['gold'] as num?)?.toInt() ?? 2000,
-      xu: (json['xu'] as num?)?.toInt() ?? 5,
+      gold: (json['gold'] as num?)?.toInt() ?? 500,
+      xu: (json['xu'] as num?)?.toInt() ?? 1,
       diamonds: (json['diamonds'] as num?)?.toInt() ?? 50,
+      totalMatches: parsedMatches,
+      totalWins: parsedWins,
       rankPoints: parsedRp,
       rankStars: parsedStars,
       isChallengerTop10: parsedChallenger,
@@ -375,6 +424,14 @@ class PlayerProfile {
       heroExp: parseIntMap(json['heroExp'], const {'george': 0}),
       friendIds: parseStringList(json['friendIds'], const []),
       extraFields: Map<String, dynamic>.of(json),
+      pveCurrentFloor: ((json['pveCurrentFloor'] as num?)?.toInt() ?? 1).clamp(
+        1,
+        9999,
+      ),
+      pveHighestFloor: ((json['pveHighestFloor'] as num?)?.toInt() ?? 1).clamp(
+        1,
+        9999,
+      ),
     );
   }
 }

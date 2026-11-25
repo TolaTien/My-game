@@ -32,6 +32,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byKey(const Key('auth_play_offline')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('auth_play_offline')));
     await tester.tap(find.byKey(const Key('auth_play_offline')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -54,7 +55,8 @@ void main() {
 
       await tester.pumpWidget(const MaterialApp(home: AuthScreen()));
       await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.text('Chưa có tài khoản? Đăng ký ngay'));
+      await tester.ensureVisible(find.textContaining('Register now!'));
+      await tester.tap(find.textContaining('Register now!'));
       await tester.pump(const Duration(milliseconds: 250));
       final fields = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
@@ -97,13 +99,13 @@ void main() {
       expect(tester.takeException(), isNull);
     }
 
-    await expectVisibleLabel('ĐĂNG NHẬP');
-    final switchToRegister = find.text('Chưa có tài khoản? Đăng ký ngay');
+    await expectVisibleLabel('Login');
+    final switchToRegister = find.textContaining('Register now!');
     await tester.ensureVisible(switchToRegister);
     await tester.pump();
     await tester.tap(switchToRegister);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
-    await expectVisibleLabel('TẠO TÀI KHOẢN');
+    await expectVisibleLabel('Register');
   });
 }

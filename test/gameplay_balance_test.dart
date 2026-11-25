@@ -29,10 +29,10 @@ void main() {
     // Explicit historical values catch an accidental rebase of floor-one boss
     // HP or use of the boss scale for ordinary enemies.
     const rows = [
-      [1, 1.0, 60.0, 10.0, 45.0, 600.0, 50],
-      [2, 1.2, 72.0, 12.0, 54.0, 625.0, 100],
-      [5, 1.8, 108.0, 18.0, 81.0, 1000.0, 250],
-      [10, 2.8, 168.0, 28.0, 126.0, 1625.0, 500],
+      [1, 1.0, 60.0, 12.0, 45.0, 600.0, 200],
+      [2, 1.3, 78.0, 15.0, 58.5, 810.0, 400],
+      [5, 2.2, 132.0, 24.0, 99.0, 1440.0, 1000],
+      [10, 3.7, 222.0, 39.0, 166.5, 2490.0, 2000],
     ];
     for (final row in rows) {
       final floor = row[0].toInt();
@@ -79,8 +79,19 @@ void main() {
       await tester.pump();
       game.pauseEngine();
       expect(game.player.isMounted, isTrue);
-      expect(game.enemies, hasLength(5));
-      expect(game.skeletons, hasLength(3));
+      final portals = game.currentMapConfig.monsterPortals;
+      expect(
+        game.enemies,
+        hasLength(
+          (portals.isEmpty ? 5 : portals.length + 1) +
+              BigWarGame.extraZombiesForFloor(floor),
+        ),
+      );
+      expect(
+        game.skeletons,
+        hasLength(3 + BigWarGame.extraSkeletonsForFloor(floor)),
+      );
+      expect(game.bosses, hasLength(BigWarGame.bossCountForFloor(floor)));
       for (final zombie in game.enemies) {
         expect(zombie.isMounted, isTrue);
         expect(zombie.maxHp, PveBalance.zombieMaxHp(floor));
@@ -102,14 +113,8 @@ void main() {
       await tester.runAsync(game.ready);
       final destination = floor + 1;
       expect(game.currentFloor, destination);
-      expect(
-        game.player.coinsCollected - coins,
-        PveBalance.floorCompletionGold(destination),
-      );
-      expect(
-        PlayerStorage.currentProfile.gold - gold,
-        PveBalance.floorCompletionGold(destination),
-      );
+      expect(game.player.coinsCollected - coins, 0);
+      expect(PlayerStorage.currentProfile.gold - gold, 0);
       expect(game.enemies.first.maxHp, PveBalance.zombieMaxHp(destination));
       expect(game.enemies.first.damage, PveBalance.zombieDamage(destination));
       expect(game.skeletons.first.maxHp, PveBalance.skeletonMaxHp(destination));
@@ -136,23 +141,31 @@ void main() {
           );
           expect(player.maxHp, scaled.maxHp, reason: '${hero.id} level $level');
           expect(player.maxKi, scaled.maxKi, reason: '${hero.id} level $level');
-          expect(player.effectiveDamage, scaled.attackDamage, reason: '${hero.id} level $level');
-          expect(player.effectiveSpeed, scaled.moveSpeed, reason: '${hero.id} level $level');
+          expect(
+            player.effectiveDamage,
+            scaled.attackDamage,
+            reason: '${hero.id} level $level',
+          );
+          expect(
+            player.effectiveSpeed,
+            scaled.moveSpeed,
+            reason: '${hero.id} level $level',
+          );
         }
       }
       final markdown = report.buildGameplayBalanceReport();
       expect(
         markdown,
         contains(
-           '| george | 1 | 1 | 340 | 100 | 25 | '
-           '3 / 2 / 24 | 34 | 34 |',
+          '| george | 1 | 1 | 340 | 100 | 25 | '
+          '3 / 2 / 24 | 28 | 29 |',
         ),
       );
       expect(
         markdown,
         contains(
-           '| george | 1 | 10 | 340 | 100 | 25 | '
-           '7 / 6 / 65 | 12 | 13 |',
+          '| george | 1 | 10 | 340 | 100 | 25 | '
+          '9 / 7 / 100 | 8 | 9 |',
         ),
       );
       for (final hero in GameAssetRegistry.instance.heroes) {

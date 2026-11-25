@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' show Rect;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -7,9 +8,11 @@ import '../models/pvp_match.dart';
 import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/player_storage.dart';
+import 'combat/hero_skill_system.dart';
 import 'components/floating_combat_text.dart';
 import 'components/hero_projectile.dart';
 import 'components/player.dart';
+import 'components/player_skill_effect.dart';
 import 'components/pvp_arena_map.dart';
 import 'components/pvp_bot_player.dart';
 
@@ -136,8 +139,8 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       position: _localSpawn,
       heroId: localHero,
       userHeroLevel: PlayerStorage.currentProfile.getHeroLevel(localHero),
-      // The existing online action strings replay these same legacy effects.
-      legacyPvpSkills: true,
+      // Keep the original nine heroes on their existing PvP replay contract.
+      legacyPvpSkills: localHero != 'kaelen',
     );
     bot = PvpBotPlayerComponent(
       position: _opponentSpawn,
@@ -272,8 +275,16 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   @override
   void update(double dt) {
     if (!dt.isFinite || dt < 0) return;
-    player.actionsEnabled = !paused && matchState == PvpMatchState.fighting;
+    final wasStunned = allEnemies.any((enemy) => enemy.kaelenPlayerStunTimer > 0);
+    player.actionsEnabled =
+        !paused &&
+        matchState == PvpMatchState.fighting &&
+        !wasStunned;
     super.update(dt);
+    if (wasStunned &&
+        allEnemies.every((enemy) => enemy.kaelenPlayerStunTimer <= 0)) {
+      player.actionsEnabled = !paused && matchState == PvpMatchState.fighting;
+    }
 
     // Xử lý speech bubble của Player
     if (playerSpeechTimer > 0) {
@@ -378,6 +389,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   }
 
   void _startNextRound() {
+    for (final effect in world.children.whereType<PlayerSkillArea>().toList()) {
+      effect.removeFromParent();
+    }
     for (final projectile
         in world.children.whereType<HeroProjectile>().toList()) {
       projectile.removeFromParent();
@@ -575,17 +589,169 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     onLocalAction?.call('basicAttack');
   }
 
+  List<SkillTargetAdapter> _buildPvpSkillTargets() {
+    return allEnemies
+        .map(
+          (enemy) => SkillTargetAdapter(
+            getPosition: () => enemy.position,
+            isAlive: () => enemy.isMounted && enemy.currentHp > 0,
+            applyDamage: (dmg, textType) {
+              enemy.takeDamage(dmg);
+              if (isMounted) {
+                world.add(
+                  FloatingCombatText(
+                    text: '-${dmg.toInt()}',
+                    position: enemy.position.clone()..y -= 20,
+                    type: textType,
+                  ),
+                );
+              }
+            },
+            pushBy: (delta) {
+              enemy.position.add(delta);
+              enemy.position.x = enemy.position.x.clamp(52.0, 908.0);
+              enemy.position.y = enemy.position.y.clamp(52.0, 588.0);
+            },
+          ),
+        )
+        .toList();
+  }
+
+  void _executePvpSkillSlot(int slot) {
+    if (player.heroId == 'kaelen') {
+      _executeKaelenSkill(slot);
+      return;
+    }
+    HeroSkillSystem.executeSkill(
+      slot: slot,
+      player: player,
+      world: world,
+      targets: _buildPvpSkillTargets(),
+      onDamageText: (pos, dmg, textType) {
+        if (isMounted) {
+          world.add(
+            FloatingCombatText(
+              text: '-$dmg',
+              position: pos.clone()..y -= 20,
+              type: textType,
+            ),
+          );
+        }
+      },
+      onBannerText: (pos, text) {
+        if (isMounted) {
+          world.add(
+            FloatingCombatText(
+              text: text,
+              position: pos.clone()..y -= 24,
+              type: CombatTextType.buff,
+            ),
+          );
+        }
+      },
+      clampPlayerPos: (pos) {
+        pos.x = pos.x.clamp(52.0, 908.0);
+        pos.y = pos.y.clamp(52.0, 588.0);
+      },
+    );
+  }
+
+  void _executeKaelenSkill(int slot) {
+    // PlayerComponent owns the catalog resource, cooldown and buff clocks.
+    final config = player.skillConfig(slot);
+    final effects = config.effects;
+    final damage = player.effectiveDamage * config.damageMultiplier;
+    final origin = player.position.clone();
+    final round = currentRound;
+
+    void hit(PvpBotPlayerComponent enemy, double fraction) {
+      enemy.takeDamage(damage * fraction);
+      if (effects.stunDuration > 0) {
+        enemy.applyControl(stunDuration: effects.stunDuration);
+      }
+      if (isMounted) {
+        world.add(
+          FloatingCombatText(
+            text: '-${(damage * fraction).toInt()}',
+            position: enemy.position.clone()..y -= 20,
+            type: CombatTextType.skillDamage,
+          ),
+        );
+      }
+    }
+
+    void pulse(double fraction) {
+      for (final enemy in allEnemies) {
+        if (enemy.currentHp > 0 &&
+            player.position.distanceTo(enemy.position) <= config.radius) {
+          hit(enemy, fraction);
+        }
+      }
+    }
+
+    if (slot == 1) {
+      final direction = player.attackDirection;
+      var travelled = 0.0;
+      while (travelled < effects.dashDistance) {
+        final step = min(4.0, effects.dashDistance - travelled);
+        final next = player.position + direction * step;
+        final body = Rect.fromLTRB(
+          next.x - 12,
+          next.y - 10,
+          next.x + 12,
+          next.y + 18,
+        );
+        if (next.x < 52 ||
+            next.x > 908 ||
+            next.y < 52 ||
+            next.y > 588 ||
+            arenaMap.obstacleRects.any((obstacle) => body.overlaps(obstacle))) {
+          break;
+        }
+        player.previousPosition.setFrom(player.position);
+        player.position.setFrom(next);
+        travelled += step;
+      }
+      player.recordDashTrail(origin, player.position);
+      final segment = player.position - origin;
+      for (final enemy in allEnemies) {
+        if (enemy.currentHp <= 0) continue;
+        final t = segment.length2 == 0
+            ? 0.0
+            : ((enemy.position - origin).dot(segment) / segment.length2)
+                  .clamp(0.0, 1.0);
+        if ((origin + segment * t).distanceTo(enemy.position) <=
+            28 + enemy.size.x / 2) {
+          hit(enemy, 1);
+        }
+      }
+    } else if (slot == 2) {
+      world.add(
+        PlayerSkillArea(
+          position: player.position,
+          radius: config.radius,
+          duration: effects.duration,
+          tickInterval: effects.tickInterval,
+          color: player.skillEffectColor,
+          follow: player,
+          isActive: () =>
+              player.currentHp > 0 &&
+              currentRound == round &&
+              matchState == PvpMatchState.fighting,
+          onPulse: pulse,
+        ),
+      );
+    } else if (slot == 3) {
+      pulse(1);
+    }
+  }
+
   void onSkill1() {
     if (paused || matchState != PvpMatchState.fighting || !player.canAct) {
       return;
     }
     if (!player.useSkill1()) return;
-
-    _damageEnemiesInRange(
-      player.damage * 1.8,
-      85,
-      type: CombatTextType.skillDamage,
-    );
+    _executePvpSkillSlot(1);
     onLocalAction?.call('skill1');
   }
 
@@ -594,12 +760,7 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       return;
     }
     if (!player.useSkill2()) return;
-
-    _damageEnemiesInRange(
-      player.damage * 2.5,
-      110,
-      type: CombatTextType.skillDamage,
-    );
+    _executePvpSkillSlot(2);
     onLocalAction?.call('skill2');
   }
 
@@ -607,19 +768,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     if (paused || matchState != PvpMatchState.fighting || !player.canAct) {
       return;
     }
-    if (player.useSkill3()) {
-      if (player.heroId != 'george' &&
-          player.heroId != 'ranger' &&
-          player.heroId != 'tanker' &&
-          player.heroId != 'ninja') {
-        _damageEnemiesInRange(
-          player.damage * 2.2,
-          140,
-          type: CombatTextType.criticalDamage,
-        );
-      }
-      onLocalAction?.call('skill3');
-    }
+    if (!player.useSkill3()) return;
+    _executePvpSkillSlot(3);
+    onLocalAction?.call('skill3');
   }
 
   void sendQuickChat(QuickChatPhrase phrase) {
@@ -778,7 +929,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   }
 
   Map<String, Object?> get localSnapshot {
-    final effectiveSpeed = player.isBerserk ? player.speed * 1.5 : player.speed;
+    final effectiveSpeed = player.heroId == 'kaelen'
+        ? player.effectiveSpeed
+        : (player.isBerserk ? player.speed * 1.5 : player.speed);
     final vx = player.moveDirection.x * effectiveSpeed;
     final vy = player.moveDirection.y * effectiveSpeed;
 

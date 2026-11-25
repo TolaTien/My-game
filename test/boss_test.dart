@@ -79,14 +79,16 @@ void main() {
 
   group('Boss Combat Parameters & Auxiliary Skills', () {
     test('Melee Cleave parameters: 70px range, 25 damage', () {
+      final boss = BossEnemy(position: Vector2.zero(), player: PlayerComponent(position: Vector2.zero()));
       expect(BossEnemy.meleeRange, 70.0);
-      expect(BossEnemy.meleeDamage, 25.0);
+      expect(boss.meleeDamage, 25.0);
     });
 
     test('Ground Slam parameters: 1.2s telegraph, 70px radius / 140px diameter AoE, 40 damage', () {
+      final boss = BossEnemy(position: Vector2.zero(), player: PlayerComponent(position: Vector2.zero()));
       expect(BossEnemy.groundSlamRange, 220.0);
       expect(BossEnemy.groundSlamAoERadius, 70.0);
-      expect(BossEnemy.groundSlamDamage, 40.0);
+      expect(boss.groundSlamDamage, 40.0);
       expect(BossEnemy.groundSlamTelegraphDuration, 1.2);
 
       final telegraph = GroundSlamTelegraph(
@@ -98,8 +100,9 @@ void main() {
     });
 
     test('Radial Flame Burst parameters: 8 fireballs, 180 px/s speed, 15 damage', () {
-      expect(BossEnemy.flameBurstSpeed, 180.0);
-      expect(BossEnemy.flameBurstDamage, 15.0);
+      final boss = BossEnemy(position: Vector2.zero(), player: PlayerComponent(position: Vector2.zero()));
+      expect(boss.flameBurstSpeed, 180.0);
+      expect(boss.flameBurstDamage, 15.0);
 
       final flame = BossFlameProjectile(
         position: Vector2(100, 100),

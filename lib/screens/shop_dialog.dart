@@ -344,7 +344,7 @@ class _ShopDialogState extends State<ShopDialog>
     );
   }
 
-  // --- TAB 1: NHÂN VẬT (ĐỒNG GIÁ 100 VÀNG THEO MỤC 6) ---
+  // --- TAB 1: NHÂN VẬT (BẬC TƯỚNG & GIÁ VÀNG) ---
   Widget _buildHeroesTab(PlayerProfile profile, {required bool compact}) {
     final heroes = [
       // === HEROES WITH NATIVE MAIN-BRANCH PORTRAITS ===
@@ -356,8 +356,8 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Song kiếm năng lượng cực quang, lướt bóng hư không, bộc phá lượng tử diện rộng.',
         color: const Color(0xFF00E5FF),
         icon: Icons.electric_bolt_rounded,
-        portraitAsset:
-            'assets/images/heroes/nova_blade/nova_blade_portrait.png',
+        portraitAsset: 'assets/images/heroes/nova/nova_portrait.png',
+        price: 6000,
       ),
       _HeroItem(
         id: 'shadow_01',
@@ -369,6 +369,7 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFF9C27B0),
         icon: Icons.nights_stay_rounded,
         portraitAsset: 'assets/images/heroes/shadow/shadow_01_portrait.png',
+        price: 6000,
       ),
       _HeroItem(
         id: 'ember_02',
@@ -378,7 +379,8 @@ class _ShopDialogState extends State<ShopDialog>
         description: 'Hỏa cầu nổ diện rộng, cột lửa ma pháp thiêu đốt, thái dương bộc phá hủy diệt.',
         color: const Color(0xFFFF5722),
         icon: Icons.local_fire_department_rounded,
-        portraitAsset: 'assets/images/heroes/ember/ember_02_portrait.png',
+        portraitAsset: 'assets/images/heroes/ember/ember.png',
+        price: 6500,
       ),
 
       // === BASE HEROES ===
@@ -391,6 +393,7 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFFFF5722),
         icon: Icons.shield_sharp,
         portraitAsset: 'assets/images/heroes/george_portrait.png',
+        price: 0,
       ),
       _HeroItem(
         id: 'ranger',
@@ -402,6 +405,7 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFF00E676),
         icon: Icons.gps_fixed_rounded,
         portraitAsset: 'assets/images/heroes/ranger_portrait.png',
+        price: 4000,
       ),
       _HeroItem(
         id: 'tanker',
@@ -413,6 +417,7 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFF00B0FF),
         icon: Icons.security_rounded,
         portraitAsset: 'assets/images/heroes/tanker_portrait.png',
+        price: 4000,
       ),
       _HeroItem(
         id: 'ninja',
@@ -424,6 +429,7 @@ class _ShopDialogState extends State<ShopDialog>
         color: const Color(0xFFAB47BC),
         icon: Icons.flash_on_rounded,
         portraitAsset: 'assets/images/heroes/ninja_portrait.png',
+        price: 4500,
       ),
       _HeroItem(
         id: 'kaelen',
@@ -638,10 +644,10 @@ class _ShopDialogState extends State<ShopDialog>
                       ),
                     ),
                     onPressed: () async {
-                      const price = GameConstants.heroUnlockPrice;
+                      final price = hero.price ?? GameConstants.heroUnlockPrice;
                       if (profile.gold < price) {
                         _showNotification(
-                          'Bạn không đủ Vàng! Cần 100 Vàng để mở khóa.',
+                          'Bạn không đủ Vàng! Cần $price Vàng để mở khóa.',
                           isSuccess: false,
                         );
                         return;
@@ -652,14 +658,14 @@ class _ShopDialogState extends State<ShopDialog>
                       );
                       if (success) {
                         _showNotification(
-                          'Mở khóa thành công ${hero.name} (-100 Vàng)!',
+                          'Mở khóa thành công ${hero.name} (-$price Vàng)!',
                         );
                       }
                     },
                     icon: const Icon(Icons.monetization_on_rounded, size: 14),
-                    label: const Text(
-                      '100 VÀNG',
-                      style: TextStyle(
+                    label: Text(
+                      '${hero.price ?? GameConstants.heroUnlockPrice} VÀNG',
+                      style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 11,
                       ),
@@ -680,76 +686,74 @@ class _ShopDialogState extends State<ShopDialog>
       _CompanionItem(
         id: 'comp_attack',
         name: 'Trợ Thủ Công Kích',
-        tag: 'ATTACK DRONE',
-        description:
-            'Tự động phát hiện và phóng tia plasma năng lượng vào quái.',
-        price: 500,
+        tag: 'TIER 1 • ATTACK DRONE',
+        description: 'Bắn đạn Plasma tự động. Kỹ năng [E]: Mưa Đạn Plasma phóng 6 tia 360°.',
+        price: 2000,
         color: const Color(0xFFFF5252),
         icon: Icons.rocket_launch_rounded,
       ),
       _CompanionItem(
         id: 'comp_defense',
         name: 'Trợ Thủ Phòng Ngự',
-        tag: 'SHIELD DRONE',
-        description: 'Tạo lồng bảo hộ năng lượng giảm 30% sát thương nhận vào.',
-        price: 600,
+        tag: 'TIER 1 • SHIELD DRONE',
+        description: 'Giảm 30% sát thương. Kỹ năng [E]: Lồng Phản Chấn (Khiên 55% + đẩy lùi quái).',
+        price: 2500,
         color: const Color(0xFF448AFF),
         icon: Icons.shield_rounded,
       ),
       _CompanionItem(
         id: 'comp_control',
         name: 'Trợ Thủ Khống Chế',
-        tag: 'FROST DRONE',
-        description:
-            'Tỏa aura băng tuyết làm chậm 40% tốc chạy của toàn bộ quái vật.',
-        price: 700,
+        tag: 'TIER 1 • FROST DRONE',
+        description: 'Làm chậm 40% quái. Kỹ năng [E]: Bão Tuyết đóng băng toàn bộ quái 3s.',
+        price: 3000,
         color: const Color(0xFF18FFFF),
         icon: Icons.ac_unit_rounded,
       ),
       _CompanionItem(
-        id: 'aegis_x9',
-        name: 'Aegis-X9 Lôi Từ',
-        tag: 'GOLDEN SPIRIT',
-        description: 'Lõi bát diện Hoàng Kim: Hút vàng 120px, bắn tia Laser & mở Trường Trọng Lực + Khiên Vàng.',
-        price: 800,
-        color: const Color(0xFFFFD700),
-        icon: Icons.auto_awesome_rounded,
-      ),
-      _CompanionItem(
         id: 'cyber_drone',
         name: 'Cyber Drone (PIXEL-01)',
-        tag: 'SUPPORT • UTILITY (ASSET 1 & 2)',
-        description: 'Drone sừng trắng mắt lam: Bắn đạn Plasma, hồi máu đồng minh & bật Khiên Cầu Năng Lượng.',
-        price: 650,
+        tag: 'TIER 2 • SUPPORT (ASSET 1 & 2)',
+        description: 'Khiên 30%. Kỹ năng [E]: Khiên Sinh Học hồi 25% HP, bật Khiên 45% & bắn 3 tia Plasma.',
+        price: 4000,
         color: const Color(0xFF00E5FF),
         icon: Icons.smart_toy_rounded,
       ),
       _CompanionItem(
-        id: 'pyro_frost_dragon',
-        name: 'Pyro-Frost Dragon',
-        tag: 'RỒNG BĂNG HỎA 2 ĐẦU (ASSET 3)',
-        description: 'Phun lửa & tuyết xen kẽ; kích hoạt Hơi Thở Bão Tố đóng băng kẻ địch và buff khiên lửa.',
-        price: 900,
-        color: const Color(0xFFFF5252),
-        icon: Icons.whatshot_rounded,
-      ),
-      _CompanionItem(
         id: 'luna_fox',
         name: 'Hồ Ly Luna',
-        tag: 'PET FOX (ASSET 2)',
-        description: 'Linh thú Hồ Ly trắng xanh: Bắn cầu linh lực băng lam làm chậm quái và hồi Ki.',
-        price: 750,
+        tag: 'TIER 2 • PET FOX (ASSET 2)',
+        description: 'Aura băng làm chậm. Kỹ năng [E]: Linh Hồn Hồ Ly hồi 40% Ki & giảm 3s hồi chiêu.',
+        price: 4500,
         color: const Color(0xFF80D8FF),
         icon: Icons.pets_rounded,
       ),
       _CompanionItem(
         id: 'orbit_03',
         name: 'ORBIT-03 Drone',
-        tag: 'MECH SPHERE (ASSET 2)',
-        description: 'Cầu cơ khí Hoàng Kim bắn tia laser năng lượng tốc độ cao liên hoàn.',
-        price: 700,
+        tag: 'TIER 2 • MECH SPHERE (ASSET 2)',
+        description: 'Bắn laser tự động. Kỹ năng [E]: Pháo Laser Quỹ Đạo (55 DMG nổ) & bắn liên thanh 4s.',
+        price: 5000,
         color: const Color(0xFFFFAB00),
         icon: Icons.radar_rounded,
+      ),
+      _CompanionItem(
+        id: 'aegis_x9',
+        name: 'Aegis-X9 Lôi Từ',
+        tag: 'TIER 3 • HUYỀN THOẠI (ASSET 4)',
+        description: 'Hút vàng & laser vàng. Kỹ năng [E]: Trường Trọng Lực gom quái + hút toàn map + Khiên 35%.',
+        price: 8000,
+        color: const Color(0xFFFFD700),
+        icon: Icons.auto_awesome_rounded,
+      ),
+      _CompanionItem(
+        id: 'pyro_frost_dragon',
+        name: 'Pyro-Frost Dragon',
+        tag: 'TIER 3 • HUYỀN THOẠI (ASSET 3)',
+        description: 'Aura băng. Kỹ năng [E]: Hơi Thở Bão Tố (65 DMG nổ + đóng băng 2.5s + tăng 30% ATK 5s).',
+        price: 10000,
+        color: const Color(0xFFFF5252),
+        icon: Icons.whatshot_rounded,
       ),
     ].where((item) => availableCompanionIds.contains(item.id)).toList();
 
@@ -1227,6 +1231,7 @@ class _HeroItem {
   final Color color;
   final IconData icon;
   final String? portraitAsset;
+  final int? price;
 
   const _HeroItem({
     required this.id,
@@ -1237,6 +1242,7 @@ class _HeroItem {
     required this.color,
     required this.icon,
     this.portraitAsset,
+    this.price,
   });
 }
 

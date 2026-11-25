@@ -9,7 +9,7 @@ import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
 import '../rendering/fox_spirit_visual.dart';
 import '../rendering/dragon_spirit_visual.dart';
-import '../gold_rush_game.dart';
+import '../big_war_game.dart';
 import 'player.dart';
 import 'enemy_zombie.dart';
 import 'enemy_skeleton.dart';
@@ -79,7 +79,7 @@ extension CompanionTypeExtension on CompanionType {
 
 /// AI Companion Drone bay lơ lửng quanh Player
 class CompanionComponent extends PositionComponent
-    with HasGameReference<GoldRushGame> {
+    with HasGameReference<BigWarGame> {
   final String companionId;
   final CompanionType type;
   final PlayerComponent player;
@@ -103,14 +103,159 @@ class CompanionComponent extends PositionComponent
   double actionCooldown = 0.0;
   PositionComponent? lockedTarget;
 
-  // Kỹ năng Đặc biệt của Trợ thủ: Trường Trọng Lực Hoàng Kim (Golden Overdrive)
+  // Kỹ năng Đặc biệt riêng của từng Trợ thủ
   static const double maxSpecialSkillCooldown = 14.0;
   static const double specialSkillMaxCooldown = maxSpecialSkillCooldown;
   double specialSkillCooldown = 0.0;
   double overdriveTimer = 0.0;
 
+  // Overdrive riêng cho ORBIT-03 (bắn liên thanh + tia laser quỹ đạo)
+  double _rapidFireTimer = 0.0;
+  Vector2? _orbitalStrikePos;
+  double _orbitalStrikeTimer = 0.0;
+
   // Quản lý trạng thái làm chậm của Frost Drone / Aegis-X9
   final Map<PositionComponent, double> _slowedEnemies = {};
+  // Quản lý hiệu ứng đóng băng / làm chậm có thời hạn từ kỹ năng kích hoạt
+  final Map<PositionComponent, _TimedSpeedEffect> _timedSpeedEffects = {};
+
+  /// Tên kỹ năng đặc biệt hiển thị khi kích hoạt (FloatingCombatText)
+  String get skillName {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return 'MƯA ĐẠN PLASMA!';
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return 'LỒNG PHẢN CHẤN!';
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return 'BÃO TUYẾT ĐÓNG BĂNG!';
+      case 'cyber_drone':
+        return 'KHIÊN SINH HỌC & HỒI MÁU!';
+      case 'luna_fox':
+        return 'LINH HỒN HỒ LY!';
+      case 'orbit_03':
+        return 'PHÁO LASER QUỸ ĐẠO!';
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return 'TRƯỜNG TRỌNG LỰC HOÀNG KIM!';
+      case 'pyro_frost_dragon':
+        return 'HƠI THỞ BÃO TỐ!';
+      default:
+        return 'KỸ NĂNG TRỢ THỦ!';
+    }
+  }
+
+  /// Thời gian hồi chiêu riêng cho từng Trợ thủ
+  double get skillCooldownDuration {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return 10.0;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return 13.0;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return 13.0;
+      case 'cyber_drone':
+        return 15.0;
+      case 'luna_fox':
+        return 14.0;
+      case 'orbit_03':
+        return 13.0;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return 14.0;
+      case 'pyro_frost_dragon':
+        return 15.0;
+      default:
+        return maxSpecialSkillCooldown;
+    }
+  }
+
+  /// Màu chủ đạo trên nút PET HUD và vòng hiệu ứng kỹ năng
+  Color get skillColor {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return const Color(0xFFFF5252);
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return const Color(0xFF448AFF);
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return const Color(0xFF18FFFF);
+      case 'cyber_drone':
+        return const Color(0xFF00E5FF);
+      case 'luna_fox':
+        return const Color(0xFF80D8FF);
+      case 'orbit_03':
+        return const Color(0xFFFFAB00);
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return const Color(0xFFFFD700);
+      case 'pyro_frost_dragon':
+        return const Color(0xFFFF5252);
+      default:
+        return type.themeColor;
+    }
+  }
+
+  /// Icon hiển thị trên nút PET HUD
+  IconData get skillIcon {
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        return Icons.rocket_launch_rounded;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        return Icons.shield_rounded;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        return Icons.ac_unit_rounded;
+      case 'cyber_drone':
+        return Icons.health_and_safety_rounded;
+      case 'luna_fox':
+        return Icons.auto_fix_high_rounded;
+      case 'orbit_03':
+        return Icons.radar_rounded;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+        return Icons.auto_awesome_rounded;
+      case 'pyro_frost_dragon':
+        return Icons.whatshot_rounded;
+      default:
+        return Icons.auto_awesome;
+    }
+  }
+
+  bool get isRapidFireActive => _rapidFireTimer > 0;
 
   CompanionComponent({
     required this.companionId,
@@ -134,8 +279,10 @@ class CompanionComponent extends PositionComponent
 
     // Kích hoạt khiên bảo vệ 30% cho Player nếu là Shield Drone
     if (type == CompanionType.shield) {
+      player.passivePetShieldOwner = this;
       player.companionDamageAbsorption = 0.30;
     } else if (type == CompanionType.aegisX9) {
+      player.passivePetShieldOwner = this;
       player.companionDamageAbsorption = 0.20;
     }
   }
@@ -144,8 +291,10 @@ class CompanionComponent extends PositionComponent
   void onMount() {
     super.onMount();
     if (type == CompanionType.shield) {
+      player.passivePetShieldOwner = this;
       player.companionDamageAbsorption = 0.30;
     } else if (type == CompanionType.aegisX9) {
+      player.passivePetShieldOwner = this;
       player.companionDamageAbsorption = 0.20;
     }
   }
@@ -171,20 +320,37 @@ class CompanionComponent extends PositionComponent
   /// Dọn dẹp trạng thái, hoàn trả tốc độ quái vật và hồi phục chỉ số khi unequip / exit
   void cleanup() {
     _clearActiveShield();
+    _clearAttackBuff();
     lockedTarget = null;
-    if (type == CompanionType.shield || type == CompanionType.aegisX9) {
+    _rapidFireTimer = 0.0;
+    _orbitalStrikePos = null;
+    _orbitalStrikeTimer = 0.0;
+    if (identical(player.passivePetShieldOwner, this)) {
+      player.passivePetShieldOwner = null;
       player.companionDamageAbsorption = 0.0;
     }
+    _restoreAllTimedSpeedEffects();
     _restoreAllSlowedEnemies();
   }
 
+  void _clearAttackBuff() {
+    if (!identical(player.activePetAttackBuffOwner, this)) return;
+    player.petAttackBuffTimer = 0.0;
+    player.petAttackBuffBonus = 0.0;
+    player.activePetAttackBuffOwner = null;
+  }
+
+  /// No targeting/slow/shield state from a previous floor should leak into retry.
   void resetForFloor() {
     _clearActiveShield();
+    _clearAttackBuff();
+    _restoreAllTimedSpeedEffects();
     _restoreAllSlowedEnemies();
     lockedTarget = null;
-    actionCooldown = 0;
-    specialSkillCooldown = 0;
-    overdriveTimer = 0;
+    actionCooldown = specialSkillCooldown = overdriveTimer = 0.0;
+    _rapidFireTimer = 0.0;
+    _orbitalStrikePos = null;
+    _orbitalStrikeTimer = 0.0;
     position = player.position + Vector2(orbitRadius, 0);
     _foxRunning = false;
     _foxRunTime = 0;
@@ -200,13 +366,7 @@ class CompanionComponent extends PositionComponent
       final enemy = entry.key;
       final origSpeed = entry.value;
       if (enemy.isMounted) {
-        if (enemy is ZombieEnemy) {
-          enemy.speed = origSpeed;
-        } else if (enemy is SkeletonEnemy) {
-          enemy.speed = origSpeed;
-        } else if (enemy is BossEnemy) {
-          enemy.currentSpeed = origSpeed;
-        }
+        _setEnemySpeed(enemy, origSpeed);
       }
     }
     _slowedEnemies.clear();
@@ -226,41 +386,294 @@ class CompanionComponent extends PositionComponent
     player.activePetShieldOwner = null;
   }
 
-  /// Kích hoạt Kỹ năng Đặc biệt của Trợ thủ: Trường Trọng Lực Hoàng Kim (Golden Overdrive)
+  void _restoreAllTimedSpeedEffects() {
+    for (final entry in _timedSpeedEffects.entries) {
+      final enemy = entry.key;
+      if (enemy.isMounted) {
+        _setEnemySpeed(enemy, entry.value.originalSpeed);
+      }
+    }
+    _timedSpeedEffects.clear();
+  }
+
+  double _getEnemySpeed(PositionComponent enemy) {
+    if (enemy is ZombieEnemy) return enemy.speed;
+    if (enemy is SkeletonEnemy) return enemy.speed;
+    if (enemy is BossEnemy) return enemy.currentSpeed;
+    return 0.0;
+  }
+
+  void _setEnemySpeed(PositionComponent enemy, double speed) {
+    if (enemy is ZombieEnemy) {
+      enemy.speed = speed;
+    } else if (enemy is SkeletonEnemy) {
+      enemy.speed = speed;
+    } else if (enemy is BossEnemy) {
+      enemy.currentSpeed = speed;
+    }
+  }
+
+  void _damageEnemy(PositionComponent enemy, double dmg) {
+    if (enemy is ZombieEnemy) {
+      enemy.takeDamage(dmg);
+    } else if (enemy is SkeletonEnemy) {
+      enemy.takeDamage(dmg);
+    } else if (enemy is BossEnemy) {
+      enemy.takeDamage(dmg);
+    }
+  }
+
+  void _applyTimedSpeedMultiplier(
+    PositionComponent enemy, {
+    required double multiplier,
+    required double duration,
+  }) {
+    final existing = _timedSpeedEffects[enemy];
+    final baseSpeed =
+        existing?.originalSpeed ??
+        _slowedEnemies[enemy] ??
+        _getEnemySpeed(enemy);
+    _timedSpeedEffects[enemy] = _TimedSpeedEffect(
+      originalSpeed: baseSpeed,
+      remaining: max(existing?.remaining ?? 0.0, duration),
+    );
+    _setEnemySpeed(enemy, baseSpeed * multiplier);
+  }
+
+  List<PositionComponent> _livingMonsters() {
+    if (!isMounted) return const [];
+    return <PositionComponent>[
+      ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
+      ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
+      ...game.bosses.where((b) => b.isMounted && !b.isDefeated),
+    ];
+  }
+
+  void _grantTemporaryShield({
+    required double absorption,
+    required double duration,
+  }) {
+    player.goldenShieldTimer = duration;
+    player.temporaryPetDamageAbsorption = absorption;
+    player.activePetShieldOwner = this;
+  }
+
+  /// Kích hoạt Kỹ năng Đặc biệt riêng theo từng Trợ thủ
   bool activateSpecialSkill() {
-    if (specialSkillCooldown > 0 || !player.canAct) return false;
-    if (isMounted &&
-        (game.paused || game.isGameOverTriggered || game.isVictoryTriggered)) {
+    if (specialSkillCooldown > 0 ||
+        !player.canAct ||
+        (isMounted &&
+            (game.paused ||
+                game.isVictoryTriggered ||
+                game.isGameOverTriggered))) {
       return false;
     }
-    specialSkillCooldown = maxSpecialSkillCooldown;
+    specialSkillCooldown = skillCooldownDuration;
     overdriveTimer = 2.5;
-    player.goldenShieldTimer = 4.0;
-    player.temporaryPetDamageAbsorption = .25;
-    player.activePetShieldOwner = this;
 
-    AudioService.instance.playSfx(SfxSound.skillSmash);
-
-    if (isMounted) {
-      const pullRadius = 130.0;
-      final allMonsters = <PositionComponent>[
-        ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
-        ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
-        if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
-          game.boss!,
-      ];
-
-      for (final m in allMonsters) {
-        final dist = player.position.distanceTo(m.position);
-        if (dist <= pullRadius && dist > 18) {
-          final pullDir = (player.position - m.position).normalized();
-          m.position.add(pullDir * min(36.0, dist * 0.45));
-        }
-      }
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        _activateAttackNova();
+        break;
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        _activateDefenseShockwave();
+        break;
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        _activateFrostFreeze();
+        break;
+      case 'cyber_drone':
+        _activateCyberBioShield();
+        break;
+      case 'luna_fox':
+        _activateLunaSpirit();
+        break;
+      case 'orbit_03':
+        _activateOrbitLaserStrike();
+        break;
+      case 'pyro_frost_dragon':
+        _activateDragonStormBreath();
+        break;
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+      default:
+        _activateAegisGravityField();
+        break;
     }
 
     player.onStatsChanged?.call();
     return true;
+  }
+
+  /// 1. Trợ Thủ Công Kích: Mưa Đạn Plasma (6 tia 360°, 24 DMG/tia)
+  void _activateAttackNova() {
+    AudioService.instance.playSfx(SfxSound.skillHurricane);
+    if (!isMounted) return;
+    const count = 6;
+    for (int i = 0; i < count; i++) {
+      final rad = (i * 2 * pi / count) + orbitAngle;
+      final dir = Vector2(cos(rad), sin(rad));
+      game.world.add(
+        CompanionPlasmaProjectile(
+          position: position.clone(),
+          direction: dir,
+          damage: 24.0,
+          speed: 320.0,
+          color: const Color(0xFFFF5252),
+        ),
+      );
+    }
+  }
+
+  /// 2. Trợ Thủ Phòng Ngự: Lồng Phản Chấn (Khiên 55% trong 5s + đẩy lùi quái 150px + 18 DMG)
+  void _activateDefenseShockwave() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    _grantTemporaryShield(absorption: 0.55, duration: 5.0);
+    for (final m in _livingMonsters()) {
+      final delta = m.position - player.position;
+      final dist = delta.length;
+      if (dist <= 150.0) {
+        final pushDir = dist > 1 ? delta.normalized() : Vector2(1, 0);
+        m.position.add(pushDir * 68.0);
+        _damageEnemy(m, 18.0);
+      }
+    }
+  }
+
+  /// 3. Trợ Thủ Khống Chế: Bão Tuyết Đóng Băng (đóng băng 3s + 20 DMG trong 180px)
+  void _activateFrostFreeze() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 180.0) {
+        _applyTimedSpeedMultiplier(m, multiplier: 0.0, duration: 3.0);
+        _damageEnemy(m, 20.0);
+      }
+    }
+  }
+
+  /// 4. Cyber Drone (PIXEL-01): Khiên Sinh Học & Hồi Máu (+25% Max HP + Khiên 45% 4.5s + 3 tia Plasma)
+  void _activateCyberBioShield() {
+    AudioService.instance.playSfx(SfxSound.pickupPotion);
+    player.heal(player.maxHp * 0.25);
+    _grantTemporaryShield(absorption: 0.45, duration: 4.5);
+    if (!isMounted) return;
+    final monsters = _livingMonsters();
+    monsters.sort(
+      (a, b) => position
+          .distanceTo(a.position)
+          .compareTo(position.distanceTo(b.position)),
+    );
+    for (int i = 0; i < 3; i++) {
+      final Vector2 dir;
+      if (i < monsters.length) {
+        final delta = monsters[i].position - position;
+        dir = delta.length2 > 0 ? delta.normalized() : Vector2(1, 0);
+      } else {
+        final rad = (i * 2 * pi / 3);
+        dir = Vector2(cos(rad), sin(rad));
+      }
+      game.world.add(
+        CompanionPlasmaProjectile(
+          position: position.clone(),
+          direction: dir,
+          damage: 16.0,
+          speed: 300.0,
+          color: const Color(0xFF00E5FF),
+        ),
+      );
+    }
+  }
+
+  /// 5. Hồ Ly Luna: Linh Hồn Hồ Ly (+40% Ki + giảm 3s hồi chiêu Skill 1-2-3 + làm chậm 50% quái 4s)
+  void _activateLunaSpirit() {
+    AudioService.instance.playSfx(SfxSound.pickupGem);
+    player.restoreKi(player.maxKi * 0.40);
+    player.reduceSkillCooldowns(3.0);
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 160.0) {
+        _applyTimedSpeedMultiplier(m, multiplier: 0.50, duration: 4.0);
+        _damageEnemy(m, 15.0);
+      }
+    }
+  }
+
+  /// 6. ORBIT-03 Drone: Pháo Laser Quỹ Đạo (giáng laser nổ 55 DMG + bắn liên thanh 4s)
+  void _activateOrbitLaserStrike() {
+    AudioService.instance.playSfx(SfxSound.skillBerserk);
+    _rapidFireTimer = 4.0;
+    actionCooldown = 0.0;
+    final monsters = _livingMonsters();
+    if (monsters.isEmpty) return;
+
+    PositionComponent? nearest;
+    double nearestDist = 240.0;
+    for (final m in monsters) {
+      final d = player.position.distanceTo(m.position);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = m;
+      }
+    }
+    if (nearest != null) {
+      _orbitalStrikePos = nearest.position.clone();
+      _orbitalStrikeTimer = 0.9;
+      for (final m in monsters) {
+        if (m.position.distanceTo(_orbitalStrikePos!) <= 90.0) {
+          _damageEnemy(m, 55.0);
+        }
+      }
+    }
+  }
+
+  /// 7. Aegis-X9 Lôi Từ: Trường Trọng Lực Hoàng Kim (gom quái 170px + hút vật phẩm 320px + 35 DMG + Khiên 35% 4s)
+  void _activateAegisGravityField() {
+    AudioService.instance.playSfx(SfxSound.skillSmash);
+    _grantTemporaryShield(absorption: 0.35, duration: 4.0);
+    if (!isMounted) return;
+
+    const pullRadius = 170.0;
+    for (final m in _livingMonsters()) {
+      final dist = player.position.distanceTo(m.position);
+      if (dist <= pullRadius) {
+        if (dist > 22) {
+          final pullDir = (player.position - m.position).normalized();
+          m.position.add(pullDir * min(55.0, dist * 0.55));
+        }
+        _damageEnemy(m, 35.0);
+      }
+    }
+
+    // Hút toàn bộ vật phẩm (xu, ngọc, bình máu) trong 320px về gần người chơi
+    for (final item in game.pickups) {
+      if (!item.isMounted) continue;
+      final dist = player.position.distanceTo(item.position);
+      if (dist <= 320.0 && dist > 8.0) {
+        final pullDir = (player.position - item.position).normalized();
+        item.position.add(pullDir * (dist - 8.0));
+      }
+    }
+  }
+
+  /// 8. Pyro-Frost Dragon: Hơi Thở Bão Tố (65 DMG nổ 200px + đóng băng 2.5s + tăng 30% sát thương đòn đánh 5s)
+  void _activateDragonStormBreath() {
+    AudioService.instance.playSfx(SfxSound.skillBerserk);
+    player.petAttackBuffBonus = 0.30;
+    player.petAttackBuffTimer = 5.0;
+    player.activePetAttackBuffOwner = this;
+    for (final m in _livingMonsters()) {
+      if (player.position.distanceTo(m.position) <= 200.0) {
+        _damageEnemy(m, 65.0);
+        _applyTimedSpeedMultiplier(m, multiplier: 0.0, duration: 2.5);
+      }
+    }
   }
 
   @override
@@ -273,6 +686,16 @@ class CompanionComponent extends PositionComponent
     if (overdriveTimer > 0) {
       overdriveTimer = max(0.0, overdriveTimer - dt);
     }
+    if (_rapidFireTimer > 0) {
+      _rapidFireTimer = max(0.0, _rapidFireTimer - dt);
+    }
+    if (_orbitalStrikeTimer > 0) {
+      _orbitalStrikeTimer = max(0.0, _orbitalStrikeTimer - dt);
+      if (_orbitalStrikeTimer <= 0) {
+        _orbitalStrikePos = null;
+      }
+    }
+    _updateTimedSpeedEffects(dt);
     if (!player.canAct ||
         (isMounted &&
             (game.paused ||
@@ -379,11 +802,12 @@ class CompanionComponent extends PositionComponent
         nearest = s;
       }
     }
-    if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated) {
-      final dist = position.distanceTo(game.boss!.position);
+    for (final b in game.bosses) {
+      if (!b.isMounted || b.isDefeated) continue;
+      final dist = position.distanceTo(b.position);
       if (dist < nearestDist) {
         nearestDist = dist;
-        nearest = game.boss;
+        nearest = b;
       }
     }
 
@@ -430,33 +854,64 @@ class CompanionComponent extends PositionComponent
       }
     }
 
-    if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated) {
-      final dist = position.distanceTo(game.boss!.position);
+    for (final b in game.bosses) {
+      if (!b.isMounted || b.isDefeated) continue;
+      final dist = position.distanceTo(b.position);
       if (dist < nearestDist) {
         nearestDist = dist;
-        nearest = game.boss;
+        nearest = b;
       }
     }
 
     lockedTarget = nearest;
 
-    // Bắn đạn mini plasma mỗi 1.5s vào quái gần nhất
+    // Bắn đạn mini plasma (ORBIT-03 bắn liên thanh 0.3s khi đang Overdrive)
     if (lockedTarget != null && actionCooldown <= 0) {
       final toTarget = lockedTarget!.position - position;
       if (toTarget.length2 > 0) {
         final dir = toTarget.normalized();
+        final isOrbitRapid = companionId == 'orbit_03' && _rapidFireTimer > 0;
         final plasma = CompanionPlasmaProjectile(
           position: position.clone(),
           direction: dir,
+          damage: isOrbitRapid ? 16.0 : 12.0,
+          speed: isOrbitRapid ? 360.0 : 280.0,
+          color: isOrbitRapid
+              ? const Color(0xFFFFAB00)
+              : const Color(0xFFFF1744),
         );
         game.world.add(plasma);
-        actionCooldown = 1.5;
+        actionCooldown = isOrbitRapid ? 0.3 : 1.5;
+      }
+    }
+  }
+
+  void _updateTimedSpeedEffects(double dt) {
+    if (_timedSpeedEffects.isEmpty) return;
+    final expired = <PositionComponent>[];
+    for (final entry in _timedSpeedEffects.entries) {
+      final enemy = entry.key;
+      entry.value.remaining -= dt;
+      if (!enemy.isMounted || entry.value.remaining <= 0) {
+        expired.add(enemy);
+      }
+    }
+    for (final enemy in expired) {
+      final eff = _timedSpeedEffects.remove(enemy);
+      if (eff != null && enemy.isMounted) {
+        final auraOrig = _slowedEnemies[enemy];
+        if (auraOrig != null) {
+          _setEnemySpeed(enemy, auraOrig * 0.60);
+        } else {
+          _setEnemySpeed(enemy, eff.originalSpeed);
+        }
       }
     }
   }
 
   // --- ARCHETYPE 2: SHIELD DRONE ---
   void _updateShieldDrone(double dt) {
+    player.passivePetShieldOwner = this;
     player.companionDamageAbsorption = 0.30;
   }
 
@@ -470,8 +925,7 @@ class CompanionComponent extends PositionComponent
     final allMonsters = <PositionComponent>[
       ...game.enemies.where((e) => e.isMounted && e.currentHp > 0),
       ...game.skeletons.where((e) => e.isMounted && e.currentHp > 0),
-      if (game.boss != null && game.boss!.isMounted && !game.boss!.isDefeated)
-        game.boss!,
+      ...game.bosses.where((b) => b.isMounted && !b.isDefeated),
     ];
 
     for (final monster in allMonsters) {
@@ -528,27 +982,53 @@ class CompanionComponent extends PositionComponent
       player.position.y - position.y,
     );
 
-    // Hiệu ứng Trường Trọng Lực Hoàng Kim (Golden Overdrive) khi kích hoạt
+    // Hiệu ứng kỹ năng đặc biệt nâng cấp (Sprite Frame Sheet + Procedural VFX riêng cho từng Trợ thủ)
     if (overdriveTimer > 0) {
       final playerCenter = droneCenter + offsetToPlayer;
-      final alpha = (overdriveTimer / 2.5).clamp(0.0, 1.0);
+      _renderSpecialSkillVfx(canvas, droneCenter, playerCenter);
+    }
+
+    // Hào quang kéo dài khi ORBIT-03 đang bắn liên thanh (4s)
+    if (companionId == 'orbit_03' && _rapidFireTimer > 0) {
+      final pulse = 0.55 + 0.35 * sin(bobbingTimer * 18.0);
       canvas.drawCircle(
-        playerCenter,
-        115,
+        droneCenter,
+        22.0,
         Paint()
-          ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
+          ..color = const Color(0xFFFFAB00).withValues(alpha: pulse * 0.25)
+          ..style = PaintingStyle.fill,
       );
       canvas.drawCircle(
-        playerCenter,
-        115,
+        droneCenter,
+        22.0,
         Paint()
-          ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.75)
+          ..color = const Color(0xFFFFD740).withValues(alpha: pulse)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8,
+      );
+    }
+
+    // Hào quang lửa đỏ quanh người chơi suốt 5s buff +30% ATK của Pyro-Frost Dragon
+    if (companionId == 'pyro_frost_dragon' && player.petAttackBuffTimer > 0) {
+      final playerCenter = droneCenter + offsetToPlayer;
+      final pulse = 0.5 + 0.4 * sin(bobbingTimer * 10.0);
+      canvas.drawCircle(
+        playerCenter,
+        30.0 + sin(bobbingTimer * 8.0) * 3.0,
+        Paint()
+          ..color = const Color(0xFFFF5252).withValues(alpha: pulse * 0.65)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0,
       );
     }
 
-    // World effects precede both sprite and cached procedural bodies.
+    // Hiệu ứng tia Pháo Laser Quỹ Đạo từ trên trời xuống của ORBIT-03
+    if (_orbitalStrikeTimer > 0 && _orbitalStrikePos != null) {
+      _renderOrbitalStrikeVfx(canvas, droneCenter);
+    }
+
+    // World effects must be drawn before either sprite or procedural body.
+    // A restored image must never bypass targeting lasers and defensive auras.
     if (type == CompanionType.shield) {
       _renderShieldDomeAndTether(canvas, droneCenter, offsetToPlayer);
     } else if (type == CompanionType.frost) {
@@ -658,6 +1138,348 @@ class CompanionComponent extends PositionComponent
     canvas.translate(droneCenter.dx, droneCenter.dy);
     canvas.drawPicture(_chassisPicture!);
     canvas.restore();
+  }
+
+  void _renderSpecialSkillVfx(
+    Canvas canvas,
+    Offset droneCenter,
+    Offset playerCenter,
+  ) {
+    final progress = (1.0 - (overdriveTimer / 2.5)).clamp(0.0, 0.999);
+    final alpha = (overdriveTimer / 2.5).clamp(0.0, 1.0);
+    final burstScale = 0.72 + progress * 0.48;
+    final targetCenter = companionId == 'comp_attack'
+        ? droneCenter
+        : playerCenter;
+
+    // 1. Sprite Frame Sheet (4-frame horizontal pixel-art VFX sinh từ Gemini)
+    final sheet = SpriteImageCache.instance.getCompanionSkillSheet(companionId);
+    if (sheet != null && sheet.width >= 4 && sheet.height > 0) {
+      final frameIdx = (progress * 4).floor().clamp(0, 3);
+      final frameW = sheet.width / 4.0;
+      final srcRect = Rect.fromLTWH(
+        frameIdx * frameW,
+        0,
+        frameW,
+        sheet.height.toDouble(),
+      );
+      final baseSize = companionId == 'pyro_frost_dragon'
+          ? 240.0
+          : companionId == 'comp_control' || companionId == 'aegis_x9'
+          ? 220.0
+          : 185.0;
+      final drawSize = baseSize * burstScale;
+      final dstRect = Rect.fromCenter(
+        center: targetCenter,
+        width: drawSize,
+        height: drawSize,
+      );
+      canvas.drawImageRect(
+        sheet,
+        srcRect,
+        dstRect,
+        Paint()
+          ..filterQuality = FilterQuality.none
+          ..blendMode = BlendMode.screen
+          ..color = Colors.white.withValues(
+            alpha: (alpha * 1.15).clamp(0.0, 1.0),
+          ),
+      );
+    }
+
+    // 2. Procedural VFX lớp trên cho chuyển động 60fps mượt mà đặc trưng từng trợ thủ
+    switch (companionId) {
+      case 'comp_attack':
+      case 'companion_attack':
+      case 'attack':
+        // Sóng xung kích đỏ + 6 tia năng lượng tỏa ra
+        final r = 24.0 + progress * 115.0;
+        canvas.drawCircle(
+          droneCenter,
+          r,
+          Paint()
+            ..color = const Color(0xFFFF5252).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        for (int i = 0; i < 6; i++) {
+          final rad = (i * pi / 3) + orbitAngle;
+          final p1 = droneCenter + Offset(cos(rad) * 14, sin(rad) * 14);
+          final p2 = droneCenter + Offset(cos(rad) * r, sin(rad) * r);
+          canvas.drawLine(
+            p1,
+            p2,
+            Paint()
+              ..color = const Color(0xFFFFD54F).withValues(alpha: alpha * 0.7)
+              ..strokeWidth = 2.0,
+          );
+        }
+        break;
+
+      case 'comp_defense':
+      case 'companion_defense':
+      case 'defense':
+      case 'shield':
+        // Lồng lục giác xoay + 2 đợt sóng đẩy lùi xanh dương
+        final pushR = 32.0 + progress * 125.0;
+        canvas.drawCircle(
+          playerCenter,
+          pushR,
+          Paint()
+            ..color = const Color(0xFF448AFF).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.8,
+        );
+        final hexPath = Path();
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 2.2 + i * pi / 3;
+          final pt = playerCenter + Offset(cos(rad) * 42, sin(rad) * 42);
+          if (i == 0) {
+            hexPath.moveTo(pt.dx, pt.dy);
+          } else {
+            hexPath.lineTo(pt.dx, pt.dy);
+          }
+        }
+        hexPath.close();
+        canvas.drawPath(
+          hexPath,
+          Paint()
+            ..color = const Color(0xFF00E5FF).withValues(alpha: alpha * 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.2,
+        );
+        break;
+
+      case 'comp_control':
+      case 'companion_frost':
+      case 'control':
+      case 'frost':
+        // Hoa tuyết 6 cánh xoay + tinh thể băng nhọn quanh rìa 160px
+        final iceR = 40.0 + progress * 135.0;
+        canvas.drawCircle(
+          playerCenter,
+          iceR,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.14),
+        );
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 1.4 + i * pi / 3;
+          final tip = playerCenter + Offset(cos(rad) * iceR, sin(rad) * iceR);
+          canvas.drawLine(
+            playerCenter,
+            tip,
+            Paint()
+              ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.75)
+              ..strokeWidth = 2.0,
+          );
+          canvas.drawCircle(
+            tip,
+            4.5,
+            Paint()..color = Colors.white.withValues(alpha: alpha * 0.9),
+          );
+        }
+        break;
+
+      case 'cyber_drone':
+        // Vòng hồi máu xanh ngọc + dấu '+' bay lên quanh nhân vật
+        canvas.drawCircle(
+          playerCenter,
+          36.0 + progress * 34.0,
+          Paint()
+            ..color = const Color(0xFF00E676).withValues(alpha: alpha * 0.75)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        final crossPaint = Paint()
+          ..color = const Color(0xFF00E676).withValues(alpha: alpha)
+          ..strokeWidth = 2.2;
+        for (int i = 0; i < 5; i++) {
+          final rad = i * (2 * pi / 5) + bobbingTimer * 1.5;
+          final cx = playerCenter.dx + cos(rad) * 32;
+          final cy = playerCenter.dy + sin(rad) * 18 - progress * 28.0;
+          canvas.drawLine(Offset(cx - 4, cy), Offset(cx + 4, cy), crossPaint);
+          canvas.drawLine(Offset(cx, cy - 4), Offset(cx, cy + 4), crossPaint);
+        }
+        break;
+
+      case 'luna_fox':
+        // 5 đốm Hồ Hỏa lam ngọc xoay xoắn ốc quanh nhân vật
+        canvas.drawCircle(
+          playerCenter,
+          44.0 + progress * 60.0,
+          Paint()
+            ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.6)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.8,
+        );
+        for (int i = 0; i < 5; i++) {
+          final rad = bobbingTimer * 4.5 + i * (2 * pi / 5);
+          final wispR = 30.0 + progress * 55.0;
+          final pt = playerCenter + Offset(cos(rad) * wispR, sin(rad) * wispR);
+          canvas.drawCircle(
+            pt,
+            6.0,
+            Paint()
+              ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.45)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          );
+          canvas.drawCircle(
+            pt,
+            3.0,
+            Paint()..color = Colors.white.withValues(alpha: alpha * 0.95),
+          );
+        }
+        break;
+
+      case 'orbit_03':
+        // Vòng ngắm khóa mục tiêu xoay quanh drone
+        canvas.drawCircle(
+          droneCenter,
+          28.0 + progress * 24.0,
+          Paint()
+            ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0,
+        );
+        break;
+
+      case 'pyro_frost_dragon':
+        // Vòng xoáy song nguyên Lửa (đỏ cam) & Băng (xanh cyan) xoay ngược chiều
+        final r = 45.0 + progress * 125.0;
+        canvas.drawCircle(
+          playerCenter,
+          r,
+          Paint()
+            ..color = const Color(0xFFFF5252).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.6,
+        );
+        canvas.drawCircle(
+          playerCenter,
+          r * 0.72,
+          Paint()
+            ..color = const Color(0xFF18FFFF).withValues(alpha: alpha * 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.2,
+        );
+        for (int i = 0; i < 8; i++) {
+          final isFire = i.isEven;
+          final rad =
+              (isFire ? bobbingTimer * 3.8 : -bobbingTimer * 3.8) +
+              i * (pi / 4);
+          final pt =
+              playerCenter +
+              Offset(cos(rad) * (r * 0.85), sin(rad) * (r * 0.85));
+          canvas.drawCircle(
+            pt,
+            4.2,
+            Paint()
+              ..color =
+                  (isFire ? const Color(0xFFFF6E40) : const Color(0xFF18FFFF))
+                      .withValues(alpha: alpha * 0.95),
+          );
+        }
+        break;
+
+      case 'aegis_x9':
+      case 'comp_aegis':
+      case 'aegis':
+      default:
+        // Vòng trọng lực hút vào tâm (implosion) + 6 tia sét vàng giật vào giữa
+        final implodeR = (155.0 * (1.0 - progress * 0.65)).clamp(35.0, 155.0);
+        canvas.drawCircle(
+          playerCenter,
+          implodeR,
+          Paint()
+            ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.14),
+        );
+        canvas.drawCircle(
+          playerCenter,
+          implodeR,
+          Paint()
+            ..color = const Color(0xFFFFD700).withValues(alpha: alpha * 0.85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
+        final arcPaint = Paint()
+          ..color = const Color(0xFF00F0FF).withValues(alpha: alpha * 0.8)
+          ..strokeWidth = 1.6;
+        for (int i = 0; i < 6; i++) {
+          final rad = bobbingTimer * 2.5 + i * (pi / 3);
+          final outer =
+              playerCenter + Offset(cos(rad) * implodeR, sin(rad) * implodeR);
+          final mid =
+              playerCenter +
+              Offset(
+                cos(rad + 0.18) * (implodeR * 0.55),
+                sin(rad + 0.18) * (implodeR * 0.55),
+              );
+          canvas.drawLine(outer, mid, arcPaint);
+          canvas.drawLine(mid, playerCenter, arcPaint);
+        }
+        break;
+    }
+  }
+
+  void _renderOrbitalStrikeVfx(Canvas canvas, Offset droneCenter) {
+    final alpha = (_orbitalStrikeTimer / 0.9).clamp(0.0, 1.0);
+    final strikeOffset = Offset(
+      _orbitalStrikePos!.x - position.x,
+      _orbitalStrikePos!.y - position.y,
+    );
+    final impact = droneCenter + strikeOffset;
+
+    // Tia laser quỹ đạo 3 lớp (cam ngoài -> vàng giữa -> trắng lõi)
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = const Color(0xFFFF6D00).withValues(alpha: alpha * 0.5)
+        ..strokeWidth = 18.0 * alpha
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.9)
+        ..strokeWidth = 10.0 * alpha,
+    );
+    canvas.drawLine(
+      Offset(impact.dx, impact.dy - 280),
+      impact,
+      Paint()
+        ..color = Colors.white.withValues(alpha: alpha)
+        ..strokeWidth = 3.5 * alpha,
+    );
+
+    // Vòng nổ + tâm ngắm xoay tại điểm rơi
+    final blastR = 90.0 * (1.12 - alpha * 0.32);
+    canvas.drawCircle(
+      impact,
+      blastR,
+      Paint()..color = const Color(0xFFFFAB00).withValues(alpha: alpha * 0.22),
+    );
+    canvas.drawCircle(
+      impact,
+      blastR,
+      Paint()
+        ..color = const Color(0xFFFFD740).withValues(alpha: alpha * 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2,
+    );
+    // 4 vạch chữ thập tâm ngắm
+    final reticlePaint = Paint()
+      ..color = Colors.white.withValues(alpha: alpha * 0.85)
+      ..strokeWidth = 1.6;
+    for (int i = 0; i < 4; i++) {
+      final rad = bobbingTimer * 6.0 + i * (pi / 2);
+      canvas.drawLine(
+        impact + Offset(cos(rad) * 14, sin(rad) * 14),
+        impact + Offset(cos(rad) * 32, sin(rad) * 32),
+        reticlePaint,
+      );
+    }
   }
 
   /// Vẽ Aegis-X9 - Tinh Linh Lôi Từ (Pha lê bát diện #FFD700 + 2 vòng Gyroscope bạc/cyan xoay chéo)
@@ -915,12 +1737,20 @@ class CompanionComponent extends PositionComponent
   }
 }
 
-/// Tia đạn Plasma mini của Attack Drone / Aegis-X9
+class _TimedSpeedEffect {
+  final double originalSpeed;
+  double remaining;
+
+  _TimedSpeedEffect({required this.originalSpeed, required this.remaining});
+}
+
+/// Tia đạn Plasma mini của Attack Drone / Cyber Drone / ORBIT-03 / Aegis-X9
 class CompanionPlasmaProjectile extends PositionComponent
-    with CollisionCallbacks, HasGameReference<GoldRushGame> {
+    with CollisionCallbacks, HasGameReference<BigWarGame> {
   final Vector2 direction;
-  final double speed = 280.0;
-  final double damage = 12.0;
+  final double speed;
+  final double damage;
+  final Color color;
 
   double _lifeTimer = 0.0;
   bool _hasHit = false;
@@ -928,6 +1758,9 @@ class CompanionPlasmaProjectile extends PositionComponent
   CompanionPlasmaProjectile({
     required Vector2 position,
     required Vector2 direction,
+    this.speed = 280.0,
+    this.damage = 12.0,
+    this.color = const Color(0xFFFF1744),
   }) : direction = direction.length2 > 0
            ? direction.normalized()
            : Vector2(1, 0),
@@ -979,11 +1812,11 @@ class CompanionPlasmaProjectile extends PositionComponent
     final center = Offset(size.x / 2, size.y / 2);
 
     final haloPaint = Paint()
-      ..color = const Color(0x66FF1744)
+      ..color = color.withValues(alpha: 0.4)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
     canvas.drawCircle(center, 5.5, haloPaint);
 
-    final bodyPaint = Paint()..color = const Color(0xFFFF1744);
+    final bodyPaint = Paint()..color = color;
     canvas.drawCircle(center, 3.8, bodyPaint);
 
     final corePaint = Paint()..color = const Color(0xFFFFF176);

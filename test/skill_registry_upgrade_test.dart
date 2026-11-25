@@ -92,30 +92,39 @@ void main() {
     },
   );
 
-  test('original 21 root numeric values are unchanged', () {
-    // Snapshot from the working JSON before this migration, not old runtime.
+  test('keeps main skill tuning plus the three Kaelen slots', () {
+    // Numeric contract from main plus the Kaelen extension.
     const original = <String, List<num>>{
-      'nova_energy_slash': [1, 4, 20, 1.2, 80],
-      'nova_shadow_dash': [2, 8, 30, 1.5, 120],
-      'nova_quantum_burst': [3, 12, 50, 2, 200],
-      'shadow_plasma_shot': [1, 4.5, 20, 1.6, 140],
-      'shadow_cyber_spin': [2, 8, 35, 2.2, 110],
-      'shadow_phantom_dash': [3, 12, 50, 3.2, 170],
-      'ember_fireball': [1, 4, 20, 1.7, 130],
-      'ember_flame_pillar': [2, 8, 35, 2.4, 115],
-      'ember_supernova': [3, 12, 50, 3.5, 180],
-      'valeria_frost_fire_slash': [1, 5, 25, 1.9, 150],
-      'valeria_elemental_vortex': [2, 9, 40, 2.6, 110],
-      'valeria_ice_meteor': [3, 14, 60, 3.6, 180],
-      'garrick_landslide': [1, 5, 20, 1.85, 130],
-      'garrick_golden_aegis': [2, 9, 35, 2.3, 115],
-      'garrick_earth_shatter': [3, 14, 50, 3.5, 175],
+      'george_hurricane': [1, 5, 20, 1.8, 95],
+      'george_earth_smash': [2, 8, 30, 2.4, 120],
+      'george_berserk': [3, 13, 45, 2.2, 150],
+      'ranger_multishot': [1, 4.5, 20, 1.15, 240],
+      'ranger_trap_roll': [2, 7.5, 25, 1.9, 100],
+      'ranger_star_rain': [3, 12, 45, 2.8, 240],
+      'tanker_shield_bash': [1, 5, 20, 1.9, 95],
+      'tanker_iron_fortress': [2, 9, 30, 1.4, 110],
+      'tanker_earthquake': [3, 13, 45, 2.8, 175],
+      'ninja_shuriken_dash': [1, 4.5, 20, 1.35, 150],
+      'ninja_smoke_veil': [2, 8.5, 30, 1.7, 100],
+      'ninja_shadow_execution': [3, 12, 45, 3.2, 130],
+      'nova_energy_slash': [1, 4, 20, 1.7, 160],
+      'nova_shadow_dash': [2, 7.5, 30, 2.1, 125],
+      'nova_quantum_burst': [3, 12, 50, 3, 200],
+      'shadow_plasma_shot': [1, 4, 20, 1.35, 160],
+      'shadow_cyber_spin': [2, 7.5, 30, 2.2, 115],
+      'shadow_phantom_dash': [3, 12, 50, 3.1, 165],
+      'ember_fireball': [1, 4, 20, 1.45, 150],
+      'ember_flame_pillar': [2, 8, 35, 2.3, 125],
+      'ember_supernova': [3, 12.5, 50, 2.8, 180],
+      'valeria_frost_fire_slash': [1, 4.5, 25, 1.5, 160],
+      'valeria_elemental_vortex': [2, 9, 35, 2.1, 110],
+      'valeria_ice_meteor': [3, 13.5, 55, 3.1, 185],
+      'garrick_landslide': [1, 5, 20, 2, 170],
+      'garrick_golden_aegis': [2, 9, 35, 1.8, 115],
+      'garrick_earth_shatter': [3, 13.5, 50, 3.3, 175],
       'kaelen_thunder_flash': [1, 5, 30, 1.8, 180],
       'kaelen_storm_vortex': [2, 10, 55, 4.5, 85],
       'kaelen_heaven_judgment': [3, 18, 90, 3.5, 160],
-      'george_hurricane': [1, 5, 20, 1.8, 80],
-      'george_earth_smash': [2, 8, 35, 2.5, 120],
-      'george_berserk': [3, 12, 50, 3.5, 160],
     };
     for (final entry in original.entries) {
       final skill = skills.singleWhere((s) => s.id == entry.key);
@@ -130,21 +139,6 @@ void main() {
         entry.value,
         reason: entry.key,
       );
-    }
-    for (final heroId in ['ranger', 'tanker', 'ninja']) {
-      for (final skill in skills.where((s) => s.heroId == heroId)) {
-        final legacy = SkillAssetConfig.legacy(heroId, skill.slot);
-        expect(skill.cooldown, legacy.cooldown);
-        expect(skill.kiCost, legacy.kiCost);
-        expect(skill.damageMultiplier, legacy.damageMultiplier);
-        expect(skill.radius, legacy.radius);
-        expect(
-          (skillJson['skills'] as List).singleWhere(
-            (s) => s['id'] == skill.id,
-          )['effects'],
-          isA<Map<String, dynamic>>(),
-        );
-      }
     }
   });
 
@@ -172,7 +166,11 @@ void main() {
       for (final s in skills.where(
         (s) => s.effects.delivery == SkillDelivery.dash,
       )) {
-        expect(s.effects.dashDistance, s.radius);
+        expect(s.effects.dashDistance, {
+          'ninja_shuriken_dash': 85,
+          'nova_shadow_dash': 120,
+          'kaelen_thunder_flash': 180,
+        }[s.id], reason: s.id);
       }
       expect(skill('kaelen_thunder_flash').effects.stunDuration, 0.5);
       final kaelenUlt = skill('kaelen_heaven_judgment').effects;
@@ -201,10 +199,9 @@ void main() {
       for (final s in skills.where(
         (s) => const {'ranger', 'tanker', 'ninja'}.contains(s.heroId),
       )) {
-        expect(
-          (await rootBundle.load(s.iconAsset)).lengthInBytes,
-          greaterThan(0),
-        );
+        if (s.iconAsset.isNotEmpty) {
+          expect((await rootBundle.load(s.iconAsset)).lengthInBytes, greaterThan(0));
+        }
         expect(
           (await rootBundle.load('assets/audio/${s.sfxAsset}')).lengthInBytes,
           greaterThan(0),
@@ -473,7 +470,7 @@ void main() {
         (h) => h['id'] == 'nova_blade',
       );
       nova['skillIds'][0] = 'nova_energy_slash_v2';
-      updatedSkills['skills'][0]['id'] = 'nova_energy_slash_v2';
+      (updatedSkills['skills'] as List).singleWhere((s) => s['id'] == 'nova_energy_slash')['id'] = 'nova_energy_slash_v2';
       await registry.initialize(
         bundle: _CatalogBundle(updatedHeroes, updatedSkills),
       );

@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================================
-echo   GOLD RUSH MOBILE - KHOI CHAY TREN MAY AO ANDROID
+echo   BIG-WAR MOBILE - KHOI CHAY TREN MAY AO ANDROID
 echo ========================================================
 
 set "PROJECT_DIR=%~dp0"

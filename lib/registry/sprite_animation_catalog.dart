@@ -128,7 +128,7 @@ const nativeIdlePaths = {
 
 const nativeRunPaths = {
   'nova_blade': '$_heroes/nova/nova-run.png',
-  'ember_02': '$_heroes/ember/ember-run.png',
+  'ember_02': '$_heroes/ember/Ember-run.png',
   'shadow_01': '$_heroes/shadow/run/01.png',
 };
 

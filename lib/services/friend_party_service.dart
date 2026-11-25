@@ -22,15 +22,15 @@ class FriendPartyService {
 
   static final FriendPartyService instance = FriendPartyService._();
 
-  static const String _localPartyPrefix = 'gold_rush_shared_party_';
-  static const String _localInvitePrefix = 'gold_rush_shared_invite_';
-  static const String _localInviteRespPrefix = 'gold_rush_shared_invite_resp_';
-  static const String _localDirectoryPrefix = 'gold_rush_shared_directory_';
-  static const String _localFriendReqPrefix = 'gold_rush_shared_friend_req_';
+  static const String _localPartyPrefix = 'big_war_shared_party_';
+  static const String _localInvitePrefix = 'big_war_shared_invite_';
+  static const String _localInviteRespPrefix = 'big_war_shared_invite_resp_';
+  static const String _localDirectoryPrefix = 'big_war_shared_directory_';
+  static const String _localFriendReqPrefix = 'big_war_shared_friend_req_';
   static const String _localFriendReqRespPrefix =
-      'gold_rush_shared_friend_req_resp_';
+      'big_war_shared_friend_req_resp_';
   static const String _localFriendshipsPrefix =
-      'gold_rush_shared_friendships_';
+      'big_war_shared_friendships_';
 
   /// Mã phiên dự phòng nếu hồ sơ chưa có mã định danh riêng
   final String _sessionPlayerCode = 'GR${1000 + Random().nextInt(8999)}';
@@ -1772,7 +1772,7 @@ class FriendPartyService {
   // ĐỒNG BỘ REALTIME TRẬN ĐẤU TỔ ĐỘI (FIREBASE rooms/{roomId} + PREFS)
   // =========================================================================
 
-  static const String _localMatchPrefix = 'gold_rush_party_match_';
+  static const String _localMatchPrefix = 'big_war_party_match_';
 
   Future<void> writePartyPlayerState(
     String roomId,

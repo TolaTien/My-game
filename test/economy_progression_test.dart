@@ -64,72 +64,72 @@ void main() {
           reason: '100 coins jackpot must equal 100,000 gold');
     });
 
-    test('Hero unlock flat 100 gold pricing and deduplication', () async {
-      expect(GameConstants.heroUnlockPrice, 100,
-          reason: 'Hero unlock price must be flat 100 gold');
+    test('Default hero unlock price and purchase deduplication', () async {
+      expect(GameConstants.heroUnlockPrice, 5000);
 
       await PlayerStorage.loadProfile();
-      // Start with 2000 gold, george unlocked
-      expect(PlayerStorage.currentProfile.gold, 2000);
+      await PlayerStorage.addGold(14500);
+      expect(PlayerStorage.currentProfile.gold, 15000);
       expect(PlayerStorage.currentProfile.unlockedHeroIds, ['george']);
 
-      // 1. Unlock Ranger for 100 gold
+      // 1. Unlock Ranger at the default price
       final unlockRanger =
           await PlayerStorage.unlockHero('ranger', GameConstants.heroUnlockPrice);
       expect(unlockRanger, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 1900);
+      expect(PlayerStorage.currentProfile.gold, 10000);
       expect(PlayerStorage.currentProfile.unlockedHeroIds,
           containsAll(['george', 'ranger']));
       expect(PlayerStorage.currentProfile.selectedHeroId, 'ranger');
 
-      // 2. Unlock Tanker for 100 gold
+      // 2. Unlock Tanker at the default price
       final unlockTanker =
           await PlayerStorage.unlockHero('tanker', GameConstants.heroUnlockPrice);
       expect(unlockTanker, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 1800);
+      expect(PlayerStorage.currentProfile.gold, 5000);
       expect(PlayerStorage.currentProfile.unlockedHeroIds, contains('tanker'));
 
-      // 3. Unlock Ninja for 100 gold
+      // 3. Unlock Ninja at the default price
       final unlockNinja =
           await PlayerStorage.unlockHero('ninja', GameConstants.heroUnlockPrice);
       expect(unlockNinja, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 1700);
+      expect(PlayerStorage.currentProfile.gold, 0);
       expect(PlayerStorage.currentProfile.unlockedHeroIds, contains('ninja'));
 
       // 4. Re-unlocking already owned hero does not deduct gold again
       final reUnlockRanger =
           await PlayerStorage.unlockHero('ranger', GameConstants.heroUnlockPrice);
       expect(reUnlockRanger, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 1700,
+      expect(PlayerStorage.currentProfile.gold, 0,
           reason: 'Re-unlocking already owned hero must not charge gold');
     });
 
     test('Shop companion purchases and equipping flow', () async {
       await PlayerStorage.loadProfile();
+      await PlayerStorage.addGold(7000);
       // Initial state
       expect(PlayerStorage.currentProfile.unlockedCompanionIds, isEmpty);
       expect(PlayerStorage.currentProfile.selectedCompanionId, isNull);
 
-      // Buy Attack Drone (500 gold)
-      final buyAttack = await PlayerStorage.unlockCompanion('comp_attack', 500);
+      // Buy Attack Drone (2000 gold)
+      final buyAttack = await PlayerStorage.unlockCompanion('comp_attack', 2000);
       expect(buyAttack, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 1500);
+      expect(PlayerStorage.currentProfile.gold, 5500);
       expect(PlayerStorage.currentProfile.unlockedCompanionIds,
           contains('comp_attack'));
       expect(PlayerStorage.currentProfile.selectedCompanionId, 'comp_attack');
 
-      // Buy Shield Drone (600 gold)
-      final buyShield = await PlayerStorage.unlockCompanion('comp_defense', 600);
+      // Buy Shield Drone (2500 gold)
+      final buyShield = await PlayerStorage.unlockCompanion('comp_defense', 2500);
       expect(buyShield, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 900);
+      expect(PlayerStorage.currentProfile.gold, 3000);
       expect(PlayerStorage.currentProfile.unlockedCompanionIds,
           contains('comp_defense'));
       expect(PlayerStorage.currentProfile.selectedCompanionId, 'comp_defense');
 
-      // Buy Frost Drone (700 gold)
-      final buyFrost = await PlayerStorage.unlockCompanion('comp_control', 700);
+      // Buy Frost Drone (3000 gold)
+      final buyFrost = await PlayerStorage.unlockCompanion('comp_control', 3000);
       expect(buyFrost, isTrue);
-      expect(PlayerStorage.currentProfile.gold, 200);
+      expect(PlayerStorage.currentProfile.gold, 0);
       expect(PlayerStorage.currentProfile.unlockedCompanionIds,
           contains('comp_control'));
 
@@ -320,9 +320,9 @@ void main() {
       expect(spendAttempt, isFalse);
       expect(PlayerStorage.currentProfile.gold, 99);
 
-      // 3. Companion purchase rejection (needs 500 gold)
+      // 3. Companion purchase rejection (needs 2000 gold)
       final companionAttempt =
-          await PlayerStorage.unlockCompanion('comp_attack', 500);
+          await PlayerStorage.unlockCompanion('comp_attack', 2000);
       expect(companionAttempt, isFalse);
       expect(PlayerStorage.currentProfile.gold, 99);
 
@@ -364,27 +364,27 @@ void main() {
       // Case 1: Ki is 0
       player.currentKi = 0.0;
       expect(player.useSkill1(), isFalse,
-          reason: 'Skill 1 (25 Ki) must fail at 0 Ki');
+          reason: 'Skill 1 (20 Ki) must fail at 0 Ki');
       expect(player.useSkill2(), isFalse,
-          reason: 'Skill 2 (35 Ki) must fail at 0 Ki');
+          reason: 'Skill 2 (30 Ki) must fail at 0 Ki');
       expect(player.useSkill3(), isFalse,
-          reason: 'Skill 3 (40 Ki) must fail at 0 Ki');
+          reason: 'Skill 3 (45 Ki) must fail at 0 Ki');
       expect(player.currentKi, 0.0, reason: 'Ki must remain 0');
 
-      // Case 2: Ki is 24.9 (just below 25 cost for Skill 1)
-      player.currentKi = 24.9;
+      // Case 2: Ki is 19.9 (just below 20 cost for Skill 1)
+      player.currentKi = 19.9;
       expect(player.useSkill1(), isFalse);
-      expect(player.currentKi, 24.9);
+      expect(player.currentKi, 19.9);
 
-      // Case 3: Ki is 34.9 (just below 35 cost for Skill 2)
-      player.currentKi = 34.9;
+      // Case 3: Ki is 29.9 (just below 30 cost for Skill 2)
+      player.currentKi = 29.9;
       expect(player.useSkill2(), isFalse);
-      expect(player.currentKi, 34.9);
+      expect(player.currentKi, 29.9);
 
-      // Case 4: Ki is 39.9 (just below 40 cost for Skill 3)
-      player.currentKi = 39.9;
+      // Case 4: Ki is 44.9 (just below 45 cost for Skill 3)
+      player.currentKi = 44.9;
       expect(player.useSkill3(), isFalse);
-      expect(player.currentKi, 39.9);
+      expect(player.currentKi, 44.9);
     });
 
     test('Berserk Recast Guard prevents re-triggering & preserves Ki', () {
@@ -395,16 +395,16 @@ void main() {
       final firstCast = player.useSkill3();
       expect(firstCast, isTrue);
       expect(player.isBerserk, isTrue);
-      expect(player.berserkTimer, 8.0);
-      expect(player.currentKi, 60.0, reason: '100 - 40 Ki = 60 Ki');
+      expect(player.berserkTimer, 6.0);
+      expect(player.currentKi, 55.0, reason: '100 - 45 Ki = 55 Ki');
 
       // 2. Immediate recast attempt while active
       final secondCast = player.useSkill3();
       expect(secondCast, isFalse,
           reason: 'Recast during active Berserk must return false');
-      expect(player.currentKi, 60.0,
+      expect(player.currentKi, 55.0,
           reason: 'Rejected recast must not deduct Ki');
-      expect(player.berserkTimer, 8.0,
+      expect(player.berserkTimer, 6.0,
           reason: 'Rejected recast must not reset timer prematurely');
 
       // 3. Berserk damage reduction: takes 60% incoming damage (-40% reduction)

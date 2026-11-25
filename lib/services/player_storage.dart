@@ -12,7 +12,8 @@ import '../models/pvp_match.dart';
 import 'friend_party_service.dart';
 
 class PlayerStorage {
-  static const String _storageKey = 'gold_rush_player_profile';
+  static const String _storageKey = 'big_war_player_profile';
+  static const String _legacyStorageKey = 'gold_rush_player_profile';
 
   /// Tỷ giá quy đổi chuẩn: 1 Xu = 1000 Vàng
   static const int goldPerXu = PlayerProfile.goldPerXu;
@@ -77,7 +78,11 @@ class PlayerStorage {
   static Future<PlayerProfile> loadProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_activeKey);
+      var jsonString = prefs.getString(_activeKey);
+      if (jsonString == null || jsonString.isEmpty) {
+        final legacyKey = _activeUid == null ? _legacyStorageKey : '${_legacyStorageKey}_$_activeUid';
+        jsonString = prefs.getString(legacyKey);
+      }
       if (jsonString != null && jsonString.isNotEmpty) {
         final Map<String, dynamic> map = jsonDecode(jsonString);
         var profile = PlayerProfile.fromJson(map);
@@ -152,6 +157,24 @@ class PlayerStorage {
     }
   }
 
+  /// Lưu tiến độ tầng PvE hiện tại (tự động đồng bộ local + Firebase)
+  static Future<void> savePveProgress(int nextFloor) async {
+    final safeFloor = nextFloor.clamp(1, 9999);
+    final updated = currentProfile.copyWith(
+      pveCurrentFloor: safeFloor,
+      pveHighestFloor: max(currentProfile.pveHighestFloor, safeFloor),
+    );
+    await saveProfile(updated);
+  }
+
+  /// Đặt lại tiến độ PvE về Tầng 1 khi người chơi chủ động chọn đánh lại từ đầu
+  static Future<void> resetPveToFloorOne() async {
+    final updated = currentProfile.copyWith(
+      pveCurrentFloor: 1,
+    );
+    await saveProfile(updated);
+  }
+
   /// Cộng Vàng vào tài khoản
   static Future<void> addGold(int amount) async {
     final updated = currentProfile.copyWith(gold: currentProfile.gold + amount);
@@ -196,18 +219,8 @@ class PlayerStorage {
     return true;
   }
 
-  /// Trừ Kim Cương khỏi tài khoản (nếu đủ số dư)
-  static Future<bool> spendDiamonds(int amount) async {
-    if (currentProfile.diamonds < amount) return false;
-    final updated = currentProfile.copyWith(
-      diamonds: currentProfile.diamonds - amount,
-    );
-    await saveProfile(updated);
-    return true;
-  }
-
   /// Cộng EXP cho nhân vật sau mỗi trận đấu (Level 1 -> 100)
-  /// Tự động tăng cấp và cộng chỉ số HP, Ki, Sức đánh theo hệ tướng.
+  /// Tự động tăng cấp, cập nhật số trận / số trận thắng và cộng chỉ số HP, Ki, Sức đánh theo hệ tướng.
   static Future<HeroLevelUpResult> addHeroExpAfterMatch({
     String? heroId,
     required bool isVictory,
@@ -243,6 +256,8 @@ class PlayerStorage {
     final updated = currentProfile.copyWith(
       heroLevels: newLevels,
       heroExp: newExps,
+      totalMatches: currentProfile.totalMatches + 1,
+      totalWins: currentProfile.totalWins + (isVictory ? 1 : 0),
     );
     await saveProfile(updated);
     return result;

@@ -50,21 +50,21 @@ jobs:
           # Package Payload into standalone installable unsigned IPA
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -r -y GoldRush_unsigned.ipa Payload/
+          zip -r -y BigWar_unsigned.ipa Payload/
           
           # Package Runner.app.zip for Simulator / Xcode testing
           zip -r -y Runner.app.zip build/ios/iphoneos/Runner.app
 
           # Output verification
-          ls -lh GoldRush_unsigned.ipa Runner.app.zip
-          shasum -a 256 GoldRush_unsigned.ipa Runner.app.zip
+          ls -lh BigWar_unsigned.ipa Runner.app.zip
+          shasum -a 256 BigWar_unsigned.ipa Runner.app.zip
 
       - name: Upload iOS Release Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GoldRush-iOS-Deliverables
+          name: BigWar-iOS-Deliverables
           path: |
-            GoldRush_unsigned.ipa
+            BigWar_unsigned.ipa
             Runner.app.zip
             build/ios/archive/Runner.xcarchive
           retention-days: 30

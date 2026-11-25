@@ -5,12 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_game/game/ai/astar_pathfinder.dart';
 import 'package:my_game/game/ai/pvp_bot_ai.dart';
 import 'package:my_game/game/components/boss_enemy.dart';
+import 'package:my_game/game/components/pickup_item.dart';
 import 'package:my_game/game/components/player.dart';
 import 'package:my_game/game/components/pvp_bot_player.dart';
 import 'package:my_game/game/gold_rush_game.dart';
 import 'package:my_game/models/database_models.dart';
 import 'package:my_game/models/player_profile.dart';
 import 'package:my_game/models/pvp_match.dart';
+import 'package:my_game/registry/asset_registry.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -406,9 +408,17 @@ void main() {
     testWidgets(
       'Overkill In-Game: Loot cascade and victory portal do not duplicate on repeated hits',
       (tester) async {
-        final game = GoldRushGame(playerProfile: const PlayerProfile());
+        final game = GoldRushGame(
+          playerProfile: const PlayerProfile(),
+          selectedMapConfig: GameAssetRegistry.defaultSanctumMap,
+        );
         await tester.pumpWidget(GameWidget(game: game));
         await tester.pump();
+        await tester.runAsync(() async {
+          await game.toBeLoaded();
+          await game.ready();
+        });
+        game.pauseEngine();
 
         final boss = game.boss;
         expect(boss, isNotNull);
@@ -422,14 +432,24 @@ void main() {
 
         // Deal 1000 overkill damage
         boss.takeDamage(1000.0);
-        await tester.pump();
+        await tester.runAsync(game.ready);
 
         expect(boss.currentHp, 0.0);
         expect(boss.isDefeated, isTrue);
 
-        // Exactly 15 pickups (12 gold coins + 3 potions) created
+        // Main's enraged boss drops three coins, one potion and one EXP gem.
         final afterFirstDefeatPickups = game.pickups.length;
-        expect(afterFirstDefeatPickups - initialPickups, 15);
+        expect(afterFirstDefeatPickups - initialPickups, 5);
+        expect(
+          game.pickups.skip(initialPickups).map((pickup) => pickup.type),
+          unorderedEquals([
+            PickupType.goldCoin,
+            PickupType.goldCoin,
+            PickupType.goldCoin,
+            PickupType.healthPotion,
+            PickupType.expGem,
+          ]),
+        );
 
         final victoryPortals = game.world.children
             .whereType<BossVictoryPortal>()
@@ -439,7 +459,7 @@ void main() {
         // Attempt repeated damage attacks on defeated boss in subsequent frames
         boss.takeDamage(500.0);
         boss.takeDamage(999.0);
-        await tester.pump();
+        await tester.runAsync(game.ready);
 
         expect(
           game.pickups.length,
@@ -759,7 +779,7 @@ void main() {
         reason: 'Clean sweep 2-0 awards 30 + 5 = 35 RP',
       );
       expect(resSweep.newRankPoints, 1535);
-      expect(resSweep.goldReward, 1500);
+      expect(resSweep.goldReward, 200);
 
       // 2-1 Win awards standard +30 RP
       final resStandard = PvpEloCalculator.calculateResult(
@@ -770,6 +790,7 @@ void main() {
       );
       expect(resStandard.rpDelta, 30);
       expect(resStandard.newRankPoints, 1530);
+      expect(resStandard.goldReward, 200);
     });
 
     test('Elo Calculator: Silver+ defeat deducts full -20 RP', () {
@@ -849,20 +870,20 @@ void main() {
       expect(ai.canCastSkill2(0.0), isFalse);
       expect(ai.canCastSkill3(0.0), isFalse);
 
-      // 2. Skill 1 boundary: 24.99 Ki vs 25.0 Ki
-      expect(ai.canCastSkill1(24.99), isFalse);
-      expect(ai.canCastSkill1(25.0), isTrue);
-      expect(ai.canCastSkill2(25.0), isFalse);
-      expect(ai.canCastSkill3(25.0), isFalse);
+      // 2. Skill 1 boundary: 19.99 Ki vs 20.0 Ki
+      expect(ai.canCastSkill1(19.99), isFalse);
+      expect(ai.canCastSkill1(20.0), isTrue);
+      expect(ai.canCastSkill2(20.0), isFalse);
+      expect(ai.canCastSkill3(20.0), isFalse);
 
-      // 3. Skill 2 boundary: 34.99 Ki vs 35.0 Ki
-      expect(ai.canCastSkill2(34.99), isFalse);
-      expect(ai.canCastSkill2(35.0), isTrue);
-      expect(ai.canCastSkill3(35.0), isFalse);
+      // 3. Skill 2 boundary: 29.99 Ki vs 30.0 Ki
+      expect(ai.canCastSkill2(29.99), isFalse);
+      expect(ai.canCastSkill2(30.0), isTrue);
+      expect(ai.canCastSkill3(30.0), isFalse);
 
-      // 4. Skill 3 boundary: 39.99 Ki vs 40.0 Ki
-      expect(ai.canCastSkill3(39.99), isFalse);
-      expect(ai.canCastSkill3(40.0), isTrue);
+      // 4. Skill 3 boundary: 44.99 Ki vs 45.0 Ki
+      expect(ai.canCastSkill3(44.99), isFalse);
+      expect(ai.canCastSkill3(45.0), isTrue);
 
       // 5. Cooldown gate: Sufficient Ki (100) but cooldown active
       ai.skill1Cooldown = 2.0;
@@ -887,30 +908,30 @@ void main() {
 
       final initialPlayerHp = player.currentHp;
 
-      // 1. Try Skill 1 with 20 Ki (< 25 Ki)
-      bot.currentKi = 20.0;
+      // 1. Try Skill 1 just below its 20 Ki cost.
+      bot.currentKi = 19.99;
       bot.executeSkill1();
-      expect(bot.currentKi, 20.0, reason: 'Ki must NOT be deducted');
+      expect(bot.currentKi, 19.99, reason: 'Ki must NOT be deducted');
       expect(
         player.currentHp,
         initialPlayerHp,
         reason: 'Damage must NOT be dealt',
       );
 
-      // 2. Try Skill 2 with 30 Ki (< 35 Ki)
-      bot.currentKi = 30.0;
+      // 2. Try Skill 2 just below its 30 Ki cost.
+      bot.currentKi = 29.99;
       bot.executeSkill2();
-      expect(bot.currentKi, 30.0);
+      expect(bot.currentKi, 29.99);
       expect(player.currentHp, initialPlayerHp);
 
-      // 3. Try Skill 3 with 35 Ki (< 40 Ki)
-      bot.currentKi = 35.0;
+      // 3. Try Skill 3 just below its 45 Ki cost.
+      bot.currentKi = 44.99;
       bot.executeSkill3();
-      expect(bot.currentKi, 35.0);
+      expect(bot.currentKi, 44.99);
       expect(bot.isBerserk, isFalse);
 
       // 4. Successful Skill 1 deduction
-      bot.currentKi = 25.0;
+      bot.currentKi = 20.0;
       bot.executeSkill1();
       expect(bot.currentKi, 0.0);
       expect(player.currentHp, lessThan(initialPlayerHp));
@@ -933,23 +954,23 @@ void main() {
       bot.currentKi = 100.0;
       bot.executeSkill3();
 
-      expect(bot.currentKi, 60.0); // 100 - 40
+      expect(bot.currentKi, 55.0); // 100 - 45
       expect(bot.isBerserk, isTrue);
-      expect(bot.berserkTimer, 8.0);
+      expect(bot.berserkTimer, 6.0);
 
       // Simulate 2 seconds into berserk
-      bot.berserkTimer = 6.0;
+      bot.berserkTimer = 4.0;
 
       // Attempt to recast Skill 3 while already Berserk
       bot.executeSkill3();
       expect(
         bot.currentKi,
-        60.0,
+        55.0,
         reason: 'Ki must NOT be deducted on recast attempt',
       );
       expect(
         bot.berserkTimer,
-        6.0,
+        4.0,
         reason: 'Active timer must NOT reset prematurely',
       );
     });

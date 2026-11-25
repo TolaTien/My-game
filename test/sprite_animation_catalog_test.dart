@@ -38,6 +38,7 @@ void main() {
     };
     for (final entry in counts.entries) {
       final id = entry.key;
+      await cache.preloadHero(id);
       final hero = cache.getHeroAnimations(id)!;
       final clips = [
         hero.idle,
@@ -118,6 +119,7 @@ void main() {
         cache.preloadHero('shadow_01'),
         cache.preloadHero('ember_02'),
         cache.preloadHero('garrick'),
+        cache.preloadHero('nova_blade'),
       ]);
       expect(bundle.loads[_valeriaSkills], 1);
       expect(bundle.loads[_cyberSkills], 1);

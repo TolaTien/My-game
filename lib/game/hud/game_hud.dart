@@ -8,13 +8,13 @@ import 'package:flutter/scheduler.dart';
 import '../../core/constants.dart';
 import '../../core/game_keyboard_controller.dart';
 import '../../screens/settings_dialog.dart';
-import '../components/companion_component.dart';
-import '../gold_rush_game.dart';
+import '../combat/hero_skill_system.dart';
+import '../big_war_game.dart';
 import 'boss_bar_overlay.dart';
 import 'virtual_joystick.dart';
 
 class GameHudOverlay extends StatefulWidget {
-  final GoldRushGame game;
+  final BigWarGame game;
   final GameKeyboardController? keyboardController;
   final Future<void> Function()? onPause;
 
@@ -211,6 +211,9 @@ class _GameHudOverlayState extends State<GameHudOverlay>
     final player = widget.game.player;
     final isDesktopOrWeb = GamePlatformHelper.isDesktopOrWeb;
     final compactHud = MediaQuery.sizeOf(context).width < 1000;
+    final s1 = HeroSkillSystem.getSkillMeta(player.heroId, 1);
+    final s2 = HeroSkillSystem.getSkillMeta(player.heroId, 2);
+    final s3 = HeroSkillSystem.getSkillMeta(player.heroId, 3);
 
     return SafeArea(
       child: Stack(
@@ -571,21 +574,21 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: Colors.amberAccent.withValues(alpha: 0.6),
+                      color: Colors.orangeAccent.withValues(alpha: 0.8),
                     ),
                   ),
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.monetization_on,
-                        color: Colors.amberAccent,
+                        Icons.currency_exchange_rounded,
+                        color: Colors.orangeAccent,
                         size: 20,
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${player.coinsCollected * GameConstants.goldPerCoinPickup} Vàng',
+                        '${player.coinsCollected} Xu',
                         style: const TextStyle(
-                          color: Colors.amberAccent,
+                          color: Colors.orangeAccent,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -710,91 +713,93 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                       ),
                     ),
 
-                    // Skill values and clocks come from the same cast runtime.
+                    // Skill 1 (riêng biệt theo từng nhân vật)
                     Positioned(
                       bottom: 84,
                       right: 0,
                       child: _ActionButton(
                         key: const Key('pve_skill_1'),
                         size: 52,
-                        icon: Icons.cyclone,
-                        label:
-                            '${player.skillConfig(1).kiCost.toStringAsFixed(0)} Ki',
-                        skillName: player.skillConfig(1).name,
+                        icon: s1.icon,
+                        label: s1.shortLabel,
+                        skillName: s1.name,
                         hotkey: isDesktopOrWeb ? '1' : null,
-                        color: const Color(0xFFFF9800),
+                        color: s1.color,
                         cooldownRemaining: player.skill1VisualCd,
-                        maxCooldown: player.skillConfig(1).cooldown,
+                        maxCooldown: s1.cooldown,
                         hasEnoughKi:
-                            player.skillRuntime(1).enabled &&
                             player.canAct &&
-                            player.currentKi >= player.skillConfig(1).kiCost,
+                            (player.heroId != 'kaelen' ||
+                                player.skillRuntime(1).enabled) &&
+                            player.currentKi >= s1.kiCost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill1(),
                       ),
                     ),
 
+                    // Skill 2 (riêng biệt theo từng nhân vật)
                     Positioned(
                       bottom: 66,
                       right: 66,
                       child: _ActionButton(
                         key: const Key('pve_skill_2'),
                         size: 52,
-                        icon: Icons.landslide,
-                        label:
-                            '${player.skillConfig(2).kiCost.toStringAsFixed(0)} Ki',
-                        skillName: player.skillConfig(2).name,
+                        icon: s2.icon,
+                        label: s2.shortLabel,
+                        skillName: s2.name,
                         hotkey: isDesktopOrWeb ? '2' : null,
-                        color: const Color(0xFF00B0FF),
+                        color: s2.color,
                         cooldownRemaining: player.skill2VisualCd,
-                        maxCooldown: player.skillConfig(2).cooldown,
+                        maxCooldown: s2.cooldown,
                         hasEnoughKi:
-                            player.skillRuntime(2).enabled &&
                             player.canAct &&
-                            player.currentKi >= player.skillConfig(2).kiCost,
+                            (player.heroId != 'kaelen' ||
+                                player.skillRuntime(2).enabled) &&
+                            player.currentKi >= s2.kiCost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill2(),
                       ),
                     ),
 
+                    // Skill 3 Ultimate (riêng biệt theo từng nhân vật)
                     Positioned(
                       bottom: 0,
                       right: 84,
                       child: _ActionButton(
                         key: const Key('pve_skill_3'),
                         size: 52,
-                        icon: Icons.whatshot,
-                        label:
-                            '${player.skillConfig(3).kiCost.toStringAsFixed(0)} Ki',
-                        skillName: player.skillConfig(3).name,
+                        icon: s3.icon,
+                        label: s3.shortLabel,
+                        skillName: s3.name,
                         hotkey: isDesktopOrWeb ? '3' : null,
-                        color: const Color(0xFF7B1FA2),
+                        color: s3.color,
                         cooldownRemaining: player.skill3VisualCd,
-                        maxCooldown: player.skillConfig(3).cooldown,
+                        maxCooldown: s3.cooldown,
                         hasEnoughKi:
-                            player.skillRuntime(3).enabled &&
                             player.canAct &&
-                            player.currentKi >= player.skillConfig(3).kiCost,
+                            (player.heroId != 'kaelen' ||
+                                player.skillRuntime(3).enabled) &&
+                            player.currentKi >= s3.kiCost,
                         lowKiFlash: player.insufficientKiFlashTimer > 0,
                         onTap: () => widget.game.onSkill3(),
                       ),
                     ),
 
-                    // Companion Active Skill Button (Aegis-X9 / PET: Trường Trọng Lực Hoàng Kim)
+                    // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)
                     if (widget.game.companion != null)
                       Positioned(
                         bottom: 124,
                         right: 54,
                         child: _ActionButton(
                           size: 44,
-                          icon: Icons.auto_awesome,
+                          icon: widget.game.companion!.skillIcon,
                           label: 'PET',
                           hotkey: isDesktopOrWeb ? 'E' : null,
-                          color: const Color(0xFFFFB300),
+                          color: widget.game.companion!.skillColor,
                           cooldownRemaining:
                               widget.game.companion!.specialSkillCooldown,
                           maxCooldown:
-                              CompanionComponent.specialSkillMaxCooldown,
+                              widget.game.companion!.skillCooldownDuration,
                           hasEnoughKi: true,
                           onTap: () => widget.game.onCompanionSkill(),
                         ),
@@ -833,7 +838,7 @@ class _GameHudOverlayState extends State<GameHudOverlay>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] ${player.skillConfig(1).name}  [2] ${player.skillConfig(2).name}  [3] ${player.skillConfig(3).name}  |  Đánh: SPACE / J',
+                          'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] ${s1.name}  [2] ${s2.name}  [3] ${s3.name}  |  Đánh: SPACE / J',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 11,

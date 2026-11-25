@@ -453,7 +453,7 @@ class EditProfileDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // 5. Thống kê tài sản & Tướng
+                // 5. Thống kê tài sản, Tỉ lệ thắng & Tướng
                 Row(
                   children: [
                     _buildStatChip(
@@ -471,10 +471,10 @@ class EditProfileDialog extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _buildStatChip(
-                      Icons.diamond_rounded,
+                      Icons.emoji_events_rounded,
                       const Color(0xFF00E5FF),
-                      'Kim Cương',
-                      '${profile.diamonds}',
+                      'Tỉ lệ thắng',
+                      profile.winRateDisplay,
                     ),
                     const SizedBox(width: 8),
                     _buildStatChip(

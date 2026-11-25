@@ -5,12 +5,12 @@ import 'registry/asset_registry.dart';
 import 'registry/sprite_image_cache.dart';
 import 'screens/auth_screen.dart';
 import 'screens/lobby_screen.dart';
+import 'screens/widgets/orientation_guard.dart';
 import 'services/audio_service.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
 import 'services/firebase_bootstrap.dart';
 import 'services/firebase_database_service.dart';
-import 'services/game_settings_service.dart';
 import 'services/player_storage.dart';
 
 void main() async {
@@ -51,12 +51,11 @@ void main() async {
     await DatabaseService.instance.updateLeaderboard(PlayerStorage.currentProfile);
   }
 
-  // Khởi tạo hệ thống âm thanh và cài đặt trò chơi
+  // Khởi tạo hệ thống âm thanh
   await AudioService.instance.initialize();
-  await GameSettingsService.instance.initialize();
 
   // Khởi chạy giao diện ngay lập tức để tránh lỗi ANR (Application Not Responding)
-  runApp(GoldRushApp(isSignedIn: isSignedIn));
+  runApp(BigWarApp(isSignedIn: isSignedIn));
 
   // Tải trước tài nguyên ảnh Sprite trong nền sau khi frame đầu tiên đã vẽ xong
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,9 +63,9 @@ void main() async {
   });
 }
 
-class GoldRushApp extends StatelessWidget {
+class BigWarApp extends StatelessWidget {
   final bool isSignedIn;
-  const GoldRushApp({super.key, this.isSignedIn = false});
+  const BigWarApp({super.key, this.isSignedIn = false});
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +79,9 @@ class GoldRushApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        return OrientationGuard(child: child ?? const SizedBox.shrink());
+      },
       home: isSignedIn ? const LobbyScreen() : const AuthScreen(),
     );
   }

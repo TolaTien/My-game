@@ -223,6 +223,7 @@ void main() {
   group('3. Economy Exchange (1 Xu = 1000 Vàng)', () {
     test('Converts Xu <-> Gold at exact 1 Xu = 1000 Gold ratio', () async {
       final initialGold = PlayerStorage.currentProfile.gold;
+      await PlayerStorage.saveProfile(PlayerStorage.currentProfile.copyWith(xu: 2));
       final initialXu = PlayerStorage.currentProfile.xu;
 
       final okXuToGold = await PlayerStorage.convertXuToGold(2);
@@ -251,7 +252,7 @@ void main() {
       );
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        'gold_rush_shared_directory_GR7777',
+        'big_war_shared_directory_GR7777',
         jsonEncode(peer.toJson()),
       );
       final service = FriendPartyService.instance;
@@ -290,7 +291,7 @@ void main() {
         reason: 'An invitation alone must not add a player without consent',
       );
       await prefs.setString(
-        'gold_rush_shared_party_${party.partyCode}',
+        'big_war_shared_party_${party.partyCode}',
         partyFixtureJson(party),
       );
       await PlayerStorage.saveProfile(
@@ -333,7 +334,7 @@ void main() {
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(
-          'gold_rush_shared_party_${hostParty.partyCode}',
+          'big_war_shared_party_${hostParty.partyCode}',
           partyFixtureJson(hostParty),
         );
         await PlayerStorage.saveProfile(host.copyWith(playerCode: 'GR1002'));

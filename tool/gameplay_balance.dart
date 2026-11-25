@@ -1,10 +1,8 @@
 import 'package:flame/components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_game/core/constants.dart';
 import 'package:my_game/core/pve_balance.dart';
 import 'package:my_game/core/stat_growth_formula.dart';
-import 'package:my_game/game/components/arrow_projectile.dart';
 import 'package:my_game/game/components/boss_enemy.dart';
 import 'package:my_game/game/components/player.dart';
 import 'package:my_game/registry/asset_registry.dart';
@@ -57,7 +55,7 @@ String buildGameplayBalanceReport() {
   line();
   line(
     '| Floor | Enemy scale | Zombie HP | Zombie damage | Skeleton HP | '
-    'Boss HP | Completion gold entering this floor |',
+    'Boss HP | Gold for clearing this floor |',
   );
   line('| --- | --- | --- | --- | --- | --- | --- |');
   for (final floor in [1, 2, 5, 10]) {
@@ -72,10 +70,7 @@ String buildGameplayBalanceReport() {
   }
   line();
   line(
-    'The reward helper accepts the destination floor: clearing floor one '
-    'and advancing to floor two pays '
-    '${PveBalance.floorCompletionGold(2)} gold. Its floor-one result is a '
-    'formula boundary, not a reward paid when a new game starts.',
+    'Clearing floor one grants ${PveBalance.floorCompletionGold(1)} gold. Moving to the next floor does not grant it again.',
   );
   line();
   line('## Registry Versus Actual Initial Player');
@@ -103,14 +98,7 @@ String buildGameplayBalanceReport() {
   }
   line();
   line(
-    'PlayerComponent starts every hero from GameConstants: '
-    '${_number(GameConstants.playerMaxHp)} HP, '
-    '${_number(GameConstants.playerMaxKi)} Ki, '
-    '${_number(GameConstants.playerBaseDamage)} attack and '
-    '${_number(GameConstants.playerBaseSpeed)} speed. At mastery levels '
-    'above one it adds StatGrowthFormula bonuses to those constants, '
-    'rather than adopting the registry base stats. Speed remains the '
-    'player constant. The report preserves this existing mismatch.',
+    'Runtime stats are read from PlayerComponent after applying each hero mastery level.',
   );
   line();
 
@@ -167,11 +155,7 @@ String buildGameplayBalanceReport() {
   line();
   line(
     'Each cost / cooldown entry comes from the same slot configuration '
-    'captured by the initial player. Neutral skill damage is the nominal '
-    'total against one target if every hit lands; periodic damage uses '
-    'the configured total multiplier, not that multiplier per tick. '
-    'Self delivery deals zero direct damage. Buffs, misses, travel, '
-    'other targets and active-cast overlap are excluded.',
+    'captured by the initial player. The damage column gives the configured neutral per-effect value. Actual totals depend on projectile count, delivery, buffs and targets.',
   );
   line();
   line(
@@ -219,27 +203,10 @@ String buildGameplayBalanceReport() {
   line();
   line('## Preserved Quirks And Limits');
   line();
-  final arrow = ArrowProjectile(
-    position: Vector2.zero(),
-    direction: Vector2(1, 0),
-  );
+  final boss = BossEnemy(position: Vector2.zero(), player: player('george', 1))
+    ..applyFloorDifficulty(1);
   line(
-    '- Floor one boss HP is ${_number(PveBalance.bossMaxHp(1))}; higher '
-    'floors scale from a different base. Floor two is '
-    '${_number(PveBalance.bossMaxHp(2))}, not a scaled floor-one baseline.',
-  );
-  line(
-    '- Skeleton HP scales but its arrow damage remains '
-    '${_number(arrow.damage)} at every floor. The shared spawn helper '
-    'deliberately has no skeleton-damage formula.',
-  );
-  line(
-    '- Boss HP scales; its attack constants remain '
-    '${_number(BossEnemy.meleeDamage)} melee / '
-    '${_number(BossEnemy.groundSlamDamage)} slam / '
-    '${_number(BossEnemy.flameBurstDamage)} per radial projectile. '
-    'Boss-summoned minions still use component defaults instead of '
-    'the ordinary floor spawn scaling.',
+    '- Floor-one boss attack values: ${_number(boss.meleeDamage)} melee / ${_number(boss.groundSlamDamage)} slam / ${_number(boss.flameBurstDamage)} per projectile. Enemy and boss damage scale with floor.',
   );
   line(
     '- Registry enemy definitions are not used by the current ordinary '

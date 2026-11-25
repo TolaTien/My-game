@@ -1,5 +1,5 @@
 name: my_game
-description: "Gold Rush — 2D Pixel-Art Action RPG Mobile (Flutter + Flame Engine)."
+description: "Big-War — 2D Pixel-Art Action RPG Mobile (Flutter + Flame Engine)."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -32,18 +32,22 @@ flutter:
     - assets/images/
     - assets/images/companions/
     - assets/images/heroes/
-    - assets/images/heroes/ember/
+    - assets/images/heroes/george/
+    - assets/images/heroes/ranger/
+    - assets/images/heroes/tanker/
+    - assets/images/heroes/ninja/
+    - assets/images/heroes/valeria/
     - assets/images/heroes/garrick/
+    - assets/images/heroes/nova/
+    - assets/images/heroes/ember/
     - assets/images/heroes/kaelen/
     - assets/images/heroes/nova_blade/
     - assets/images/heroes/shadow/
     - assets/images/heroes/valenria/
-    - assets/images/heroes/nova/
     - assets/images/heroes/shadow/idle/
     - assets/images/heroes/shadow/run/
     - assets/images/heroes/shadow/attack/
     - assets/images/skills/
-    - assets/images/companions/
     - assets/images/ranks/
     - assets/images/maps/
     - assets/images/ui/

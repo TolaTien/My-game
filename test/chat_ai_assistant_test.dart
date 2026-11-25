@@ -11,6 +11,13 @@ void main() {
   tearDown(EnvConfig.clearTestOverrides);
 
   group('EnvConfig & ChatAiAssistantService (AI Proxy + Demo Mode)', () {
+    test('has no hardcoded Firebase or AI API keys by default', () {
+      EnvConfig.clearTestOverrides();
+      expect(EnvConfig.firebaseApiKey, isEmpty);
+      expect(EnvConfig.aiProxyUrl, isEmpty);
+      expect(DefaultFirebaseOptions.isConfigured, isFalse);
+    });
+
     test('loads non-secret runtime config without bundling API keys in client', () {
       EnvConfig.setTestOverrides({
         'AI_PROXY_URL': 'https://ai-proxy.example.com',

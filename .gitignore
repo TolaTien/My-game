@@ -66,3 +66,5 @@ server/ai_proxy/.venv/
 *.keystore
 android/key.properties
 emulator_screenshot.png
+android/app/google-services.json
+android/app/src/google-services.json

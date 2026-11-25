@@ -6,9 +6,9 @@ import 'dart:math';
 import 'dart:typed_data';
 
 /// ============================================================================
-/// Gold Rush — Procedural Map Generator CLI Tool
+/// Big-War — Procedural Map Generator CLI Tool
 /// ============================================================================
-/// Công cụ tự động sinh bản đồ 2D cho game Gold Rush (Flame Engine) tuân thủ:
+/// Công cụ tự động sinh bản đồ 2D cho game Big-War (Flame Engine) tuân thủ:
 /// 1. Kiến trúc Data-Driven (`assets/data/maps.json`).
 /// 2. Đảm bảo tính liên thông 100% cho thuật toán AI tìm đường A* (BFS validation).
 /// 3. In preview trực quan ASCII Art trên Console.
@@ -41,7 +41,7 @@ void main(List<String> args) {
   }
 
   print('\x1B[36m============================================================\x1B[0m');
-  print('\x1B[1;33m🏆 GOLD RUSH — PROCEDURAL MAP GENERATOR\x1B[0m');
+  print('\x1B[1;33m🏆 BIG-WAR — PROCEDURAL MAP GENERATOR\x1B[0m');
   print('\x1B[36m============================================================\x1B[0m');
 
   final generator = MapGenerator(options);
@@ -163,7 +163,7 @@ GeneratorOptions _parseArgs(List<String> args) {
 
 void _printHelp() {
   print('''
-Gold Rush — Procedural Map Generator CLI Tool
+Big-War — Procedural Map Generator CLI Tool
 
 Cú pháp:
   dart run tool/generate_map.dart [options]

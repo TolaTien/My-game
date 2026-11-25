@@ -215,11 +215,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Skeleton Ranged AI & Kiting Distance Thresholds', () {
-    test('Distance < 110px triggers retreat / kiting-away behavior', () {
+    test('Distance < 115px retreats with bounded lateral movement', () {
       final player = PlayerComponent(position: Vector2(100, 100));
-      // Place skeleton at (150, 100) -> distance is 50px (< 110px threshold)
-      final skeleton =
-          SkeletonEnemy(position: Vector2(150, 100), player: player);
+      final skeleton = SkeletonEnemy(
+        position: Vector2(150, 100),
+        player: player,
+        random: Random(1),
+      );
       skeleton.shootCooldown = 2.0; // Ensure shoot logic does not trigger
 
       final initialDistance = skeleton.position.distanceTo(player.position);
@@ -230,14 +232,16 @@ void main() {
 
       final newDistance = skeleton.position.distanceTo(player.position);
       expect(newDistance, greaterThan(initialDistance),
-          reason: 'Skeleton must retreat away from player when distance < 110px');
-      // Velocity is awayDir * 50 px/s * 0.1s = 5px away
-      expect(skeleton.position.x, closeTo(155.0, 0.01));
+          reason: 'Skeleton must retreat away from player when distance < 115px');
+      final retreat = skeleton.position - Vector2(150, 100);
+      expect(retreat.x, greaterThan(0));
+      expect(retreat.y.abs(), greaterThan(0));
+      expect(retreat.length, closeTo(skeleton.speed * 1.15 * 0.1, 0.01));
     });
 
-    test('Distance > 240px triggers approach behavior', () {
+    test('Distance > 250px triggers approach behavior', () {
       final player = PlayerComponent(position: Vector2(100, 100));
-      // Place skeleton at (400, 100) -> distance is 300px (> 240px threshold)
+      // Place skeleton at (400, 100) -> distance is 300px (> 250px threshold)
       final skeleton =
           SkeletonEnemy(position: Vector2(400, 100), player: player);
       skeleton.shootCooldown = 2.0;
@@ -249,25 +253,30 @@ void main() {
 
       final newDistance = skeleton.position.distanceTo(player.position);
       expect(newDistance, lessThan(initialDistance),
-          reason: 'Skeleton must approach player when distance > 240px');
+          reason: 'Skeleton must approach player when distance > 250px');
       // Velocity is towardDir * 50 px/s * 0.1s = 5px closer
       expect(skeleton.position.x, closeTo(395.0, 0.01));
     });
 
-    test('Distance 110px - 240px holds position and counts down shoot timer',
+    test('Distance 115px - 250px strafes while counting down shoot timer',
         () {
       final player = PlayerComponent(position: Vector2(100, 100));
-      // Place skeleton at (280, 100) -> distance is 180px (between 110 and 240)
-      final skeleton =
-          SkeletonEnemy(position: Vector2(280, 100), player: player);
+      final skeleton = SkeletonEnemy(
+        position: Vector2(280, 100),
+        player: player,
+        random: Random(1),
+      );
       skeleton.shootCooldown = 1.0;
 
       skeleton.update(0.2);
 
-      // Position must remain stationary
-      expect(skeleton.position.x, 280.0,
-          reason: 'Skeleton must hold position when within 110-240px range');
-      expect(skeleton.position.y, 100.0);
+      final strafe = skeleton.position - Vector2(280, 100);
+      expect(strafe.x, closeTo(0, 0.01));
+      expect(strafe.y.abs(), closeTo(skeleton.speed * 0.65 * 0.2, 0.01));
+      expect(
+        skeleton.position.distanceTo(player.position),
+        closeTo(sqrt(180 * 180 + 6.5 * 6.5), 0.01),
+      );
 
       // Cooldown timer must decrement
       expect(skeleton.shootCooldown, closeTo(0.8, 0.01));

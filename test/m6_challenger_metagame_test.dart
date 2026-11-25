@@ -446,21 +446,21 @@ void main() {
         expect(player.currentKi, equals(100.0));
         expect(player.isBerserk, isFalse);
 
-        // First activation: consumes 40 Ki, activates berserk for 8.0s
+        // First activation: consumes 45 Ki, activates berserk for 6.0s
         final success1 = player.useSkill3();
         expect(success1, isTrue);
-        expect(player.currentKi, equals(60.0));
+        expect(player.currentKi, equals(55.0));
         expect(player.isBerserk, isTrue);
-        expect(player.berserkTimer, equals(8.0));
+        expect(player.berserkTimer, equals(6.0));
 
-        // 50 rapid recast attempts while active: must ALL fail and keep Ki at 60.0
+        // 50 rapid recast attempts while active: must ALL fail and keep Ki at 55.0
         for (int i = 0; i < 50; i++) {
           final recast = player.useSkill3();
           expect(recast, isFalse);
         }
         expect(
           player.currentKi,
-          equals(60.0),
+          equals(55.0),
           reason: 'Ki must not be deducted on blocked recasts',
         );
         expect(player.isBerserk, isTrue);
@@ -677,7 +677,7 @@ void main() {
 
       // 1. Verify SharedPreferences JSON string is valid and not corrupted
       final prefs = await SharedPreferences.getInstance();
-      final storedJsonString = prefs.getString('gold_rush_player_profile');
+      final storedJsonString = prefs.getString('big_war_player_profile');
       expect(storedJsonString, isNotNull);
 
       // jsonDecode must succeed without FormatException
@@ -738,7 +738,7 @@ void main() {
       // 1. Completely empty JSON {}
       final emptyProfile = PlayerProfile.fromJson({});
       expect(emptyProfile.playerName, equals('Chiến Binh #88'));
-      expect(emptyProfile.gold, equals(2000));
+      expect(emptyProfile.gold, equals(500));
       expect(emptyProfile.diamonds, equals(50));
       expect(emptyProfile.rankPoints, equals(1000));
       expect(emptyProfile.unlockedHeroIds, equals(['george']));
@@ -777,7 +777,7 @@ void main() {
       };
       final profileNulls = PlayerProfile.fromJson(nullJson);
       expect(profileNulls.playerName, equals('Chiến Binh #88'));
-      expect(profileNulls.gold, equals(2000));
+      expect(profileNulls.gold, equals(500));
       expect(profileNulls.diamonds, equals(50));
       expect(profileNulls.rankPoints, equals(1000));
       expect(profileNulls.unlockedHeroIds, equals(['george']));
@@ -910,7 +910,7 @@ void main() {
 
       // Verify the persisted JSON is 100% valid JSON and readable
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('gold_rush_player_profile');
+      final raw = prefs.getString('big_war_player_profile');
       expect(raw, isNotNull);
 
       expect(
