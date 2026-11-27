@@ -39,7 +39,12 @@ jobs:
         run: flutter pub get
 
       - name: Run Dart Static Analysis
-        run: dart analyze lib test
+        run: |
+          if [ -d test ]; then
+            dart analyze lib test
+          else
+            dart analyze lib
+          fi
 
       - name: Build iOS IPA (Unsigned Release)
         run: |

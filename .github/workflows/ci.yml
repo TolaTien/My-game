@@ -29,4 +29,9 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Run unit & widget tests
-        run: flutter test --reporter expanded
+        run: |
+          if [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit)" ]; then
+            flutter test --reporter expanded
+          else
+            echo "No test files found in test/, skipping flutter test."
+          fi

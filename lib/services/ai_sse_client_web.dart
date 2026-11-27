@@ -78,7 +78,7 @@ Stream<String> postSseLinesImpl({
   }
 
   final abortCtrl = _JSAbortController();
-  Timer? timeoutTimer = Timer(timeout, abortCtrl.abort);
+  Timer? timeoutTimer = Timer(timeout, () => abortCtrl.abort());
 
   final headers = _JSHeaders()
     ..append('Content-Type'.toJS, 'application/json; charset=utf-8'.toJS)
@@ -124,7 +124,7 @@ Stream<String> postSseLinesImpl({
     reader = body.getReader();
     while (true) {
       timeoutTimer?.cancel();
-      timeoutTimer = Timer(timeout, abortCtrl.abort);
+      timeoutTimer = Timer(timeout, () => abortCtrl.abort());
 
       final chunk = await reader.read().toDart;
       if (chunk.done) break;
