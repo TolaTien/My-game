@@ -90,513 +90,651 @@ class _GameHudOverlayState extends State<GameHudOverlay>
     final s3 = HeroSkillSystem.getSkillMeta(player.heroId, 3);
 
     return SafeArea(
-      child: Stack(
-        children: [
-          // Banner thông báo chiến trường ngẫu nhiên khi vào trận
-          Positioned(
-            top: 22,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: AnimatedBuilder(
-                animation: _bannerController,
-                builder: (context, child) {
-                  if (_bannerController.isCompleted) return const SizedBox.shrink();
-                  final map = widget.game.currentMapConfig;
-                  final isIceTheme = map.theme == 'ice_arena' || map.theme == 'frost_island';
-                  return Opacity(
-                    opacity: _bannerOpacityAnim.value,
-                    child: Transform.translate(
-                      offset: Offset(0, (1.0 - _bannerOpacityAnim.value) * -16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: isIceTheme
-                                ? [
-                                    const Color(0xFF002244).withValues(alpha: 0.92),
-                                    const Color(0xFF005588).withValues(alpha: 0.92),
-                                  ]
-                                : [
-                                    const Color(0xFF2C1E0A).withValues(alpha: 0.92),
-                                    const Color(0xFF4A3410).withValues(alpha: 0.92),
-                                  ],
-                          ),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: isIceTheme
-                                ? const Color(0xFF00E5FF)
-                                : const Color(0xFFFFD700),
-                            width: 1.6,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isIceTheme
-                                      ? const Color(0xFF00E5FF)
-                                      : const Color(0xFFFFD700))
-                                  .withValues(alpha: 0.35),
-                              blurRadius: 14,
-                              spreadRadius: 2,
+      minimum: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final safeW = constraints.maxWidth;
+          final safeH = constraints.maxHeight;
+          final isCompact = safeW < 760 || safeH < 410;
+          final canInlineBossBar = safeW >= 840;
+          final controlScale =
+              min(safeW / 820.0, safeH / 410.0).clamp(0.74, 1.0);
+
+          final avatarSize = isCompact ? 42.0 : 52.0;
+          final statBarWidth = isCompact ? 104.0 : 138.0;
+          final topEdge = isCompact ? 4.0 : 8.0;
+          final sideEdge = isCompact ? 8.0 : 14.0;
+          final bottomEdge = isCompact ? 8.0 : 18.0;
+          final bossBarMaxWidth = canInlineBossBar
+              ? (safeW * 0.28).clamp(210.0, 260.0)
+              : (safeW * 0.34).clamp(175.0, 230.0);
+
+          final map = widget.game.currentMapConfig;
+          final isIceTheme =
+              map.theme == 'ice_arena' || map.theme == 'frost_island';
+          final mapAccentColor =
+              isIceTheme ? const Color(0xFF00E5FF) : const Color(0xFFFFD700);
+
+          return Stack(
+            children: [
+              // Banner thông báo chiến trường ngẫu nhiên khi vào trận
+              Positioned(
+                top: isCompact ? 48 : 56,
+                left: sideEdge,
+                right: sideEdge,
+                child: IgnorePointer(
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _bannerController,
+                      builder: (context, child) {
+                        if (_bannerController.isCompleted) {
+                          return const SizedBox.shrink();
+                        }
+                        return Opacity(
+                          opacity: _bannerOpacityAnim.value,
+                          child: Transform.translate(
+                            offset: Offset(
+                              0,
+                              (1.0 - _bannerOpacityAnim.value) * -14,
                             ),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 14 : 18,
+                                vertical: isCompact ? 5 : 7,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isIceTheme
+                                      ? [
+                                          const Color(0xFF002244)
+                                              .withValues(alpha: 0.92),
+                                          const Color(0xFF005588)
+                                              .withValues(alpha: 0.92),
+                                        ]
+                                      : [
+                                          const Color(0xFF2C1E0A)
+                                              .withValues(alpha: 0.92),
+                                          const Color(0xFF4A3410)
+                                              .withValues(alpha: 0.92),
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: mapAccentColor,
+                                  width: 1.4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        mapAccentColor.withValues(alpha: 0.35),
+                                    blurRadius: 12,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isIceTheme
+                                        ? Icons.ac_unit_rounded
+                                        : Icons.account_balance_rounded,
+                                    color: mapAccentColor,
+                                    size: isCompact ? 16 : 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      'CHIẾN TRƯỜNG: ${map.name.toUpperCase()}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: isIceTheme
+                                            ? const Color(0xFFE0F7FA)
+                                            : const Color(0xFFFFF8E1),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: isCompact ? 11 : 12.5,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+
+              // 1 & 2. TOP ROW: Player Stats (Left) | Boss Bar (Center on wide screens) | Info & Settings (Right)
+              Positioned(
+                top: topEdge,
+                left: sideEdge,
+                right: sideEdge,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // TOP LEFT: Chỉ số HP, Ki, EXP, Giáp Hoàng Kim và Level
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: avatarSize,
+                          height: avatarSize,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                            ),
+                            borderRadius:
+                                BorderRadius.circular(isCompact ? 10 : 12),
+                            border: Border.all(
+                              color: const Color(0xFFFFD700),
+                              width: 1.8,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black54, blurRadius: 5),
+                            ],
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                player.heroId == 'ranger' ||
+                                        player.heroId == 'valeria'
+                                    ? Icons.gps_fixed_rounded
+                                    : player.heroId == 'ninja'
+                                        ? Icons.flash_on_rounded
+                                        : Icons.shield,
+                                color: Colors.orangeAccent,
+                                size: isCompact ? 22 : 28,
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFD700),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Lv.${player.level}',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: isCompact ? 8.5 : 9.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: isCompact ? 6 : 9),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildStatBar(
+                              label: 'HP',
+                              current: player.currentHp,
+                              max: player.maxHp,
+                              color: GameColors.hpBar,
+                              barWidth: statBarWidth,
+                              compact: isCompact,
+                            ),
+                            SizedBox(height: isCompact ? 3 : 4),
+                            _buildStatBar(
+                              label: 'KI',
+                              current: player.currentKi,
+                              max: player.maxKi,
+                              color: GameColors.kiBar,
+                              barWidth: statBarWidth,
+                              compact: isCompact,
+                            ),
+                            SizedBox(height: isCompact ? 3 : 4),
+                            _buildExpBar(
+                              current: player.currentExp,
+                              max: player.expToNextLevel,
+                              barWidth: statBarWidth,
+                              compact: isCompact,
+                            ),
+                            if (player.shieldHp > 0) ...[
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFD700)
+                                      .withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFD700),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  '🛡 KHIÊN +${player.shieldHp.toInt()}',
+                                  style: TextStyle(
+                                    color: const Color(0xFFFFD700),
+                                    fontSize: isCompact ? 7.5 : 8.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
+                      ],
+                    ),
+
+                    // TOP CENTER: Boss Bar đặt inline trên màn hình rộng (>=840dp), không bao giờ đè lên nút 2 bên
+                    Expanded(
+                      child: canInlineBossBar
+                          ? Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              child: BossBarOverlay(
+                                game: widget.game,
+                                maxWidth: bossBarMaxWidth,
+                                compact: false,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+
+                    // TOP RIGHT: Bản đồ (ẩn tên dài trên điện thoại nhỏ), Tầng, Xu, PC toggle & Settings
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (safeW >= 680)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 7 : 9,
+                              vertical: isCompact ? 4 : 5,
+                            ),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E2838),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: mapAccentColor,
+                                width: 1.1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isIceTheme
+                                      ? Icons.ac_unit_rounded
+                                      : Icons.account_balance_rounded,
+                                  color: mapAccentColor,
+                                  size: isCompact ? 12 : 14,
+                                ),
+                                const SizedBox(width: 4),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: isCompact ? 72 : 110,
+                                  ),
+                                  child: Text(
+                                    map.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isIceTheme
+                                          ? const Color(0xFF80DEEA)
+                                          : const Color(0xFFFFE082),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: isCompact ? 9.5 : 10.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 7 : 9,
+                            vertical: isCompact ? 4 : 5,
+                          ),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E2838),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.cyanAccent.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.stairs,
+                                color: Colors.cyanAccent,
+                                size: isCompact ? 13 : 15,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                'TẦNG ${widget.game.currentFloor}',
+                                style: TextStyle(
+                                  color: Colors.cyanAccent,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: isCompact ? 10 : 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 8 : 10,
+                            vertical: isCompact ? 4 : 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.orangeAccent.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.currency_exchange_rounded,
+                                color: Colors.orangeAccent,
+                                size: isCompact ? 14 : 17,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${player.coinsCollected} Xu',
+                                style: TextStyle(
+                                  color: Colors.orangeAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isCompact ? 10.5 : 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isDesktopOrWeb) ...[
+                          const SizedBox(width: 4),
+                          IconButton(
+                            key: const Key('toggle_touch_controls_button'),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.all(4),
+                            constraints: BoxConstraints(
+                              minWidth: isCompact ? 34 : 40,
+                              minHeight: isCompact ? 34 : 40,
+                            ),
+                            icon: Icon(
+                              _showTouchControls
+                                  ? Icons.gamepad
+                                  : Icons.keyboard,
+                              color: Colors.amberAccent,
+                              size: isCompact ? 22 : 26,
+                            ),
+                            tooltip: _showTouchControls
+                                ? 'Chế độ phím PC (Ẩn nút ảo trên màn hình)'
+                                : 'Hiện nút cảm ứng trên màn hình',
+                            onPressed: () {
+                              _safeSetState(() {
+                                _showTouchControls = !_showTouchControls;
+                              });
+                            },
+                          ),
+                        ],
+                        const SizedBox(width: 4),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(4),
+                          constraints: BoxConstraints(
+                            minWidth: isCompact ? 34 : 40,
+                            minHeight: isCompact ? 34 : 40,
+                          ),
+                          icon: Icon(
+                            Icons.settings_rounded,
+                            color: const Color(0xFF00E5FF),
+                            size: isCompact ? 23 : 27,
+                          ),
+                          tooltip: 'Cài đặt âm lượng & trò chơi',
+                          onPressed: () {
+                            SettingsDialog.show(context);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2.5 BOSS HEALTH BAR TRÊN ĐIỆN THOẠI (<840dp): Đặt gọn phía dưới Top Bar, không che nút nào
+              if (!canInlineBossBar)
+                Positioned(
+                  top: topEdge + (isCompact ? 46 : 54),
+                  left: sideEdge,
+                  right: sideEdge,
+                  child: BossBarOverlay(
+                    game: widget.game,
+                    maxWidth: bossBarMaxWidth,
+                    compact: true,
+                  ),
+                ),
+
+              // 3. BOTTOM LEFT: Virtual Joystick điều hướng (scale theo màn hình điện thoại)
+              if (_showTouchControls || GamePlatformHelper.isMobile)
+                Positioned(
+                  bottom: bottomEdge,
+                  left: sideEdge + (isCompact ? 4 : 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isDesktopOrWeb)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: Colors.amberAccent.withValues(alpha: 0.7),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Text(
+                            'W A S D',
+                            style: TextStyle(
+                              color: Colors.amberAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                      VirtualJoystick(
+                        baseRadius: 58.0 * controlScale,
+                        knobRadius: 24.0 * controlScale,
+                        onDirectionChanged: (offset) {
+                          if (offset == Offset.zero &&
+                              widget.keyboardController != null &&
+                              widget.keyboardController!.hasKeyboardMovement) {
+                            widget.game.setPlayerMoveDirection(
+                              widget.keyboardController!.currentDirection,
+                            );
+                          } else {
+                            widget.game.setPlayerMoveDirection(
+                              Vector2(offset.dx, offset.dy),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+              // 4. BOTTOM RIGHT: Cụm phím hành động hình cánh cung (scale theo màn hình iOS/Android)
+              if (_showTouchControls || GamePlatformHelper.isMobile)
+                Positioned(
+                  bottom: bottomEdge,
+                  right: sideEdge + (isCompact ? 4 : 10),
+                  child: SizedBox(
+                    width: 210 * controlScale,
+                    height: 210 * controlScale,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        // Nút Đánh Thường (To nhất, góc dưới cùng bên phải)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: _ActionButton(
+                            size: 74 * controlScale,
+                            icon: Icons.flash_on,
+                            label: 'ATK',
+                            hotkey: isDesktopOrWeb ? 'SPACE' : null,
+                            color: const Color(0xFFE53935),
+                            onTap: () => widget.game.onBasicAttack(),
+                          ),
+                        ),
+
+                        // Skill 1 (riêng biệt theo từng nhân vật)
+                        Positioned(
+                          bottom: 84 * controlScale,
+                          right: 0,
+                          child: _ActionButton(
+                            size: 52 * controlScale,
+                            icon: s1.icon,
+                            label: s1.shortLabel,
+                            hotkey: isDesktopOrWeb ? '1' : null,
+                            color: s1.color,
+                            cooldownRemaining: player.skill1VisualCd,
+                            maxCooldown: s1.cooldown,
+                            hasEnoughKi: player.currentKi >= s1.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill1(),
+                          ),
+                        ),
+
+                        // Skill 2 (riêng biệt theo từng nhân vật)
+                        Positioned(
+                          bottom: 66 * controlScale,
+                          right: 66 * controlScale,
+                          child: _ActionButton(
+                            size: 52 * controlScale,
+                            icon: s2.icon,
+                            label: s2.shortLabel,
+                            hotkey: isDesktopOrWeb ? '2' : null,
+                            color: s2.color,
+                            cooldownRemaining: player.skill2VisualCd,
+                            maxCooldown: s2.cooldown,
+                            hasEnoughKi: player.currentKi >= s2.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill2(),
+                          ),
+                        ),
+
+                        // Skill 3 Ultimate (riêng biệt theo từng nhân vật)
+                        Positioned(
+                          bottom: 0,
+                          right: 84 * controlScale,
+                          child: _ActionButton(
+                            size: 52 * controlScale,
+                            icon: s3.icon,
+                            label: s3.shortLabel,
+                            hotkey: isDesktopOrWeb ? '3' : null,
+                            color: s3.color,
+                            cooldownRemaining: player.skill3VisualCd,
+                            maxCooldown: s3.cooldown,
+                            hasEnoughKi: player.currentKi >= s3.kiCost,
+                            lowKiFlash: player.insufficientKiFlashTimer > 0,
+                            onTap: () => widget.game.onSkill3(),
+                          ),
+                        ),
+
+                        // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)
+                        if (widget.game.companion != null)
+                          Positioned(
+                            bottom: 124 * controlScale,
+                            right: 54 * controlScale,
+                            child: _ActionButton(
+                              size: 44 * controlScale,
+                              icon: widget.game.companion!.skillIcon,
+                              label: 'PET',
+                              hotkey: isDesktopOrWeb ? 'E' : null,
+                              color: widget.game.companion!.skillColor,
+                              cooldownRemaining:
+                                  widget.game.companion!.specialSkillCooldown,
+                              maxCooldown:
+                                  widget.game.companion!.skillCooldownDuration,
+                              hasEnoughKi: true,
+                              onTap: () => widget.game.onCompanionSkill(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // 5. BOTTOM BAR HINT CHO WEB/PC (khi ẩn nút cảm ứng)
+              if (!_showTouchControls && isDesktopOrWeb)
+                Positioned(
+                  bottom: 10,
+                  left: 16,
+                  right: 16,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24, width: 1),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              isIceTheme
-                                  ? Icons.ac_unit_rounded
-                                  : Icons.account_balance_rounded,
-                              color: isIceTheme
-                                  ? const Color(0xFF00E5FF)
-                                  : const Color(0xFFFFD700),
-                              size: 20,
+                            const Icon(
+                              Icons.keyboard,
+                              color: Colors.amberAccent,
+                              size: 16,
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'CHIẾN TRƯỜNG: ${map.name.toUpperCase()}',
-                              style: TextStyle(
-                                color: isIceTheme
-                                    ? const Color(0xFFE0F7FA)
-                                    : const Color(0xFFFFF8E1),
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: 1.0,
+                              'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] ${s1.name}  [2] ${s2.name}  [3] ${s3.name}  |  Đánh: SPACE / J',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ),
-
-          // 1. TOP BAR: Chỉ số HP, Ki, EXP, Giáp Hoàng Kim và Level
-          Positioned(
-            top: 12,
-            left: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Khung Avatar nhân vật Golden-Cyber & Level
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                    ),
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: const Color(0xFFFFD700), width: 2),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black54, blurRadius: 6),
-                    ],
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        player.heroId == 'ranger' || player.heroId == 'valeria'
-                            ? Icons.gps_fixed_rounded
-                            : player.heroId == 'ninja'
-                                ? Icons.flash_on_rounded
-                                : Icons.shield,
-                        color: Colors.orangeAccent,
-                        size: 30,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Lv.${player.level}',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                // Cột thanh máu, Ki, EXP và Khiên Hoàng Kim
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatBar(
-                      label: 'HP',
-                      current: player.currentHp,
-                      max: player.maxHp,
-                      color: GameColors.hpBar,
-                    ),
-                    const SizedBox(height: 4),
-                    _buildStatBar(
-                      label: 'KI',
-                      current: player.currentKi,
-                      max: player.maxKi,
-                      color: GameColors.kiBar,
-                    ),
-                    const SizedBox(height: 4),
-                    _buildExpBar(
-                      current: player.currentExp,
-                      max: player.expToNextLevel,
-                    ),
-                    if (player.shieldHp > 0) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFFD700), width: 1),
-                        ),
-                        child: Text(
-                          '🛡 KHIÊN HOÀNG KIM +${player.shieldHp.toInt()}',
-                          style: const TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // 2. TOP RIGHT: Bản đồ ngẫu nhiên, Tầng hiện tại, Xu nhặt được, Nút bật/tắt phím ảo (trên PC/Web) & Nút Pause
-          Positioned(
-            top: 12,
-            right: 16,
-            child: Row(
-              children: [
-                // Huy hiệu bản đồ hiện tại
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E2838),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
-                              widget.game.currentMapConfig.theme == 'frost_island')
-                          ? const Color(0xFF00E5FF)
-                          : const Color(0xFFFFD700),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        (widget.game.currentMapConfig.theme == 'ice_arena' ||
-                                widget.game.currentMapConfig.theme == 'frost_island')
-                            ? Icons.ac_unit_rounded
-                            : Icons.account_balance_rounded,
-                        color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
-                                widget.game.currentMapConfig.theme == 'frost_island')
-                            ? const Color(0xFF00E5FF)
-                            : const Color(0xFFFFD700),
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.game.currentMapConfig.name,
-                        style: TextStyle(
-                          color: (widget.game.currentMapConfig.theme == 'ice_arena' ||
-                                  widget.game.currentMapConfig.theme == 'frost_island')
-                              ? const Color(0xFF80DEEA)
-                              : const Color(0xFFFFE082),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E2838),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.8)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.stairs, color: Colors.cyanAccent, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        'TẦNG ${widget.game.currentFloor}',
-                        style: const TextStyle(
-                          color: Colors.cyanAccent,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.8)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.currency_exchange_rounded, color: Colors.orangeAccent, size: 20),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${player.coinsCollected} Xu',
-                        style: const TextStyle(
-                          color: Colors.orangeAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isDesktopOrWeb) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    key: const Key('toggle_touch_controls_button'),
-                    icon: Icon(
-                      _showTouchControls ? Icons.gamepad : Icons.keyboard,
-                      color: Colors.amberAccent,
-                      size: 28,
-                    ),
-                    tooltip: _showTouchControls
-                        ? 'Chế độ phím PC (Ẩn nút ảo trên màn hình)'
-                        : 'Hiện nút cảm ứng trên màn hình',
-                    onPressed: () {
-                      _safeSetState(() {
-                        _showTouchControls = !_showTouchControls;
-                      });
-                    },
-                  ),
-                ],
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.settings_rounded, color: Color(0xFF00E5FF), size: 30),
-                  tooltip: 'Cài đặt âm lượng & trò chơi',
-                  onPressed: () {
-                    SettingsDialog.show(context);
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // 2.5 TOP CENTER: Boss Health Bar Overlay
-          Positioned(
-            top: 12,
-            left: 0,
-            right: 0,
-            child: BossBarOverlay(game: widget.game),
-          ),
-
-          // 3. BOTTOM LEFT: Virtual Joystick điều hướng
-          if (_showTouchControls || GamePlatformHelper.isMobile)
-            Positioned(
-              bottom: 24,
-              left: 24,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isDesktopOrWeb)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.75),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.7), width: 1),
-                      ),
-                      child: const Text(
-                        'W A S D',
-                        style: TextStyle(
-                          color: Colors.amberAccent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  VirtualJoystick(
-                    onDirectionChanged: (offset) {
-                      if (offset == Offset.zero &&
-                          widget.keyboardController != null &&
-                          widget.keyboardController!.hasKeyboardMovement) {
-                        widget.game.setPlayerMoveDirection(
-                          widget.keyboardController!.currentDirection,
-                        );
-                      } else {
-                        widget.game.setPlayerMoveDirection(
-                          Vector2(offset.dx, offset.dy),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-          // 4. BOTTOM RIGHT: Cụm phím hành động hình cánh cung (Arc Action Cluster: ATK + 3 Skill + Companion PET)
-          if (_showTouchControls || GamePlatformHelper.isMobile)
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: SizedBox(
-                width: 210,
-                height: 210,
-                child: Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    // Nút Đánh Thường (To nhất, góc dưới cùng bên phải)
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: _ActionButton(
-                        size: 74,
-                        icon: Icons.flash_on,
-                        label: 'ATK',
-                        hotkey: isDesktopOrWeb ? 'SPACE' : null,
-                        color: const Color(0xFFE53935),
-                        onTap: () => widget.game.onBasicAttack(),
-                      ),
-                    ),
-
-                    // Skill 1 (riêng biệt theo từng nhân vật)
-                    Positioned(
-                      bottom: 84,
-                      right: 0,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: s1.icon,
-                        label: s1.shortLabel,
-                        hotkey: isDesktopOrWeb ? '1' : null,
-                        color: s1.color,
-                        cooldownRemaining: player.skill1VisualCd,
-                        maxCooldown: s1.cooldown,
-                        hasEnoughKi: player.currentKi >= s1.kiCost,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill1(),
-                      ),
-                    ),
-
-                    // Skill 2 (riêng biệt theo từng nhân vật)
-                    Positioned(
-                      bottom: 66,
-                      right: 66,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: s2.icon,
-                        label: s2.shortLabel,
-                        hotkey: isDesktopOrWeb ? '2' : null,
-                        color: s2.color,
-                        cooldownRemaining: player.skill2VisualCd,
-                        maxCooldown: s2.cooldown,
-                        hasEnoughKi: player.currentKi >= s2.kiCost,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill2(),
-                      ),
-                    ),
-
-                    // Skill 3 Ultimate (riêng biệt theo từng nhân vật)
-                    Positioned(
-                      bottom: 0,
-                      right: 84,
-                      child: _ActionButton(
-                        size: 52,
-                        icon: s3.icon,
-                        label: s3.shortLabel,
-                        hotkey: isDesktopOrWeb ? '3' : null,
-                        color: s3.color,
-                        cooldownRemaining: player.skill3VisualCd,
-                        maxCooldown: s3.cooldown,
-                        hasEnoughKi: player.currentKi >= s3.kiCost,
-                        lowKiFlash: player.insufficientKiFlashTimer > 0,
-                        onTap: () => widget.game.onSkill3(),
-                      ),
-                    ),
-
-                    // Companion Active Skill Button (Kỹ năng đặc biệt riêng của từng Trợ thủ)
-                    if (widget.game.companion != null)
-                      Positioned(
-                        bottom: 124,
-                        right: 54,
-                        child: _ActionButton(
-                          size: 44,
-                          icon: widget.game.companion!.skillIcon,
-                          label: 'PET',
-                          hotkey: isDesktopOrWeb ? 'E' : null,
-                          color: widget.game.companion!.skillColor,
-                          cooldownRemaining:
-                              widget.game.companion!.specialSkillCooldown,
-                          maxCooldown:
-                              widget.game.companion!.skillCooldownDuration,
-                          hasEnoughKi: true,
-                          onTap: () => widget.game.onCompanionSkill(),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-          // 5. BOTTOM BAR HINT CHO WEB/PC (khi ẩn nút cảm ứng)
-          if (!_showTouchControls && isDesktopOrWeb)
-            Positioned(
-              bottom: 12,
-              left: 16,
-              right: 16,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.keyboard, color: Colors.amberAccent, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Di chuyển: WASD / Mũi tên  |  Kỹ năng: [1] ${s1.name}  [2] ${s2.name}  [3] ${s3.name}  |  Đánh: SPACE / J',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -606,50 +744,54 @@ class _GameHudOverlayState extends State<GameHudOverlay>
     required double current,
     required double max,
     required Color color,
+    double barWidth = 140,
+    bool compact = false,
   }) {
-    final progress = (current / max).clamp(0.0, 1.0);
+    final progress = max > 0 ? (current / max).clamp(0.0, 1.0) : 0.0;
+    final barHeight = compact ? 10.0 : 12.0;
     return Row(
       children: [
         SizedBox(
-          width: 24,
+          width: compact ? 20 : 24,
           child: Text(
             label,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.bold,
-              fontSize: 11,
+              fontSize: compact ? 9.5 : 11,
             ),
           ),
         ),
         Stack(
           children: [
             Container(
-              width: 140,
-              height: 12,
+              width: barWidth,
+              height: barHeight,
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(barHeight / 2),
                 border: Border.all(color: Colors.white24, width: 1),
               ),
             ),
             Container(
-              width: 140 * progress,
-              height: 12,
+              width: barWidth * progress,
+              height: barHeight,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(barHeight / 2),
               ),
             ),
             SizedBox(
-              width: 140,
-              height: 12,
+              width: barWidth,
+              height: barHeight,
               child: Center(
                 child: Text(
                   '${current.toInt()}/${max.toInt()}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 8,
+                    fontSize: compact ? 7.5 : 8,
                     fontWeight: FontWeight.bold,
+                    height: 1.0,
                   ),
                 ),
               ),
@@ -660,34 +802,39 @@ class _GameHudOverlayState extends State<GameHudOverlay>
     );
   }
 
-  Widget _buildExpBar({required int current, required int max}) {
-    final progress = (current / max).clamp(0.0, 1.0);
+  Widget _buildExpBar({
+    required int current,
+    required int max,
+    double barWidth = 140,
+    bool compact = false,
+  }) {
+    final progress = max > 0 ? (current / max).clamp(0.0, 1.0) : 0.0;
     return Row(
       children: [
-        const SizedBox(
-          width: 24,
+        SizedBox(
+          width: compact ? 20 : 24,
           child: Text(
             'EXP',
             style: TextStyle(
               color: GameColors.expBar,
               fontWeight: FontWeight.bold,
-              fontSize: 9,
+              fontSize: compact ? 8 : 9,
             ),
           ),
         ),
         Stack(
           children: [
             Container(
-              width: 140,
-              height: 6,
+              width: barWidth,
+              height: compact ? 5 : 6,
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
             Container(
-              width: 140 * progress,
-              height: 6,
+              width: barWidth * progress,
+              height: compact ? 5 : 6,
               decoration: BoxDecoration(
                 color: GameColors.expBar,
                 borderRadius: BorderRadius.circular(3),

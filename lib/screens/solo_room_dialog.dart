@@ -7,6 +7,7 @@ import '../registry/asset_registry.dart';
 import '../services/audio_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
+import 'widgets/player_profile_inspector.dart';
 
 class SoloRoomDialog extends StatefulWidget {
   final ValueChanged<SoloDuelRoomState>? onStartSoloMatch;
@@ -1356,77 +1357,96 @@ class _SoloRoomDialogState extends State<SoloRoomDialog> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: accentColor.withValues(alpha: 0.6)),
-            ),
-            child: Center(
-              child: Text(
-                displayName.characters.first.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 7),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: isMe
+                  ? null
+                  : () => PlayerQuickActionPopup.show(context, member),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: Center(
                       child: Text(
-                        isMe ? '$displayName (Bạn)' : displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isMe ? const Color(0xFFFFF59D) : Colors.white,
+                        displayName.characters.first.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontWeight: FontWeight.w900,
-                          fontSize: 11.5,
+                          fontSize: 13,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(color: statusColor, width: 0.8),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  '${heroId.toUpperCase()} Lv.$heroLv • ${member.rankTier}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 9.5,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                isMe ? '$displayName (Bạn)' : displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isMe
+                                      ? const Color(0xFFFFF59D)
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(
+                                  color: statusColor,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${heroId.toUpperCase()} Lv.$heroLv • ${member.rankTier}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 9.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (canSwitchOtherTeam) ...[

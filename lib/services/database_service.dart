@@ -196,14 +196,20 @@ class MockDatabaseService implements DatabaseService {
     final localEntry = LeaderboardEntry(
       uid: 'local_player',
       name: profile.playerName,
+      playerCode: profile.playerCode,
       rankPoints: profile.rankPoints,
       rankStars: profile.rankStars,
       rankTier: profile.rankTier,
-      winRate: '60%',
+      winRate: profile.winRateDisplay,
       rankNumber: 1,
       lastUpdated: DateTime.now(),
       isLocalPlayer: true,
       heroId: profile.selectedHeroId,
+      heroLevel: profile.getHeroLevel(),
+      totalMatches: profile.totalMatches,
+      totalWins: profile.totalWins,
+      unlockedHeroCount: profile.unlockedHeroIds.length,
+      pveHighestFloor: profile.pveHighestFloor,
     );
 
     _leaderboard.add(localEntry);

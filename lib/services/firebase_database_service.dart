@@ -137,12 +137,18 @@ class FirebaseDatabaseService implements DatabaseService {
         await _db.ref('leaderboard/${user.uid}').set({
           'uid': user.uid,
           'name': profile.playerName,
+          'playerCode': profile.playerCode,
           'rankPoints': profile.rankPoints,
           'rankStars': profile.rankStars,
           'rankTier': profile.rankTier,
-          'winRate': '60%',
+          'winRate': profile.winRateDisplay,
           'lastUpdated': DateTime.now().toIso8601String(),
           'heroId': profile.selectedHeroId,
+          'heroLevel': profile.getHeroLevel(),
+          'totalMatches': profile.totalMatches,
+          'totalWins': profile.totalWins,
+          'unlockedHeroCount': profile.unlockedHeroIds.length,
+          'pveHighestFloor': profile.pveHighestFloor,
         });
       } catch (e) {
         debugPrint('Firebase updateLeaderboard failed: $e');

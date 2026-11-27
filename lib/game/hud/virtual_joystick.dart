@@ -3,8 +3,15 @@ import 'package:flutter/material.dart';
 
 class VirtualJoystick extends StatefulWidget {
   final Function(Offset direction) onDirectionChanged;
+  final double baseRadius;
+  final double knobRadius;
 
-  const VirtualJoystick({super.key, required this.onDirectionChanged});
+  const VirtualJoystick({
+    super.key,
+    required this.onDirectionChanged,
+    this.baseRadius = 60.0,
+    this.knobRadius = 25.0,
+  });
 
   @override
   State<VirtualJoystick> createState() => _VirtualJoystickState();
@@ -12,8 +19,8 @@ class VirtualJoystick extends StatefulWidget {
 
 class _VirtualJoystickState extends State<VirtualJoystick> {
   Offset _dragPosition = Offset.zero;
-  final double _baseRadius = 60.0;
-  final double _knobRadius = 25.0;
+  double get _baseRadius => widget.baseRadius;
+  double get _knobRadius => widget.knobRadius;
 
   @override
   Widget build(BuildContext context) {

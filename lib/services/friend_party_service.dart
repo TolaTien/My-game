@@ -303,9 +303,17 @@ class FriendPartyService {
       'code': myCode,
       'name': myName,
       'rankPoints': profile.rankPoints,
+      'rankStars': profile.rankStars,
       'rankTier': profile.rankTier,
       'selectedHeroId': profile.selectedHeroId,
       'heroLevel': profile.getHeroLevel(),
+      'totalMatches': profile.totalMatches,
+      'totalWins': profile.totalWins,
+      'unlockedHeroCount': profile.unlockedHeroIds.length,
+      'pveHighestFloor': profile.pveHighestFloor,
+      'isChallengerTop10': profile.isChallengerTop10,
+      if (profile.serverRank != null) 'serverRank': profile.serverRank,
+      'winRateText': profile.winRateDisplay,
       'isOnline': effectiveOnline,
       'statusText': effectiveOnline ? 'Đang Online' : 'Ngoại tuyến',
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
@@ -575,6 +583,35 @@ class FriendPartyService {
   // =========================================================================
   // YÊU CẦU KẾT BẠN (FRIEND REQUESTS -> ACCEPT / DECLINE)
   // =========================================================================
+
+  /// Kiểm tra người chơi có trong danh sách bạn bè hiện tại hay không
+  bool isFriendPlayer({String? code, String? name}) {
+    final cleanCode = code?.trim().toUpperCase() ?? '';
+    final cleanName = name?.trim().toLowerCase() ?? '';
+    for (final f in friendsNotifier.value) {
+      if (cleanCode.isNotEmpty && f.code.trim().toUpperCase() == cleanCode) {
+        return true;
+      }
+      if (cleanName.isNotEmpty && f.name.trim().toLowerCase() == cleanName) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Tra cứu thông tin hồ sơ công khai mới nhất của một người chơi khác từ Directory
+  Future<FriendInfo?> lookupPublicProfile({String? code, String? name}) async {
+    final cleanCode = code?.trim().toUpperCase() ?? '';
+    if (cleanCode.isNotEmpty) {
+      final byCode = await _fetchLatestFriendInfo(cleanCode);
+      if (byCode != null) return byCode;
+    }
+    final cleanName = name?.trim() ?? '';
+    if (cleanName.isNotEmpty) {
+      return _findPlayerInDirectory(cleanName);
+    }
+    return null;
+  }
 
   /// Tìm người chơi thật trong hệ thống theo Mã ID hoặc Tên hiển thị
   Future<FriendInfo?> _findPlayerInDirectory(String query) async {
@@ -2088,9 +2125,17 @@ class FriendPartyService {
       code: effectivePlayerCode,
       name: effectivePlayerName,
       rankPoints: profile.rankPoints,
+      rankStars: profile.rankStars,
       rankTier: profile.rankTier,
       selectedHeroId: profile.selectedHeroId,
       heroLevel: profile.getHeroLevel(),
+      totalMatches: profile.totalMatches,
+      totalWins: profile.totalWins,
+      unlockedHeroCount: profile.unlockedHeroIds.length,
+      pveHighestFloor: profile.pveHighestFloor,
+      isChallengerTop10: profile.isChallengerTop10,
+      serverRank: profile.serverRank,
+      winRateText: profile.winRateDisplay,
       isOnline: true,
       statusText: statusText,
       updatedAt: DateTime.now().millisecondsSinceEpoch,

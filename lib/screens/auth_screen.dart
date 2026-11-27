@@ -265,7 +265,6 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  /// Khung hiển thị tranh minh họa Rồng Chibi lửa tươi sáng với hiệu ứng hòa sắc mép phải
   Widget _buildChibiDragonIllustration() {
     return Stack(
       fit: StackFit.expand,

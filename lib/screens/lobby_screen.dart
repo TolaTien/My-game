@@ -20,6 +20,7 @@ import 'solo_room_dialog.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/hero_showcase_painter.dart';
 import 'widgets/lobby_friends_sidebar.dart';
+import 'widgets/player_profile_inspector.dart';
 import 'widgets/rank_badge.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -1533,6 +1534,7 @@ class _LobbyScreenState extends State<LobbyScreen>
     // 1. CHỦ PHÒNG (LEADER)
     if (isMeLeader) {
       stageMembers.add(_LobbyHeroMemberData(
+        playerCode: myCode,
         heroId: profile.selectedHeroId,
         playerName: profile.playerName,
         heroLevel: profile.getHeroLevel(),
@@ -1541,13 +1543,22 @@ class _LobbyScreenState extends State<LobbyScreen>
         isMe: true,
       ));
     } else {
+      FriendInfo? leaderFriend;
+      for (final f in FriendPartyService.instance.friendsNotifier.value) {
+        if (f.code.toUpperCase() == party.leaderCode.toUpperCase()) {
+          leaderFriend = f;
+          break;
+        }
+      }
       stageMembers.add(_LobbyHeroMemberData(
+        playerCode: party.leaderCode.toUpperCase(),
         heroId: party.leaderHeroId,
         playerName: party.leaderName,
         heroLevel: party.leaderHeroLevel,
-        rankTier: 'Kim Cương',
+        rankTier: leaderFriend?.rankTier ?? 'Vàng',
         isLeader: true,
         isMe: false,
+        rawFriend: leaderFriend,
       ));
     }
 
@@ -1555,6 +1566,7 @@ class _LobbyScreenState extends State<LobbyScreen>
     for (final member in party.members) {
       final isMemberMe = member.code.toUpperCase() == myCode;
       stageMembers.add(_LobbyHeroMemberData(
+        playerCode: isMemberMe ? myCode : member.code.toUpperCase(),
         heroId: isMemberMe ? profile.selectedHeroId : member.selectedHeroId,
         playerName: isMemberMe ? profile.playerName : member.name,
         heroLevel: isMemberMe ? profile.getHeroLevel() : member.heroLevel,
@@ -1562,6 +1574,7 @@ class _LobbyScreenState extends State<LobbyScreen>
         isLeader: false,
         isMe: isMemberMe,
         isReady: party.isMemberReady(member.code),
+        rawFriend: isMemberMe ? null : member,
       ));
     }
 
@@ -1679,137 +1692,171 @@ class _LobbyScreenState extends State<LobbyScreen>
 
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: spacing / 2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // HUY HIỆU VAI TRÒ
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 4),
-                          decoration: BoxDecoration(
-                            color: member.isLeader
-                                ? const Color(0xFFFFD700).withValues(alpha: 0.15)
-                                : const Color(0xFF00E5FF).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: member.isLeader
-                                  ? const Color(0xFFFFD700)
-                                  : const Color(0xFF00E5FF),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                member.isLeader
-                                    ? Icons.military_tech_rounded
-                                    : Icons.shield_rounded,
-                                size: 11,
-                                color: member.isLeader
-                                    ? const Color(0xFFFFD700)
-                                    : const Color(0xFF00E5FF),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        key: Key('party_stage_member_${member.playerCode}'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (member.isMe) {
+                            AudioService.instance.playSfx(SfxSound.uiClick);
+                            EditProfileDialog.show(context, profile);
+                          } else {
+                            PlayerQuickActionPopup.show(
+                              context,
+                              member.toPublicFriendInfo(),
+                            );
+                          }
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // HUY HIỆU VAI TRÒ
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
                               ),
-                              const SizedBox(width: 3),
-                              Text(
-                                member.isLeader
-                                    ? 'CHỦ PHÒNG${member.isMe ? ' (BẠN)' : ''}'
-                                    : '${member.isReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG'}${member.isMe ? ' (BẠN)' : ''}',
-                                style: TextStyle(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              decoration: BoxDecoration(
+                                color: member.isLeader
+                                    ? const Color(0xFFFFD700).withValues(alpha: 0.15)
+                                    : const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
                                   color: member.isLeader
                                       ? const Color(0xFFFFD700)
-                                      : (member.isReady
-                                          ? const Color(0xFF00E676)
-                                          : const Color(0xFFFFB74D)),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
+                                      : const Color(0xFF00E5FF),
+                                  width: 1.2,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-
-                        // CANVAS SHOWCASE NHÂN VẬT
-                        HeroShowcaseWidget(
-                          heroId: member.heroId,
-                          companionId: member.isMe ? profile.selectedCompanionId : null,
-                          themeColor: heroInfo.themeColor,
-                          width: heroWidth,
-                          height: heroHeight,
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        // THẺ TÊN & CẤP ĐỘ NHÂN VẬT
-                        Container(
-                          width: heroWidth * 0.95,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: member.isMe
-                                  ? [
-                                      const Color(0xFF1E3A6E),
-                                      const Color(0xFF102347)
-                                    ]
-                                  : [
-                                      const Color(0xFF142442),
-                                      const Color(0xFF0C1628)
-                                    ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: member.isMe
-                                  ? const Color(0xFFFFD54F)
-                                  : heroInfo.themeColor.withValues(alpha: 0.6),
-                              width: member.isMe ? 1.5 : 1.0,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (member.isMe
-                                        ? const Color(0xFFFFD54F)
-                                        : heroInfo.themeColor)
-                                    .withValues(alpha: 0.2),
-                                blurRadius: 6,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    member.isLeader
+                                        ? Icons.military_tech_rounded
+                                        : Icons.shield_rounded,
+                                    size: 11,
+                                    color: member.isLeader
+                                        ? const Color(0xFFFFD700)
+                                        : const Color(0xFF00E5FF),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    member.isLeader
+                                        ? 'CHỦ PHÒNG${member.isMe ? ' (BẠN)' : ''}'
+                                        : '${member.isReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG'}${member.isMe ? ' (BẠN)' : ''}',
+                                    style: TextStyle(
+                                      color: member.isLeader
+                                          ? const Color(0xFFFFD700)
+                                          : (member.isReady
+                                              ? const Color(0xFF00E676)
+                                              : const Color(0xFFFFB74D)),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                member.playerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w900,
+                            ),
+
+                            // CANVAS SHOWCASE NHÂN VẬT
+                            HeroShowcaseWidget(
+                              heroId: member.heroId,
+                              companionId: member.isMe ? profile.selectedCompanionId : null,
+                              themeColor: heroInfo.themeColor,
+                              width: heroWidth,
+                              height: heroHeight,
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            // THẺ TÊN & CẤP ĐỘ NHÂN VẬT (Bấm để xem Profile / Kết bạn)
+                            Container(
+                              width: heroWidth * 0.95,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: member.isMe
+                                      ? [
+                                          const Color(0xFF1E3A6E),
+                                          const Color(0xFF102347)
+                                        ]
+                                      : [
+                                          const Color(0xFF142442),
+                                          const Color(0xFF0C1628)
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
                                   color: member.isMe
                                       ? const Color(0xFFFFD54F)
-                                      : Colors.white,
-                                  letterSpacing: 0.5,
+                                      : heroInfo.themeColor.withValues(alpha: 0.6),
+                                  width: member.isMe ? 1.5 : 1.0,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (member.isMe
+                                            ? const Color(0xFFFFD54F)
+                                            : heroInfo.themeColor)
+                                        .withValues(alpha: 0.2),
+                                    blurRadius: 6,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 1),
-                              Text(
-                                '${heroInfo.name} • LV.${member.heroLevel}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white70,
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          member.playerName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w900,
+                                            color: member.isMe
+                                                ? const Color(0xFFFFD54F)
+                                                : Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      if (!member.isMe) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.badge_outlined,
+                                          size: 12,
+                                          color: Color(0xFF40C4FF),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    '${heroInfo.name} • LV.${member.heroLevel}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 }).toList(),
@@ -2315,6 +2362,7 @@ class _LobbyScreenState extends State<LobbyScreen>
 }
 
 class _LobbyHeroMemberData {
+  final String playerCode;
   final String heroId;
   final String playerName;
   final int heroLevel;
@@ -2322,8 +2370,10 @@ class _LobbyHeroMemberData {
   final bool isLeader;
   final bool isMe;
   final bool isReady;
+  final FriendInfo? rawFriend;
 
   const _LobbyHeroMemberData({
+    required this.playerCode,
     required this.heroId,
     required this.playerName,
     required this.heroLevel,
@@ -2331,7 +2381,22 @@ class _LobbyHeroMemberData {
     required this.isLeader,
     required this.isMe,
     this.isReady = true,
+    this.rawFriend,
   });
+
+  FriendInfo toPublicFriendInfo() {
+    if (rawFriend != null) return rawFriend!;
+    return FriendInfo(
+      code: playerCode,
+      name: playerName,
+      rankPoints: 1200,
+      rankTier: rankTier,
+      selectedHeroId: heroId,
+      heroLevel: heroLevel,
+      isOnline: true,
+      statusText: isLeader ? 'Chủ phòng tổ đội' : 'Đang trong tổ đội',
+    );
+  }
 }
 
 class _HeroDisplayInfo {
@@ -2401,23 +2466,25 @@ class _LeaderboardDialog extends StatelessWidget {
         child: Column(
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: const [
-                    Icon(Icons.emoji_events_rounded,
-                        color: Colors.amberAccent, size: 24),
-                    SizedBox(width: 8),
-                    Text(
-                      'BẢNG XẾP HẠNG CHIẾN BINH (RANK)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.amberAccent,
-                        letterSpacing: 1.2,
-                      ),
+                const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Colors.amberAccent,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'BẢNG XẾP HẠNG CHIẾN BINH (RANK)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.amberAccent,
+                      letterSpacing: 1.0,
                     ),
-                  ],
+                  ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -2486,140 +2553,166 @@ class _LeaderboardDialog extends StatelessWidget {
                       final isTop10Challenger = rank <= 10 && tier == 'Thách Đấu';
                       final isLocal = entry.isLocalPlayer;
 
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isLocal
-                              ? Colors.amberAccent.withValues(alpha: 0.2)
-                              : (isTop3
-                                  ? color.withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.04)),
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          key: Key('leaderboard_entry_${entry.uid}'),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isLocal
-                                ? Colors.amberAccent
-                                : (isTop3
-                                    ? color.withValues(alpha: 0.6)
-                                    : Colors.white12),
-                            width: isLocal ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 34,
-                              child: Text(
-                                '#$rank',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w900,
-                                  color: isLocal
-                                      ? Colors.amberAccent
-                                      : (isTop10Challenger ? color : Colors.white70),
-                                ),
+                          onTap: () {
+                            if (isLocal) {
+                              AudioService.instance.playSfx(SfxSound.uiClick);
+                              EditProfileDialog.show(context, playerProfile);
+                            } else {
+                              PlayerQuickActionPopup.show(
+                                context,
+                                buildFriendInfoFromLeaderboard(entry),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isLocal
+                                  ? Colors.amberAccent.withValues(alpha: 0.2)
+                                  : (isTop3
+                                      ? color.withValues(alpha: 0.15)
+                                      : Colors.white.withValues(alpha: 0.04)),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isLocal
+                                    ? Colors.amberAccent
+                                    : (isTop3
+                                        ? color.withValues(alpha: 0.6)
+                                        : Colors.white12),
+                                width: isLocal ? 1.5 : 1,
                               ),
                             ),
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      name,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: isLocal
-                                            ? Colors.amberAccent
-                                            : Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 34,
+                                  child: Text(
+                                    '#$rank',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      color: isLocal
+                                          ? Colors.amberAccent
+                                          : (isTop10Challenger ? color : Colors.white70),
                                     ),
                                   ),
-                                  if (isLocal) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amberAccent
-                                            .withValues(alpha: 0.3),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'BẠN',
-                                        style: TextStyle(
-                                          color: Colors.amberAccent,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  if (isTop10Challenger) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFF1744)
-                                            .withValues(alpha: 0.22),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: const Color(0xFFFF1744)
-                                              .withValues(alpha: 0.6),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'TOP 10',
-                                        style: TextStyle(
-                                          color: Color(0xFFFF5252),
-                                          fontSize: 8.5,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            RankBadge(rankTier: tier, size: 22),
-                            const SizedBox(width: 6),
-                            Text(
-                              tier,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.withValues(alpha: 0.14),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                entry.starDisplayText,
-                                style: const TextStyle(
-                                  color: Color(0xFFFFD700),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 10.5,
                                 ),
-                              ),
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: isLocal
+                                                ? Colors.amberAccent
+                                                : Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isLocal) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amberAccent
+                                                .withValues(alpha: 0.3),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'BẠN',
+                                            style: TextStyle(
+                                              color: Colors.amberAccent,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      if (isTop10Challenger) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF1744)
+                                                .withValues(alpha: 0.22),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: const Color(0xFFFF1744)
+                                                  .withValues(alpha: 0.6),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'TOP 10',
+                                            style: TextStyle(
+                                              color: Color(0xFFFF5252),
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                RankBadge(rankTier: tier, size: 22),
+                                const SizedBox(width: 6),
+                                Text(
+                                  tier,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    entry.starDisplayText,
+                                    style: const TextStyle(
+                                      color: Color(0xFFFFD700),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$rp RP',
+                                  style: const TextStyle(
+                                    color: Colors.amberAccent,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                if (!isLocal) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 16,
+                                    color: Colors.white38,
+                                  ),
+                                ],
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              '$rp RP',
-                              style: const TextStyle(
-                                color: Colors.amberAccent,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       );
                     },

@@ -4,24 +4,57 @@ class FriendInfo {
   final String code;
   final String name;
   final int rankPoints;
+  final int? rankStars;
   final String rankTier;
   final String selectedHeroId;
   final int heroLevel;
   final bool isOnline;
   final String statusText;
   final int updatedAt;
+  final int totalMatches;
+  final int totalWins;
+  final int unlockedHeroCount;
+  final int pveHighestFloor;
+  final bool isChallengerTop10;
+  final int? serverRank;
+  final String? winRateText;
 
   const FriendInfo({
     required this.code,
     required this.name,
     required this.rankPoints,
+    this.rankStars,
     required this.rankTier,
     required this.selectedHeroId,
     this.heroLevel = 15,
     this.isOnline = false,
     this.statusText = 'Ngoại tuyến',
     this.updatedAt = 0,
+    this.totalMatches = 0,
+    this.totalWins = 0,
+    this.unlockedHeroCount = 1,
+    this.pveHighestFloor = 1,
+    this.isChallengerTop10 = false,
+    this.serverRank,
+    this.winRateText,
   });
+
+  int get effectiveRankStars =>
+      rankStars ?? PvpRankSystem.totalStarsFromRp(rankPoints);
+
+  String get winRateDisplay {
+    if (totalMatches > 0) {
+      final rate = (totalWins.clamp(0, totalMatches) / totalMatches) * 100.0;
+      if ((rate - rate.roundToDouble()).abs() < 0.05) {
+        return '${rate.round()}%';
+      }
+      return '${rate.toStringAsFixed(1)}%';
+    }
+    if (winRateText != null && winRateText!.isNotEmpty) {
+      return winRateText!;
+    }
+    return '0%';
+  }
 
   PvpOpponentInfo toPvpAlly() {
     return PvpOpponentInfo(
@@ -52,22 +85,33 @@ class FriendInfo {
       'code': code,
       'name': name,
       'rankPoints': rankPoints,
+      'rankStars': effectiveRankStars,
       'rankTier': rankTier,
       'selectedHeroId': selectedHeroId,
       'heroLevel': heroLevel,
       'isOnline': isOnline,
       'statusText': statusText,
       'updatedAt': updatedAt,
+      'totalMatches': totalMatches,
+      'totalWins': totalWins,
+      'unlockedHeroCount': unlockedHeroCount,
+      'pveHighestFloor': pveHighestFloor,
+      'isChallengerTop10': isChallengerTop10,
+      if (serverRank != null) 'serverRank': serverRank,
+      if (winRateText != null) 'winRateText': winRateText,
     };
   }
 
   factory FriendInfo.fromJson(Map<String, dynamic> json) {
     final rp = (json['rankPoints'] as num?)?.toInt() ?? 1200;
     final online = json['isOnline'] as bool? ?? false;
+    final parsedMatches = (json['totalMatches'] as num?)?.toInt() ?? 0;
+    final parsedWins = (json['totalWins'] as num?)?.toInt() ?? 0;
     return FriendInfo(
       code: (json['code'] as String? ?? 'GR0001').toUpperCase(),
       name: json['name'] as String? ?? 'Chiến Hữu',
       rankPoints: rp,
+      rankStars: (json['rankStars'] as num?)?.toInt(),
       rankTier: json['rankTier'] as String? ?? PvpEloCalculator.getRankTier(rp),
       selectedHeroId: json['selectedHeroId'] as String? ?? 'george',
       heroLevel: (json['heroLevel'] as num?)?.toInt() ?? 10,
@@ -75,6 +119,13 @@ class FriendInfo {
       statusText: json['statusText'] as String? ??
           (online ? 'Đang Online' : 'Ngoại tuyến'),
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+      totalMatches: parsedMatches < 0 ? 0 : parsedMatches,
+      totalWins: parsedWins.clamp(0, parsedMatches < 0 ? 0 : parsedMatches).toInt(),
+      unlockedHeroCount: ((json['unlockedHeroCount'] as num?)?.toInt() ?? 1).clamp(1, 99).toInt(),
+      pveHighestFloor: ((json['pveHighestFloor'] as num?)?.toInt() ?? 1).clamp(1, 9999).toInt(),
+      isChallengerTop10: json['isChallengerTop10'] as bool? ?? false,
+      serverRank: (json['serverRank'] as num?)?.toInt(),
+      winRateText: json['winRateText'] as String?,
     );
   }
 
@@ -82,23 +133,39 @@ class FriendInfo {
     String? code,
     String? name,
     int? rankPoints,
+    int? rankStars,
     String? rankTier,
     String? selectedHeroId,
     int? heroLevel,
     bool? isOnline,
     String? statusText,
     int? updatedAt,
+    int? totalMatches,
+    int? totalWins,
+    int? unlockedHeroCount,
+    int? pveHighestFloor,
+    bool? isChallengerTop10,
+    int? serverRank,
+    String? winRateText,
   }) {
     return FriendInfo(
       code: code ?? this.code,
       name: name ?? this.name,
       rankPoints: rankPoints ?? this.rankPoints,
+      rankStars: rankStars ?? this.rankStars,
       rankTier: rankTier ?? this.rankTier,
       selectedHeroId: selectedHeroId ?? this.selectedHeroId,
       heroLevel: heroLevel ?? this.heroLevel,
       isOnline: isOnline ?? this.isOnline,
       statusText: statusText ?? this.statusText,
       updatedAt: updatedAt ?? this.updatedAt,
+      totalMatches: totalMatches ?? this.totalMatches,
+      totalWins: totalWins ?? this.totalWins,
+      unlockedHeroCount: unlockedHeroCount ?? this.unlockedHeroCount,
+      pveHighestFloor: pveHighestFloor ?? this.pveHighestFloor,
+      isChallengerTop10: isChallengerTop10 ?? this.isChallengerTop10,
+      serverRank: serverRank ?? this.serverRank,
+      winRateText: winRateText ?? this.winRateText,
     );
   }
 }

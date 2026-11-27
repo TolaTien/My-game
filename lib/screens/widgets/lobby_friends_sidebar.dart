@@ -3,6 +3,7 @@ import '../../models/friend_party_models.dart';
 import '../../models/pvp_match.dart';
 import '../../services/audio_service.dart';
 import '../../services/friend_party_service.dart';
+import 'player_profile_inspector.dart';
 
 class LobbyFriendsSidebar extends StatefulWidget {
   final bool isPvpMode;
@@ -655,95 +656,106 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
           ),
           child: Row(
             children: [
-              // Avatar nhân vật + Chấm online
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: heroColor.withValues(alpha: isOnline ? 0.2 : 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: heroColor.withValues(alpha: isOnline ? 0.5 : 0.2),
-                      ),
-                    ),
-                    child: Icon(
-                      heroIcon,
-                      color: isOnline ? heroColor : Colors.white30,
-                      size: 18,
-                    ),
-                  ),
-                  Positioned(
-                    bottom: -1,
-                    right: -1,
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: isOnline
-                            ? const Color(0xFF00E676)
-                            : const Color(0xFF757575),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF0D1B36),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 8),
-
-              // Thông tin tên, cấp, rank
+              // Avatar nhân vật + Thông tin (Bấm để xem Profile bạn bè)
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => PlayerQuickActionPopup.show(context, friend),
+                  child: Row(
+                    children: [
+                      // Avatar nhân vật + Chấm online
+                      Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          Text(
-                            friend.name,
-                            style: TextStyle(
-                              color: isOnline ? Colors.white : Colors.white60,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11.5,
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: heroColor.withValues(alpha: isOnline ? 0.2 : 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: heroColor.withValues(alpha: isOnline ? 0.5 : 0.2),
+                              ),
+                            ),
+                            child: Icon(
+                              heroIcon,
+                              color: isOnline ? heroColor : Colors.white30,
+                              size: 18,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '[${friend.code}]',
-                            style: TextStyle(
-                              color: isOnline
-                                  ? const Color(0xFF40C4FF)
-                                  : Colors.white30,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 9,
+                          Positioned(
+                            bottom: -1,
+                            right: -1,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: isOnline
+                                    ? const Color(0xFF00E676)
+                                    : const Color(0xFF757575),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFF0D1B36),
+                                  width: 1.5,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 1.5),
-                    Text(
-                      isOnline
-                          ? 'Lv.${friend.heroLevel} • Rank ${friend.rankTier} • ${friend.statusText}'
-                          : friend.statusText,
-                      style: TextStyle(
-                        color: isOnline ? Colors.white60 : Colors.white30,
-                        fontSize: 9,
-                        height: 1.1,
+                      const SizedBox(width: 8),
+
+                      // Thông tin tên, cấp, rank
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    friend.name,
+                                    style: TextStyle(
+                                      color: isOnline ? Colors.white : Colors.white60,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '[${friend.code}]',
+                                    style: TextStyle(
+                                      color: isOnline
+                                          ? const Color(0xFF40C4FF)
+                                          : Colors.white30,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 1.5),
+                            Text(
+                              isOnline
+                                  ? 'Lv.${friend.heroLevel} • Rank ${friend.rankTier} • ${friend.statusText}'
+                                  : friend.statusText,
+                              style: TextStyle(
+                                color: isOnline ? Colors.white60 : Colors.white30,
+                                fontSize: 9,
+                                height: 1.1,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 

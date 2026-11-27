@@ -4,6 +4,7 @@ import 'pvp_match.dart';
 class LeaderboardEntry {
   final String uid;
   final String name;
+  final String playerCode;
   final int rankPoints;
   final int? _rankStars;
   final String rankTier;
@@ -12,10 +13,16 @@ class LeaderboardEntry {
   final DateTime lastUpdated;
   final bool isLocalPlayer;
   final String heroId;
+  final int heroLevel;
+  final int totalMatches;
+  final int totalWins;
+  final int unlockedHeroCount;
+  final int pveHighestFloor;
 
   const LeaderboardEntry({
     required this.uid,
     required this.name,
+    this.playerCode = '',
     required this.rankPoints,
     int? rankStars,
     required this.rankTier,
@@ -24,6 +31,11 @@ class LeaderboardEntry {
     required this.lastUpdated,
     this.isLocalPlayer = false,
     this.heroId = 'george',
+    this.heroLevel = 1,
+    this.totalMatches = 0,
+    this.totalWins = 0,
+    this.unlockedHeroCount = 1,
+    this.pveHighestFloor = 1,
     // ignore: prefer_initializing_formals
   }) : _rankStars = rankStars;
 
@@ -54,6 +66,7 @@ class LeaderboardEntry {
   Map<String, dynamic> toJson() => {
     'uid': uid,
     'name': name,
+    'playerCode': playerCode,
     'rankPoints': rankPoints,
     'rankStars': rankStars,
     'rankTier': rankTier,
@@ -62,6 +75,11 @@ class LeaderboardEntry {
     'lastUpdated': lastUpdated.toIso8601String(),
     'isLocalPlayer': isLocalPlayer,
     'heroId': heroId,
+    'heroLevel': heroLevel,
+    'totalMatches': totalMatches,
+    'totalWins': totalWins,
+    'unlockedHeroCount': unlockedHeroCount,
+    'pveHighestFloor': pveHighestFloor,
   };
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) {
@@ -78,20 +96,27 @@ class LeaderboardEntry {
     return LeaderboardEntry(
       uid: json['uid'] as String? ?? (json['userId'] as String? ?? 'unknown'),
       name: json['name'] as String? ?? (json['playerName'] as String? ?? 'Vô Danh'),
+      playerCode: (json['playerCode'] as String? ?? '').toUpperCase(),
       rankPoints: rp,
       rankStars: stars,
       rankTier: json['rankTier'] as String? ?? 'Đồng',
-      winRate: json['winRate'] as String? ?? '50%',
+      winRate: json['winRate'] as String? ?? '0%',
       rankNumber: (json['rankNumber'] as num?)?.toInt() ?? ((json['rank'] as num?)?.toInt() ?? 1),
       lastUpdated: parsedDate,
       isLocalPlayer: (json['isLocalPlayer'] as bool?) ?? ((json['isCurrentPlayer'] as bool?) ?? false),
       heroId: json['heroId'] as String? ?? 'george',
+      heroLevel: (json['heroLevel'] as num?)?.toInt() ?? 1,
+      totalMatches: (json['totalMatches'] as num?)?.toInt() ?? 0,
+      totalWins: (json['totalWins'] as num?)?.toInt() ?? 0,
+      unlockedHeroCount: (json['unlockedHeroCount'] as num?)?.toInt() ?? 1,
+      pveHighestFloor: (json['pveHighestFloor'] as num?)?.toInt() ?? 1,
     );
   }
 
   LeaderboardEntry copyWith({
     String? uid,
     String? name,
+    String? playerCode,
     int? rankPoints,
     int? rankStars,
     String? rankTier,
@@ -100,6 +125,11 @@ class LeaderboardEntry {
     DateTime? lastUpdated,
     bool? isLocalPlayer,
     String? heroId,
+    int? heroLevel,
+    int? totalMatches,
+    int? totalWins,
+    int? unlockedHeroCount,
+    int? pveHighestFloor,
   }) {
     final resolvedRp = rankPoints ?? this.rankPoints;
     final resolvedStars = rankStars ??
@@ -110,6 +140,7 @@ class LeaderboardEntry {
     return LeaderboardEntry(
       uid: uid ?? this.uid,
       name: name ?? this.name,
+      playerCode: playerCode ?? this.playerCode,
       rankPoints: resolvedRp,
       rankStars: resolvedStars,
       rankTier: rankTier ?? this.rankTier,
@@ -118,6 +149,11 @@ class LeaderboardEntry {
       lastUpdated: lastUpdated ?? this.lastUpdated,
       isLocalPlayer: isLocalPlayer ?? this.isLocalPlayer,
       heroId: heroId ?? this.heroId,
+      heroLevel: heroLevel ?? this.heroLevel,
+      totalMatches: totalMatches ?? this.totalMatches,
+      totalWins: totalWins ?? this.totalWins,
+      unlockedHeroCount: unlockedHeroCount ?? this.unlockedHeroCount,
+      pveHighestFloor: pveHighestFloor ?? this.pveHighestFloor,
     );
   }
 
