@@ -125,5 +125,45 @@ void main() {
       );
       expect(fallbackReply, contains('Trợ Lý AI Big-War'));
     });
+
+    test('streams SSE chunks incrementally from /api/chat/stream', () async {
+      EnvConfig.setTestOverrides({
+        'AI_PROXY_URL': 'https://ai-proxy.example.com',
+      });
+
+      Uri? capturedUri;
+      final mockClient = MockClient.streaming((request, _) async {
+        capturedUri = request.url;
+        final sseEvents = <List<int>>[
+          utf8.encode(
+            'data: ${jsonEncode({'delta': 'Hãy giữ vị trí ', 'model': 'gemini-3.5-flash-lite'})}\n\n',
+          ),
+          utf8.encode(
+            'data: ${jsonEncode({'delta': 'sau cột đá để né đạn Boss!', 'model': 'gemini-3.5-flash-lite'})}\n\n',
+          ),
+          utf8.encode('data: [DONE]\n\n'),
+        ];
+        return http.StreamedResponse(
+          Stream<List<int>>.fromIterable(sseEvents),
+          200,
+          headers: {'content-type': 'text/event-stream; charset=utf-8'},
+        );
+      });
+
+      final chunks = await ChatAiAssistantService.instance
+          .streamReplyAsync(
+            'Tư vấn cách di chuyển sống sót tốt nhất?',
+            client: mockClient,
+            bypassKeywordFilter: true,
+            bypassScopeFilter: true,
+          )
+          .toList();
+
+      expect(
+        capturedUri.toString(),
+        'https://ai-proxy.example.com/api/chat/stream',
+      );
+      expect(chunks, ['Hãy giữ vị trí ', 'sau cột đá để né đạn Boss!']);
+    });
   });
 }

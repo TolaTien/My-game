@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../services/audio_service.dart';
 import '../services/chat_ai_assistant_service.dart';
@@ -13,6 +15,14 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
+  bool _isStreamingText = false;
+  int? _streamingMessageIndex;
+
+  StreamSubscription<String>? _streamSub;
+  Timer? _typewriterTimer;
+  final List<int> _pendingRunes = <int>[];
+  bool _upstreamCompleted = false;
+  String _currentStreamBuffer = '';
 
   final List<ChatAiMessage> _messages = [
     ChatAiMessage(
@@ -25,21 +35,113 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
 
   @override
   void dispose() {
+    _cancelActiveStream();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom() {
+  void _cancelActiveStream() {
+    _streamSub?.cancel();
+    _streamSub = null;
+    _typewriterTimer?.cancel();
+    _typewriterTimer = null;
+    _pendingRunes.clear();
+  }
+
+  static bool _isCombiningOrEmojiModifier(int rune) {
+    return rune == 0xFE0F ||
+        rune == 0x20E3 ||
+        rune == 0x200D ||
+        (rune >= 0x0300 && rune <= 0x036F) ||
+        (rune >= 0x1F3FB && rune <= 0x1F3FF);
+  }
+
+  void _scrollToBottom({bool jump = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (!_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (jump) {
+        _scrollController.jumpTo(target);
+      } else {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
+          target,
+          duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  void _ensureTypewriterRunning() {
+    if (_typewriterTimer != null) return;
+
+    _typewriterTimer = Timer.periodic(
+      const Duration(milliseconds: 18),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        if (_pendingRunes.isEmpty) {
+          if (_upstreamCompleted) {
+            timer.cancel();
+            _typewriterTimer = null;
+            setState(() {
+              _isLoading = false;
+              _isStreamingText = false;
+              _streamingMessageIndex = null;
+            });
+            _scrollToBottom();
+          }
+          return;
+        }
+
+        final backlog = _pendingRunes.length;
+        final baseStep = backlog > 240
+            ? 14
+            : backlog > 120
+                ? 8
+                : backlog > 45
+                    ? 4
+                    : 2;
+
+        final chunkRunes = <int>[];
+        var count = 0;
+        while (_pendingRunes.isNotEmpty &&
+            (count < baseStep ||
+                _isCombiningOrEmojiModifier(_pendingRunes.first))) {
+          chunkRunes.add(_pendingRunes.removeAt(0));
+          count++;
+        }
+
+        _currentStreamBuffer += String.fromCharCodes(chunkRunes);
+
+        setState(() {
+          if (_streamingMessageIndex == null) {
+            _messages.add(
+              ChatAiMessage(
+                sender: 'ai',
+                text: _currentStreamBuffer,
+                timestamp: DateTime.now(),
+              ),
+            );
+            _streamingMessageIndex = _messages.length - 1;
+            _isStreamingText = true;
+          } else {
+            final idx = _streamingMessageIndex!;
+            _messages[idx] = ChatAiMessage(
+              sender: 'ai',
+              text: _currentStreamBuffer,
+              timestamp: _messages[idx].timestamp,
+            );
+          }
+        });
+
+        _scrollToBottom(jump: true);
+      },
+    );
   }
 
   Future<void> _sendPrompt(
@@ -50,37 +152,14 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     if (trimmed.isEmpty || _isLoading) return;
 
     AudioService.instance.playSfx(SfxSound.uiClick);
+    _cancelActiveStream();
 
     final isProxyReady = ChatAiAssistantService.instance.isProxyConfigured;
-
-    // Khi bấm nút gợi ý nhanh (hoặc đang chạy chế độ Demo offline) -> trả lời FAQ tức thì
-    if (preferInstantFaq || !isProxyReady) {
-      final instantReply =
-          ChatAiAssistantService.instance.resolveLocalReply(trimmed);
-      if (instantReply != null) {
-        setState(() {
-          _messages.add(
-            ChatAiMessage(
-              sender: 'user',
-              text: trimmed,
-              timestamp: DateTime.now(),
-            ),
-          );
-          _messages.add(
-            ChatAiMessage(
-              sender: 'ai',
-              text: instantReply,
-              timestamp: DateTime.now(),
-            ),
-          );
-          _controller.clear();
-        });
-        _scrollToBottom();
-        return;
-      }
-    }
-
     final historySnapshot = List<ChatAiMessage>.from(_messages);
+
+    _currentStreamBuffer = '';
+    _upstreamCompleted = false;
+    _streamingMessageIndex = null;
 
     setState(() {
       _messages.add(
@@ -92,29 +171,109 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
       );
       _controller.clear();
       _isLoading = true;
+      _isStreamingText = false;
     });
     _scrollToBottom();
 
-    // Khi đã cấu hình AI Proxy -> gửi thẳng sang Gemini để trả lời tự nhiên
-    final reply = await ChatAiAssistantService.instance.generateReplyAsync(
+    // Khi bấm nút gợi ý nhanh (hoặc chưa cấu hình Proxy) -> lấy FAQ offline rồi stream mượt ra khung chat
+    if (preferInstantFaq || !isProxyReady) {
+      final localReply =
+          ChatAiAssistantService.instance.resolveLocalReply(trimmed) ??
+              ChatAiAssistantService.instance.generateReply(trimmed);
+      _pendingRunes.addAll(localReply.runes);
+      _upstreamCompleted = true;
+      _ensureTypewriterRunning();
+      return;
+    }
+
+    // Khi đã cấu hình AI Proxy -> đọc luồng SSE thời gian thực từ Gemini
+    final stream = ChatAiAssistantService.instance.streamReplyAsync(
       trimmed,
       history: historySnapshot,
-      bypassKeywordFilter: isProxyReady,
-      bypassScopeFilter: isProxyReady,
+      bypassKeywordFilter: true,
+      bypassScopeFilter: true,
     );
 
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        ChatAiMessage(
-          sender: 'ai',
-          text: reply,
-          timestamp: DateTime.now(),
+    _streamSub = stream.listen(
+      (delta) {
+        if (!mounted || delta.isEmpty) return;
+        _pendingRunes.addAll(delta.runes);
+        _ensureTypewriterRunning();
+      },
+      onError: (_) {
+        if (!mounted) return;
+        if (_currentStreamBuffer.isEmpty && _pendingRunes.isEmpty) {
+          final fallback =
+              ChatAiAssistantService.instance.generateReply(trimmed);
+          _pendingRunes.addAll(fallback.runes);
+        }
+        _upstreamCompleted = true;
+        _ensureTypewriterRunning();
+      },
+      onDone: () {
+        if (!mounted) return;
+        if (_currentStreamBuffer.isEmpty && _pendingRunes.isEmpty) {
+          final fallback =
+              ChatAiAssistantService.instance.generateReply(trimmed);
+          _pendingRunes.addAll(fallback.runes);
+        }
+        _upstreamCompleted = true;
+        _ensureTypewriterRunning();
+      },
+    );
+  }
+
+  Widget _buildMessageRichText(
+    String rawText, {
+    required bool isUser,
+    required bool showCursor,
+  }) {
+    final spans = <InlineSpan>[];
+    final boldPattern = RegExp(r'\*\*(.+?)\*\*');
+    var lastEnd = 0;
+
+    for (final match in boldPattern.allMatches(rawText)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: rawText.substring(lastEnd, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: isUser ? Colors.white : const Color(0xFFFFE082),
+          ),
         ),
       );
-      _isLoading = false;
-    });
-    _scrollToBottom();
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < rawText.length) {
+      spans.add(TextSpan(text: rawText.substring(lastEnd)));
+    }
+
+    if (showCursor) {
+      spans.add(
+        const TextSpan(
+          text: ' ▍',
+          style: TextStyle(
+            color: Colors.cyanAccent,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+    }
+
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12.5,
+          height: 1.42,
+        ),
+        children: spans,
+      ),
+    );
   }
 
   @override
@@ -279,9 +438,12 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                 ),
                 child: ListView.builder(
                   controller: _scrollController,
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemCount: _messages.length +
+                      ((_isLoading && !_isStreamingText) ? 1 : 0),
                   itemBuilder: (context, idx) {
-                    if (_isLoading && idx == _messages.length) {
+                    if (_isLoading &&
+                        !_isStreamingText &&
+                        idx == _messages.length) {
                       return Align(
                         alignment: Alignment.centerLeft,
                         child: Container(
@@ -325,6 +487,8 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
 
                     final msg = _messages[idx];
                     final isUser = msg.sender == 'user';
+                    final isActivelyStreaming =
+                        _isStreamingText && idx == _streamingMessageIndex;
                     return Align(
                       alignment:
                           isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -343,16 +507,15 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                           border: Border.all(
                             color: isUser
                                 ? Colors.lightBlueAccent
-                                : Colors.cyanAccent.withValues(alpha: 0.25),
+                                : Colors.cyanAccent.withValues(
+                                    alpha: isActivelyStreaming ? 0.55 : 0.25,
+                                  ),
                           ),
                         ),
-                        child: Text(
+                        child: _buildMessageRichText(
                           msg.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            height: 1.4,
-                          ),
+                          isUser: isUser,
+                          showCursor: isActivelyStreaming,
                         ),
                       ),
                     );
