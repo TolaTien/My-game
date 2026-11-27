@@ -24,6 +24,16 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   final int localBlueSlotIndex;
   final Map<int, String> humanAllyCodes;
   final bool isPartyGuest;
+  final bool isCustomRoom;
+  final bool isLocalTeamBlue;
+  final int localCustomSlotIndex;
+  final String localPlayerCode;
+  final List<int> customAllySlots;
+  final List<String> customAllyCodes;
+  final List<int> customEnemySlots;
+  final List<String> customEnemyCodes;
+  final bool isCustomRoomHost;
+  final bool isSameTeamAsHost;
   late MapAssetConfig currentMapConfig;
   late final PvpTeamRoster teamRoster;
 
@@ -31,7 +41,9 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   late PvpBotPlayerComponent bot;
   final List<PvpBotPlayerComponent> allies = [];
   final List<int> _allySlotIndices = [];
+  final List<int> _enemySlotIndices = [];
   final Map<String, PvpBotPlayerComponent> _humanAlliesByCode = {};
+  final Map<String, PvpBotPlayerComponent> _humanEnemiesByCode = {};
   final List<PvpBotPlayerComponent> extraEnemies = [];
   late PvpArenaMapComponent arenaMap;
 
@@ -85,13 +97,26 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
   Function(PvpMatchResult result)? onMatchFinished;
   Function(String action, {String? text})? onLocalAction;
 
-  Vector2 get _localSpawn => isPlayerOne
-      ? _blueSlotPositions[
-              localBlueSlotIndex.clamp(0, _blueSlotPositions.length - 1)]
-          .clone()
-      : botSpawnPos.clone();
-  Vector2 get _opponentSpawn =>
-      (isPlayerOne ? botSpawnPos : playerSpawnPos).clone();
+  Vector2 get _localSpawn {
+    if (isCustomRoom) {
+      final slots = isLocalTeamBlue ? _blueSlotPositions : _redSlotPositions;
+      return slots[localCustomSlotIndex.clamp(0, slots.length - 1)].clone();
+    }
+    return isPlayerOne
+        ? _blueSlotPositions[
+                localBlueSlotIndex.clamp(0, _blueSlotPositions.length - 1)]
+            .clone()
+        : botSpawnPos.clone();
+  }
+
+  Vector2 get _opponentSpawn {
+    if (isCustomRoom) {
+      final slots = isLocalTeamBlue ? _redSlotPositions : _blueSlotPositions;
+      final firstIdx = customEnemySlots.isNotEmpty ? customEnemySlots.first : 0;
+      return slots[firstIdx.clamp(0, slots.length - 1)].clone();
+    }
+    return (isPlayerOne ? botSpawnPos : playerSpawnPos).clone();
+  }
 
   PvpArenaGame({
     required this.opponentInfo,
@@ -106,15 +131,25 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     this.localBlueSlotIndex = 0,
     this.humanAllyCodes = const {},
     this.isPartyGuest = false,
+    this.isCustomRoom = false,
+    this.isLocalTeamBlue = true,
+    this.localCustomSlotIndex = 0,
+    this.localPlayerCode = '',
+    this.customAllySlots = const [],
+    this.customAllyCodes = const [],
+    this.customEnemySlots = const [],
+    this.customEnemyCodes = const [],
+    this.isCustomRoomHost = false,
+    this.isSameTeamAsHost = true,
   }) {
     // Không bao giờ pause khi chạy đa tab/cửa sổ không focus (Multi-window PvP)
     pauseWhenBackgrounded = false;
 
     currentMapConfig =
-        selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
+      selectedMapConfig ?? GameAssetRegistry.instance.getRandomMap();
 
-    // Trận online 1v1 chỉ bắt đầu khi CẢ HAI bên đã vào phòng (xem startOnlineMatch)
-    if (isOnline) matchState = PvpMatchState.waiting;
+    // Trận online / phòng tùy chọn chỉ bắt đầu khi người chơi đã vào phòng
+    if (isOnline || isCustomRoom) matchState = PvpMatchState.waiting;
 
     final localHero = PlayerStorage.currentProfile.selectedHeroId;
     teamRoster = roster ??
@@ -134,12 +169,16 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       heroId: localHero,
       userHeroLevel: PlayerStorage.currentProfile.getHeroLevel(localHero),
     );
+    if (isCustomRoom) {
+      player.isFacingRight = isLocalTeamBlue;
+    }
+
     bot = PvpBotPlayerComponent(
       position: _opponentSpawn,
       opponentInfo: opponentInfo,
       targetPlayer: player,
-      enableAi: !isOnline && !isPartyGuest,
-      getHostileTargets: gameMode == PvpGameMode.solo1v1
+      enableAi: !isOnline && !isPartyGuest && !isCustomRoom,
+      getHostileTargets: (gameMode == PvpGameMode.solo1v1 && !isCustomRoom)
           ? null
           : () => <PositionComponent>[player, ...allies],
       canAct: () => matchState == PvpMatchState.fighting,
@@ -147,9 +186,67 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       getInteriorObstacleRects: () => arenaMap.pillarRects,
       getWalkableGrid: () => arenaMap.walkableGrid,
     );
+    if (isCustomRoom) {
+      bot.isFacingRight = !isLocalTeamBlue;
+      if (customEnemyCodes.isNotEmpty) {
+        _humanEnemiesByCode[customEnemyCodes.first.trim().toUpperCase()] = bot;
+      }
+    }
 
-    // Khởi tạo thêm Đồng đội & Kẻ địch cho chế độ 2v2 và 4v4
-    if (gameMode != PvpGameMode.solo1v1) {
+    if (isCustomRoom) {
+      final myTeamPositions =
+          isLocalTeamBlue ? _blueSlotPositions : _redSlotPositions;
+      final enemyTeamPositions =
+          isLocalTeamBlue ? _redSlotPositions : _blueSlotPositions;
+
+      for (int i = 0; i < teamRoster.allies.length; i++) {
+        final allyInfo = teamRoster.allies[i];
+        final slotIdx = (i < customAllySlots.length ? customAllySlots[i] : i + 1)
+            .clamp(0, myTeamPositions.length - 1);
+        final allyBot = PvpBotPlayerComponent(
+          position: myTeamPositions[slotIdx].clone(),
+          opponentInfo: allyInfo,
+          targetPlayer: player,
+          enableAi: false,
+          getHostileTargets: () => <PositionComponent>[...allEnemies],
+          canAct: () => matchState == PvpMatchState.fighting,
+          getObstacleRects: () => arenaMap.obstacleRects,
+          getInteriorObstacleRects: () => arenaMap.pillarRects,
+          getWalkableGrid: () => arenaMap.walkableGrid,
+        );
+        allyBot.isFacingRight = isLocalTeamBlue;
+        allies.add(allyBot);
+        _allySlotIndices.add(slotIdx);
+        if (i < customAllyCodes.length) {
+          _humanAlliesByCode[customAllyCodes[i].trim().toUpperCase()] = allyBot;
+        }
+      }
+
+      for (int i = 1; i < teamRoster.enemies.length; i++) {
+        final enemyInfo = teamRoster.enemies[i];
+        final slotIdx =
+            (i < customEnemySlots.length ? customEnemySlots[i] : i)
+                .clamp(0, enemyTeamPositions.length - 1);
+        final enemyBot = PvpBotPlayerComponent(
+          position: enemyTeamPositions[slotIdx].clone(),
+          opponentInfo: enemyInfo,
+          targetPlayer: player,
+          enableAi: false,
+          getHostileTargets: () => <PositionComponent>[player, ...allies],
+          canAct: () => matchState == PvpMatchState.fighting,
+          getObstacleRects: () => arenaMap.obstacleRects,
+          getInteriorObstacleRects: () => arenaMap.pillarRects,
+          getWalkableGrid: () => arenaMap.walkableGrid,
+        );
+        enemyBot.isFacingRight = !isLocalTeamBlue;
+        extraEnemies.add(enemyBot);
+        _enemySlotIndices.add(slotIdx);
+        if (i < customEnemyCodes.length) {
+          _humanEnemiesByCode[customEnemyCodes[i].trim().toUpperCase()] =
+              enemyBot;
+        }
+      }
+    } else if (gameMode != PvpGameMode.solo1v1) {
       final availableBlueSlots = <int>[
         for (int s = 0; s < _blueSlotPositions.length; s++)
           if (s != localBlueSlotIndex) s,
@@ -299,11 +396,13 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
         }
 
         // Kiểm tra kết thúc hiệp đấu (Toàn bộ đội bị K.O hoặc hết 90s)
-        final blueWiped =
-            player.currentHp <= 0 && allies.every((a) => a.currentHp <= 0);
-        final redWiped = allEnemies.every((e) => e.currentHp <= 0);
-        if (blueWiped || redWiped || roundTimeRemaining <= 0) {
-          _adjudicateRound();
+        if (!isCustomRoom || isCustomRoomHost) {
+          final blueWiped =
+              player.currentHp <= 0 && allies.every((a) => a.currentHp <= 0);
+          final redWiped = allEnemies.every((e) => e.currentHp <= 0);
+          if (blueWiped || redWiped || roundTimeRemaining <= 0) {
+            _adjudicateRound();
+          }
         }
         break;
 
@@ -367,18 +466,33 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     player.isBerserk = false;
     player.isAttacking = false;
     player.moveDirection = Vector2.zero();
+    if (isCustomRoom) {
+      player.isFacingRight = isLocalTeamBlue;
+    }
+
+    final myTeamPositions = (isCustomRoom && !isLocalTeamBlue)
+        ? _redSlotPositions
+        : _blueSlotPositions;
+    final enemyTeamPositions = (isCustomRoom && !isLocalTeamBlue)
+        ? _blueSlotPositions
+        : _redSlotPositions;
 
     for (int i = 0; i < allies.length; i++) {
       final spawnIdx = i < _allySlotIndices.length
           ? _allySlotIndices[i]
-          : min(i + 1, _blueSlotPositions.length - 1);
-      allies[i].resetRound(_blueSlotPositions[spawnIdx].clone());
+          : min(i + 1, myTeamPositions.length - 1);
+      allies[i].resetRound(myTeamPositions[spawnIdx].clone());
+      if (isCustomRoom) allies[i].isFacingRight = isLocalTeamBlue;
     }
 
     bot.resetRound(_opponentSpawn);
+    if (isCustomRoom) bot.isFacingRight = !isLocalTeamBlue;
     for (int i = 0; i < extraEnemies.length; i++) {
-      final spawnIdx = min(i + 1, _redSlotPositions.length - 1);
-      extraEnemies[i].resetRound(_redSlotPositions[spawnIdx].clone());
+      final spawnIdx = (isCustomRoom && i < _enemySlotIndices.length)
+          ? _enemySlotIndices[i]
+          : min(i + 1, enemyTeamPositions.length - 1);
+      extraEnemies[i].resetRound(enemyTeamPositions[spawnIdx].clone());
+      if (isCustomRoom) extraEnemies[i].isFacingRight = !isLocalTeamBlue;
     }
 
     onStateChanged?.call();
@@ -643,12 +757,21 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     final vx = number('vx');
     final vy = number('vy');
     final hp = number('hp');
+    final remoteMaxHp = number('maxHp');
     final targetHp = number('targetHp');
     final ki = number('ki');
+    final remoteMaxKi = number('maxKi');
     final round = (snapshot['round'] as num?)?.toInt();
     final remoteSenderWins = (snapshot['playerWins'] as num?)?.toInt();
     final remoteReceiverWins = (snapshot['opponentWins'] as num?)?.toInt();
     final remoteState = snapshot['matchState'] as String?;
+
+    if (remoteMaxHp != null && remoteMaxHp > 0) {
+      bot.maxHp = remoteMaxHp;
+    }
+    if (remoteMaxKi != null && remoteMaxKi > 0) {
+      bot.maxKi = remoteMaxKi;
+    }
 
     if (x != null && y != null) {
       final newTarget = Vector2(x, y);
@@ -774,8 +897,10 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
       'dirX': double.parse(player.moveDirection.x.toStringAsFixed(2)),
       'dirY': double.parse(player.moveDirection.y.toStringAsFixed(2)),
       'hp': player.currentHp,
+      'maxHp': player.maxHp,
       'targetHp': bot.currentHp,
       'ki': player.currentKi,
+      'maxKi': player.maxKi,
       'facingRight': player.isFacingRight,
       'berserk': player.isBerserk,
       'attacking': player.isAttacking,
@@ -788,7 +913,181 @@ class PvpArenaGame extends FlameGame with HasCollisionDetection {
     if (player.speechBubbleText != null && player.speechBubbleText!.isNotEmpty) {
       map['speech'] = player.speechBubbleText!;
     }
+    if (isCustomRoom && _humanEnemiesByCode.isNotEmpty) {
+      map['enemyHpMap'] = {
+        for (final entry in _humanEnemiesByCode.entries)
+          entry.key: entry.value.currentHp,
+      };
+    }
     return map;
+  }
+
+  // --- CUSTOM ROOM 4V4 2-TEAM SYNC (1V1, 1V2, 2V2, 3V3, 4V4 NGƯỜI THẬT) ---
+
+  void applyCustomPeerSnapshot(String peerCode, Map<String, dynamic> snapshot) {
+    final cleanCode = peerCode.trim().toUpperCase();
+    double? number(String key) => (snapshot[key] as num?)?.toDouble();
+
+    final x = number('x');
+    final y = number('y');
+    final vx = number('vx');
+    final vy = number('vy');
+    final hp = number('hp');
+    final remoteMaxHp = number('maxHp');
+    final ki = number('ki');
+    final remoteMaxKi = number('maxKi');
+    final round = (snapshot['round'] as num?)?.toInt();
+    final isStaleRound = round != null && round < currentRound;
+
+    final ally = _humanAlliesByCode[cleanCode];
+    if (ally != null) {
+      if (remoteMaxHp != null && remoteMaxHp > 0) ally.maxHp = remoteMaxHp;
+      if (remoteMaxKi != null && remoteMaxKi > 0) ally.maxKi = remoteMaxKi;
+      if (x != null && y != null) ally.targetPosition = Vector2(x, y);
+      if (vx != null && vy != null) ally.targetVelocity = Vector2(vx, vy);
+      if (hp != null && !isStaleRound) {
+        ally.currentHp = hp.clamp(0, ally.maxHp);
+      }
+      if (ki != null && !isStaleRound) {
+        ally.currentKi = ki.clamp(0, ally.maxKi);
+      }
+      ally.isFacingRight = snapshot['facingRight'] as bool? ?? ally.isFacingRight;
+      ally.isBerserk = snapshot['berserk'] as bool? ?? ally.isBerserk;
+      ally.isAttacking = snapshot['attacking'] as bool? ?? ally.isAttacking;
+      if (snapshot['speech'] is String) {
+        ally.say(snapshot['speech'] as String);
+      }
+      onStateChanged?.call();
+      return;
+    }
+
+    final enemy = _humanEnemiesByCode[cleanCode];
+    if (enemy != null) {
+      if (remoteMaxHp != null && remoteMaxHp > 0) enemy.maxHp = remoteMaxHp;
+      if (remoteMaxKi != null && remoteMaxKi > 0) enemy.maxKi = remoteMaxKi;
+      if (x != null && y != null) enemy.targetPosition = Vector2(x, y);
+      if (vx != null && vy != null) enemy.targetVelocity = Vector2(vx, vy);
+      if (hp != null && !isStaleRound) {
+        if (round != null && round > currentRound) {
+          enemy.currentHp = hp.clamp(0, enemy.maxHp);
+        } else {
+          enemy.currentHp = min(enemy.currentHp, hp.clamp(0, enemy.maxHp));
+        }
+      }
+      if (ki != null && !isStaleRound) {
+        enemy.currentKi = ki.clamp(0, enemy.maxKi);
+      }
+      enemy.isFacingRight =
+          snapshot['facingRight'] as bool? ?? enemy.isFacingRight;
+      enemy.isBerserk = snapshot['berserk'] as bool? ?? enemy.isBerserk;
+      enemy.isAttacking = snapshot['attacking'] as bool? ?? enemy.isAttacking;
+      if (snapshot['speech'] is String) {
+        enemy.speechBubbleText = snapshot['speech'] as String;
+      }
+
+      // Đồng bộ sát thương mà kẻ địch này đã gây lên người chơi cục bộ
+      if (!isStaleRound &&
+          (round == null || round == currentRound) &&
+          matchState == PvpMatchState.fighting) {
+        double? reportedMyHp;
+        final rawEnemyHpMap = snapshot['enemyHpMap'];
+        if (rawEnemyHpMap is Map && localPlayerCode.isNotEmpty) {
+          final myKey = localPlayerCode.trim().toUpperCase();
+          reportedMyHp = (rawEnemyHpMap[myKey] as num?)?.toDouble();
+        }
+        reportedMyHp ??= number('targetHp');
+        if (reportedMyHp != null && reportedMyHp < player.currentHp) {
+          player.currentHp = reportedMyHp.clamp(0, player.maxHp);
+        }
+      }
+
+      if (isCustomRoomHost && matchState == PvpMatchState.fighting) {
+        final blueWiped =
+            player.currentHp <= 0 && allies.every((a) => a.currentHp <= 0);
+        final redWiped = allEnemies.every((e) => e.currentHp <= 0);
+        if (blueWiped || redWiped) {
+          _adjudicateRound();
+          return;
+        }
+      }
+      onStateChanged?.call();
+    }
+  }
+
+  void applyCustomPeerAction(
+    String actorCode,
+    String action, {
+    String? text,
+  }) {
+    final clean = actorCode.trim().toUpperCase();
+    final unit = _humanAlliesByCode[clean] ?? _humanEnemiesByCode[clean];
+    if (unit == null) return;
+
+    switch (action) {
+      case 'basicAttack':
+        unit.performBasicAttack(force: true);
+        break;
+      case 'skill1':
+        unit.executeSkill1(force: true);
+        break;
+      case 'skill2':
+        unit.executeSkill2(force: true);
+        break;
+      case 'skill3':
+        unit.executeSkill3(force: true);
+        break;
+      case 'quickChat':
+        if (text != null) unit.say(text);
+        break;
+    }
+    onStateChanged?.call();
+  }
+
+  Map<String, Object?> get customRoomHostSnapshot => {
+        'round': currentRound,
+        'hostTeamWins': playerWins,
+        'otherTeamWins': opponentWins,
+        'matchState': matchState.name,
+        'roundTimeRemaining': roundTimeRemaining,
+        'lastRoundHostWon': lastRoundPlayerWon,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+
+  void applyCustomRoomHostState(Map<String, dynamic> hostState) {
+    if (!isCustomRoom || isCustomRoomHost) return;
+    final hostRound = (hostState['round'] as num?)?.toInt();
+    final hostTeamWins = (hostState['hostTeamWins'] as num?)?.toInt();
+    final otherTeamWins = (hostState['otherTeamWins'] as num?)?.toInt();
+    final hostMatchState = hostState['matchState'] as String?;
+    final hostTime = (hostState['roundTimeRemaining'] as num?)?.toDouble();
+    final lastRoundHostWon = hostState['lastRoundHostWon'] as bool? ?? true;
+
+    if (hostRound != null && hostRound > currentRound) {
+      currentRound = hostRound - 1;
+      _startNextRound();
+    }
+
+    if (hostTeamWins != null && otherTeamWins != null) {
+      playerWins = isSameTeamAsHost ? hostTeamWins : otherTeamWins;
+      opponentWins = isSameTeamAsHost ? otherTeamWins : hostTeamWins;
+    }
+
+    if (hostTime != null && matchState == PvpMatchState.fighting) {
+      roundTimeRemaining = hostTime;
+    }
+
+    if (hostMatchState == PvpMatchState.roundEnd.name &&
+        matchState == PvpMatchState.fighting) {
+      lastRoundPlayerWon =
+          isSameTeamAsHost ? lastRoundHostWon : !lastRoundHostWon;
+      matchState = PvpMatchState.roundEnd;
+      stateTimer = 2.5;
+    } else if (hostMatchState == PvpMatchState.matchFinished.name &&
+        matchState != PvpMatchState.matchFinished) {
+      _concludeMatch();
+      return;
+    }
+    onStateChanged?.call();
   }
 
   // --- PARTY CO-OP SYNC (ĐỒNG BỘ ĐỒNG ĐỘI & CHỦ PHÒNG TRONG CÙNG 1 TRẬN) ---

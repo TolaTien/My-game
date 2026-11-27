@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../core/stat_growth_formula.dart';
 import '../../models/pvp_match.dart';
 import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
@@ -97,12 +98,25 @@ class PvpBotPlayerComponent extends PositionComponent with CollisionCallbacks {
   void _initBotStats() {
     try {
       final heroCfg = GameAssetRegistry.instance.getHero(opponentInfo.heroId);
-      maxHp = heroCfg.baseStats.hp;
-      currentHp = maxHp;
-      maxKi = heroCfg.baseStats.ki;
-      currentKi = maxKi;
-      damage = heroCfg.baseStats.attack;
-      speed = heroCfg.baseStats.speed;
+      if (opponentInfo.heroLevel != null) {
+        final scaled = StatGrowthFormula.computeStatsForLevel(
+          heroId: opponentInfo.heroId,
+          level: opponentInfo.heroLevel!,
+        );
+        maxHp = scaled.maxHp;
+        currentHp = maxHp;
+        maxKi = scaled.maxKi;
+        currentKi = maxKi;
+        damage = scaled.attackDamage;
+        speed = heroCfg.baseStats.speed;
+      } else {
+        maxHp = heroCfg.baseStats.hp;
+        currentHp = maxHp;
+        maxKi = heroCfg.baseStats.ki;
+        currentKi = maxKi;
+        damage = heroCfg.baseStats.attack;
+        speed = heroCfg.baseStats.speed;
+      }
     } catch (_) {
       maxHp = 340.0;
       currentHp = 340.0;

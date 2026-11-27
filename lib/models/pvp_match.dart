@@ -96,6 +96,7 @@ class PvpOpponentInfo {
   final int rankPoints;
   final String rankTier;
   final String heroId;
+  final int? heroLevel;
   final bool isBot;
   final BotDifficulty difficulty;
   final bool isAlly;
@@ -105,6 +106,7 @@ class PvpOpponentInfo {
     required this.rankPoints,
     required this.rankTier,
     required this.heroId,
+    this.heroLevel,
     this.isBot = true,
     this.difficulty = BotDifficulty.bronzeSilver,
     this.isAlly = false,

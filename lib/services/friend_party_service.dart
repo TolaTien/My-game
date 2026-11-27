@@ -10,6 +10,7 @@ import '../firebase_options.dart';
 import '../models/friend_party_models.dart';
 import '../models/player_profile.dart';
 import '../models/pvp_match.dart';
+import '../registry/asset_registry.dart';
 import 'player_storage.dart';
 
 /// Dịch vụ quản lý Kết Bạn (Friends + Friend Requests + Online Presence)
@@ -31,6 +32,7 @@ class FriendPartyService {
       'big_war_shared_friend_req_resp_';
   static const String _localFriendshipsPrefix =
       'big_war_shared_friendships_';
+  static const String _localSoloPrefix = 'big_war_shared_solo_';
 
   /// Mã phiên dự phòng nếu hồ sơ chưa có mã định danh riêng
   final String _sessionPlayerCode = 'GR${1000 + Random().nextInt(8999)}';
@@ -56,6 +58,12 @@ class FriendPartyService {
   final ValueNotifier<PartyInvitation?> inviteResponseNotifier =
       ValueNotifier<PartyInvitation?>(null);
 
+  final ValueNotifier<SoloDuelRoomState?> soloRoomNotifier =
+      ValueNotifier<SoloDuelRoomState?>(null);
+
+  final ValueNotifier<String?> soloRoomNoticeNotifier =
+      ValueNotifier<String?>(null);
+
   final Map<String, StreamSubscription<DatabaseEvent>> _friendDirSubscriptions =
       {};
   final Map<String, FriendInfo> _firebaseDirCache = {};
@@ -63,6 +71,7 @@ class FriendPartyService {
   final Set<String> _seenInviteIds = {};
 
   StreamSubscription<DatabaseEvent>? _partySubscription;
+  StreamSubscription<DatabaseEvent>? _soloRoomSubscription;
   StreamSubscription<DatabaseEvent>? _inviteSubscription;
   StreamSubscription<DatabaseEvent>? _inviteRespSubscription;
   StreamSubscription<DatabaseEvent>? _friendReqSubscription;
@@ -71,10 +80,12 @@ class FriendPartyService {
   StreamSubscription<DatabaseEvent>? _connectedSubscription;
 
   Timer? _localPollTimer;
+  Timer? _soloLocalPollTimer;
   Timer? _invitationPollTimer;
   Timer? _presenceHeartbeatTimer;
 
   String? _watchedPartyCode;
+  String? _watchedSoloCode;
   String? _activeListenerCode;
   bool _isExplicitlyOffline = false;
 
@@ -234,6 +245,8 @@ class FriendPartyService {
     incomingInviteNotifier.value = null;
     inviteResponseNotifier.value = null;
     partyNotifier.value = null;
+    soloRoomNotifier.value = null;
+    soloRoomNoticeNotifier.value = null;
   }
 
   /// Dừng toàn bộ Timer & Subscription (dùng khi dọn dẹp hoặc trong test)
@@ -242,6 +255,8 @@ class FriendPartyService {
   void _cancelAllSubscriptions() {
     _partySubscription?.cancel();
     _partySubscription = null;
+    _soloRoomSubscription?.cancel();
+    _soloRoomSubscription = null;
     _inviteSubscription?.cancel();
     _inviteSubscription = null;
     _inviteRespSubscription?.cancel();
@@ -256,11 +271,14 @@ class FriendPartyService {
     _connectedSubscription = null;
     _localPollTimer?.cancel();
     _localPollTimer = null;
+    _soloLocalPollTimer?.cancel();
+    _soloLocalPollTimer = null;
     _invitationPollTimer?.cancel();
     _invitationPollTimer = null;
     _presenceHeartbeatTimer?.cancel();
     _presenceHeartbeatTimer = null;
     _watchedPartyCode = null;
+    _watchedSoloCode = null;
     for (final sub in _friendDirSubscriptions.values) {
       sub.cancel();
     }
@@ -1312,6 +1330,9 @@ class FriendPartyService {
     String code,
     Map<String, dynamic> data,
   ) {
+    if (data['roomType'] == 'solo_duel' || data['closed'] == true) {
+      return null;
+    }
     final modeCode = data['mode'] as String? ?? '2v2';
     final mode = PvpGameMode.values.firstWhere(
       (m) => m.code == modeCode,
@@ -1487,7 +1508,14 @@ class FriendPartyService {
     await _clearInviteEverywhere(invite);
 
     if (accept) {
-      await joinPartyByCode(invite.partyCode, fallbackMode: invite.mode);
+      if (invite.isCustomRoom) {
+        await joinSoloRoomByCode(
+          invite.partyCode,
+          preferredTeam: invite.preferredTeam,
+        );
+      } else {
+        await joinPartyByCode(invite.partyCode, fallbackMode: invite.mode);
+      }
     }
   }
 
@@ -1560,6 +1588,11 @@ class FriendPartyService {
     final code = rawPartyCode.trim().toUpperCase();
     if (code.isEmpty) {
       throw ArgumentError('Mã phòng không được để trống!');
+    }
+    if (code.startsWith('SOLO')) {
+      throw ArgumentError(
+        'Mã "$code" là mã Phòng Solo 1v1! Hãy mở mục PHÒNG SOLO để nhập mã này.',
+      );
     }
     final profile = PlayerStorage.currentProfile;
     final myCode = asGuestCode ?? effectivePlayerCode;
@@ -2038,6 +2071,778 @@ class FriendPartyService {
         'activeMatchRoomId': party.activeMatchRoomId,
         'activeMapId': party.activeMapId,
         'matchSeed': party.matchSeed,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (_) {}
+  }
+
+  // =========================================================================
+  // PHÒNG ĐẤU TÙY CHỌN 4V4 (4 CHỖ ĐỘI XANH VS 4 CHỖ ĐỘI ĐỎ • MỜI BẠN & XẾP ĐỘI)
+  // =========================================================================
+
+  FriendInfo _buildMyFriendInfo(
+    PlayerProfile profile, {
+    String statusText = 'Đang Online',
+  }) {
+    return FriendInfo(
+      code: effectivePlayerCode,
+      name: effectivePlayerName,
+      rankPoints: profile.rankPoints,
+      rankTier: profile.rankTier,
+      selectedHeroId: profile.selectedHeroId,
+      heroLevel: profile.getHeroLevel(),
+      isOnline: true,
+      statusText: statusText,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  /// Tạo phòng đấu tùy chọn mặc định 4v4 (4 chỗ Đội Xanh vs 4 chỗ Đội Đỏ)
+  Future<SoloDuelRoomState> createSoloRoom({
+    int betGold = 0,
+    String? selectedMapId,
+  }) async {
+    if (partyNotifier.value != null && partyNotifier.value!.members.isNotEmpty) {
+      leaveParty();
+    }
+    if (soloRoomNotifier.value != null) {
+      await leaveSoloRoom();
+    }
+
+    final profile = PlayerStorage.currentProfile;
+    final int safeBet = betGold.clamp(0, max(0, profile.gold)).toInt();
+    final rand = Random();
+    final roomCode = 'SOLO${1000 + rand.nextInt(9000)}';
+    final cleanMapId =
+        (selectedMapId != null && selectedMapId.isNotEmpty) ? selectedMapId : null;
+    final hostInfo =
+        _buildMyFriendInfo(profile, statusText: 'Chủ phòng $roomCode');
+
+    final created = SoloDuelRoomState(
+      roomCode: roomCode,
+      hostCode: hostInfo.code,
+      hostName: hostInfo.name,
+      blueSlots: [hostInfo, null, null, null],
+      redSlots: [null, null, null, null],
+      readyCodes: const [],
+      betGold: safeBet,
+      selectedMapId: cleanMapId,
+      matchStatus: 'idle',
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = created;
+    await _syncSoloRoomEverywhere(created);
+    _listenToSoloRoomRealtime(roomCode);
+    return created;
+  }
+
+  (String, int)? _findOpenSoloSlot(
+    SoloDuelRoomState room, {
+    String? preferredTeam,
+    int? preferredSlot,
+  }) {
+    int firstEmpty(List<FriendInfo?> slots) =>
+        slots.indexWhere((element) => element == null);
+
+    if (preferredTeam == 'blue' || preferredTeam == 'red') {
+      final targetSlots =
+          preferredTeam == 'blue' ? room.blueSlots : room.redSlots;
+      if (preferredSlot != null &&
+          preferredSlot >= 0 &&
+          preferredSlot < SoloDuelRoomState.slotsPerTeam &&
+          targetSlots[preferredSlot] == null) {
+        return (preferredTeam!, preferredSlot);
+      }
+      final idx = firstEmpty(targetSlots);
+      if (idx >= 0) return (preferredTeam!, idx);
+    }
+
+    // Tự động cân bằng 2 đội khi vào phòng (người thứ 2 tự sang Đội Đỏ để sẵn sàng đấu ngay)
+    if (room.redCount < room.blueCount) {
+      final rIdx = firstEmpty(room.redSlots);
+      if (rIdx >= 0) return ('red', rIdx);
+    }
+    final bIdx = firstEmpty(room.blueSlots);
+    if (bIdx >= 0) return ('blue', bIdx);
+    final rFallback = firstEmpty(room.redSlots);
+    if (rFallback >= 0) return ('red', rFallback);
+    return null;
+  }
+
+  /// Gia nhập phòng 4v4 tùy chọn bằng Mã Phòng hoặc từ Lời Mời của bạn bè
+  Future<SoloDuelRoomState> joinSoloRoomByCode(
+    String rawRoomCode, {
+    String? preferredTeam,
+    int? preferredSlot,
+  }) async {
+    final code = rawRoomCode.trim().toUpperCase();
+    if (code.isEmpty) {
+      throw ArgumentError('Vui lòng nhập Mã Phòng!');
+    }
+    if (code.startsWith('TEAM')) {
+      throw ArgumentError(
+        'Mã "$code" là mã Tổ Đội! Hãy nhập ở mục Tổ Đội.',
+      );
+    }
+
+    final currentSolo = soloRoomNotifier.value;
+    if (currentSolo != null && currentSolo.roomCode.toUpperCase() == code) {
+      return currentSolo;
+    }
+
+    SoloDuelRoomState? existing;
+    try {
+      final db = _getDb();
+      if (db != null) {
+        final snap = await db.ref('parties/$code').get();
+        if (snap.exists && snap.value != null) {
+          final norm = _normalizeMap(snap.value);
+          if (norm != null &&
+              norm['roomType'] == 'solo_duel' &&
+              norm['closed'] != true) {
+            existing = SoloDuelRoomState.fromJson(code, norm);
+          }
+        }
+      }
+    } catch (_) {}
+
+    existing ??= await _readSoloFromLocalPrefs(code);
+
+    if (existing == null) {
+      throw ArgumentError(
+        'Không tìm thấy phòng có mã "$code"! Hãy kiểm tra lại mã phòng.',
+      );
+    }
+
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    if (existing.containsPlayer(myCode)) {
+      soloRoomNotifier.value = existing;
+      _listenToSoloRoomRealtime(code);
+      return existing;
+    }
+
+    if (existing.matchStatus == 'in_match') {
+      throw StateError('Phòng $code đang trong trận đấu, vui lòng chờ trận sau!');
+    }
+
+    final openSlot = _findOpenSoloSlot(
+      existing,
+      preferredTeam: preferredTeam,
+      preferredSlot: preferredSlot,
+    );
+    if (openSlot == null) {
+      throw StateError('Phòng $code đã đủ 8/8 người chơi!');
+    }
+
+    if (partyNotifier.value != null && partyNotifier.value!.members.isNotEmpty) {
+      leaveParty();
+    }
+    if (soloRoomNotifier.value != null &&
+        soloRoomNotifier.value!.roomCode.toUpperCase() != code) {
+      await leaveSoloRoom();
+    }
+
+    final profile = PlayerStorage.currentProfile;
+    final myInfo = _buildMyFriendInfo(profile, statusText: 'Phòng $code');
+
+    final nextBlue = List<FriendInfo?>.from(existing.blueSlots);
+    final nextRed = List<FriendInfo?>.from(existing.redSlots);
+    if (openSlot.$1 == 'blue') {
+      nextBlue[openSlot.$2] = myInfo;
+    } else {
+      nextRed[openSlot.$2] = myInfo;
+    }
+    final nextReady = List<String>.from(existing.readyCodes)
+      ..removeWhere((c) => c.toUpperCase() == myCode);
+
+    final joined = existing.copyWith(
+      blueSlots: nextBlue,
+      redSlots: nextRed,
+      readyCodes: nextReady,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = joined;
+    await _syncSoloRoomEverywhere(joined);
+    _listenToSoloRoomRealtime(code);
+    return joined;
+  }
+
+  /// Bất kỳ người chơi nào trong phòng đều có thể mời bạn bè Online vào phòng tùy chọn 4v4
+  Future<bool> inviteFriendToSoloRoom(
+    FriendInfo friend, {
+    String? preferredTeam,
+  }) async {
+    var room = soloRoomNotifier.value;
+    room ??= await createSoloRoom();
+
+    if (room.isFull || room.matchStatus != 'idle') return false;
+    final toCode = friend.code.trim().toUpperCase();
+    if (isSelfPlayer(code: toCode) || room.containsPlayer(toCode)) {
+      return false;
+    }
+
+    await _syncSoloRoomEverywhere(room);
+
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    final myName = effectivePlayerName;
+    final inviteId =
+        'SINV_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
+
+    final invite = PartyInvitation(
+      id: inviteId,
+      partyCode: room.roomCode,
+      fromCode: myCode,
+      fromName: myName,
+      toCode: toCode,
+      toName: friend.name,
+      mode: PvpGameMode.squad4v4,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      status: 'pending',
+      isCustomRoom: true,
+      preferredTeam: preferredTeam,
+    );
+
+    await _saveInviteEverywhere(invite);
+    return true;
+  }
+
+  /// Chuyển vị trí / đổi phe sang một ô trống ở Đội Xanh ('blue') hoặc Đội Đỏ ('red').
+  /// Mọi thành viên đều tự đổi chỗ của mình được; Chủ phòng có thể đổi chỗ cho bất kỳ ai.
+  Future<bool> switchSoloTeamSlot({
+    required String targetTeam,
+    required int targetSlot,
+    String? memberCode,
+  }) async {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.matchStatus != 'idle') return false;
+    if (targetTeam != 'blue' && targetTeam != 'red') return false;
+    if (targetSlot < 0 || targetSlot >= SoloDuelRoomState.slotsPerTeam) {
+      return false;
+    }
+
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    final movingCode = (memberCode ?? myCode).trim().toUpperCase();
+    if (movingCode != myCode && !current.isHost(myCode)) {
+      return false;
+    }
+
+    final destList = targetTeam == 'blue' ? current.blueSlots : current.redSlots;
+    if (destList[targetSlot] != null) return false;
+
+    FriendInfo? movingPlayer;
+    final nextBlue = List<FriendInfo?>.from(current.blueSlots);
+    final nextRed = List<FriendInfo?>.from(current.redSlots);
+
+    for (int i = 0; i < SoloDuelRoomState.slotsPerTeam; i++) {
+      if (nextBlue[i]?.code.toUpperCase() == movingCode) {
+        movingPlayer = nextBlue[i];
+        nextBlue[i] = null;
+      }
+      if (nextRed[i]?.code.toUpperCase() == movingCode) {
+        movingPlayer = nextRed[i];
+        nextRed[i] = null;
+      }
+    }
+    if (movingPlayer == null) return false;
+
+    if (movingCode == myCode) {
+      movingPlayer = _buildMyFriendInfo(
+        PlayerStorage.currentProfile,
+        statusText: 'Phòng ${current.roomCode}',
+      );
+    }
+
+    if (targetTeam == 'blue') {
+      nextBlue[targetSlot] = movingPlayer;
+    } else {
+      nextRed[targetSlot] = movingPlayer;
+    }
+
+    // Khi đổi phe/vị trí, người chơi đó xác nhận lại Sẵn Sàng (trừ Chủ Phòng)
+    final nextReady = List<String>.from(current.readyCodes)
+      ..removeWhere((c) => c.toUpperCase() == movingCode);
+
+    final updated = current.copyWith(
+      blueSlots: nextBlue,
+      redSlots: nextRed,
+      readyCodes: nextReady,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+    return true;
+  }
+
+  /// Chuyển nhanh một người chơi sang ô trống đầu tiên của phe đối diện
+  Future<bool> moveSoloMemberToOppositeTeam(String memberCode) async {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.matchStatus != 'idle') return false;
+    final curTeam = current.teamOf(memberCode);
+    if (curTeam == null) return false;
+    final oppTeam = curTeam == 'blue' ? 'red' : 'blue';
+    final oppSlots = oppTeam == 'blue' ? current.blueSlots : current.redSlots;
+    final emptyIdx = oppSlots.indexWhere((e) => e == null);
+    if (emptyIdx < 0) return false;
+    return switchSoloTeamSlot(
+      targetTeam: oppTeam,
+      targetSlot: emptyIdx,
+      memberCode: memberCode,
+    );
+  }
+
+  /// Chủ phòng thay đổi Mức Cược Vàng hoặc Bản Đồ Thi Đấu.
+  /// Tự động đặt lại Sẵn Sàng của toàn bộ khách để mọi người xác nhận lại.
+  Future<void> updateSoloRoomSettings({
+    int? betGold,
+    String? selectedMapId,
+    bool clearSelectedMap = false,
+  }) async {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.matchStatus != 'idle') return;
+    final myCode = effectivePlayerCode;
+    if (!current.isHost(myCode)) return;
+
+    final profile = PlayerStorage.currentProfile;
+    final int nextBet = betGold != null
+        ? betGold.clamp(0, max(0, profile.gold)).toInt()
+        : current.betGold.clamp(0, max(0, profile.gold)).toInt();
+    final nextMap =
+        clearSelectedMap ? null : (selectedMapId ?? current.selectedMapId);
+
+    final settingsChanged =
+        nextBet != current.betGold || nextMap != current.selectedMapId;
+
+    final updated = _updateMemberInfoInSlots(
+      current,
+      myCode,
+      _buildMyFriendInfo(profile, statusText: 'Chủ phòng ${current.roomCode}'),
+    ).copyWith(
+      betGold: nextBet,
+      selectedMapId: nextMap,
+      clearSelectedMap: clearSelectedMap,
+      readyCodes: settingsChanged ? const [] : current.readyCodes,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+  }
+
+  SoloDuelRoomState _updateMemberInfoInSlots(
+    SoloDuelRoomState room,
+    String targetCode,
+    FriendInfo updatedInfo,
+  ) {
+    final clean = targetCode.trim().toUpperCase();
+    final nextBlue = List<FriendInfo?>.from(room.blueSlots);
+    final nextRed = List<FriendInfo?>.from(room.redSlots);
+    for (int i = 0; i < SoloDuelRoomState.slotsPerTeam; i++) {
+      if (nextBlue[i]?.code.toUpperCase() == clean) {
+        nextBlue[i] = updatedInfo;
+      }
+      if (nextRed[i]?.code.toUpperCase() == clean) {
+        nextRed[i] = updatedInfo;
+      }
+    }
+    return room.copyWith(blueSlots: nextBlue, redSlots: nextRed);
+  }
+
+  /// Thành viên trong phòng (không phải Chủ Phòng) bật/tắt trạng thái Sẵn Sàng
+  Future<bool> toggleSoloGuestReady() async {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.matchStatus != 'idle') return false;
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    if (current.isHost(myCode) || !current.containsPlayer(myCode)) return false;
+
+    final profile = PlayerStorage.currentProfile;
+    final currentlyReady = current.isPlayerReady(myCode);
+    final nextReady = !currentlyReady;
+    if (nextReady && profile.gold < current.betGold) {
+      return false;
+    }
+
+    final nextReadyCodes = List<String>.from(current.readyCodes);
+    if (nextReady) {
+      if (!nextReadyCodes.any((c) => c.toUpperCase() == myCode)) {
+        nextReadyCodes.add(myCode);
+      }
+    } else {
+      nextReadyCodes.removeWhere((c) => c.toUpperCase() == myCode);
+    }
+
+    final updated = _updateMemberInfoInSlots(
+      current,
+      myCode,
+      _buildMyFriendInfo(profile, statusText: 'Phòng ${current.roomCode}'),
+    ).copyWith(
+      readyCodes: nextReadyCodes,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+    return true;
+  }
+
+  /// Chủ phòng mời một thành viên ra khỏi phòng
+  Future<void> kickSoloMember(String memberCode) async {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.matchStatus != 'idle') return;
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    final cleanTarget = memberCode.trim().toUpperCase();
+    if (!current.isHost(myCode) || cleanTarget == myCode) return;
+
+    final nextBlue = current.blueSlots
+        .map((p) => p?.code.toUpperCase() == cleanTarget ? null : p)
+        .toList();
+    final nextRed = current.redSlots
+        .map((p) => p?.code.toUpperCase() == cleanTarget ? null : p)
+        .toList();
+    final nextReady = List<String>.from(current.readyCodes)
+      ..removeWhere((c) => c.toUpperCase() == cleanTarget);
+
+    final updated = current.copyWith(
+      blueSlots: nextBlue,
+      redSlots: nextRed,
+      readyCodes: nextReady,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+  }
+
+  /// Rời khỏi hoặc đóng phòng hiện tại
+  Future<void> leaveSoloRoom() async {
+    final current = soloRoomNotifier.value;
+    _soloRoomSubscription?.cancel();
+    _soloRoomSubscription = null;
+    _soloLocalPollTimer?.cancel();
+    _soloLocalPollTimer = null;
+    _watchedSoloCode = null;
+    soloRoomNotifier.value = null;
+
+    if (current == null) return;
+    final code = current.roomCode.toUpperCase();
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+
+    if (current.isHost(myCode)) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('$_localSoloPrefix$code');
+      } catch (_) {}
+      try {
+        final db = _getDb();
+        if (db != null) {
+          await db.ref('parties/$code').remove();
+        }
+      } catch (_) {}
+    } else if (current.containsPlayer(myCode)) {
+      final nextBlue = current.blueSlots
+          .map((p) => p?.code.toUpperCase() == myCode ? null : p)
+          .toList();
+      final nextRed = current.redSlots
+          .map((p) => p?.code.toUpperCase() == myCode ? null : p)
+          .toList();
+      final nextReady = List<String>.from(current.readyCodes)
+        ..removeWhere((c) => c.toUpperCase() == myCode);
+
+      final updated = current.copyWith(
+        blueSlots: nextBlue,
+        redSlots: nextRed,
+        readyCodes: nextReady,
+        matchStatus: 'idle',
+        clearActiveMatch: true,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      await _syncSoloRoomEverywhere(updated);
+    }
+  }
+
+  /// Đồng bộ lại nhân vật xuất chiến khi người chơi đổi tướng trong Cửa Hàng
+  Future<void> updateMySoloHero(String newHeroId) async {
+    final current = soloRoomNotifier.value;
+    if (current == null) return;
+    final myCode = effectivePlayerCode.trim().toUpperCase();
+    if (!current.containsPlayer(myCode)) return;
+
+    final profile = PlayerStorage.currentProfile;
+    final refreshed = _buildMyFriendInfo(
+      profile,
+      statusText: 'Phòng ${current.roomCode}',
+    ).copyWith(
+      selectedHeroId: newHeroId,
+      heroLevel: profile.getHeroLevel(newHeroId),
+    );
+
+    final updated = _updateMemberInfoInSlots(current, myCode, refreshed)
+        .copyWith(updatedAt: DateTime.now().millisecondsSinceEpoch);
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+  }
+
+  /// Chủ phòng bấm VÀO GAME sau khi cả 2 đội đã có người & tất cả thành viên đã Sẵn Sàng
+  Future<SoloDuelRoomState?> startSoloDuelMatch() async {
+    final current = soloRoomNotifier.value;
+    if (current == null || !current.canHostStart) return null;
+    final myCode = effectivePlayerCode;
+    if (!current.isHost(myCode)) return null;
+
+    final profile = PlayerStorage.currentProfile;
+    if (profile.gold < current.betGold) return null;
+
+    final resolvedMapId = !current.isRandomMap
+        ? current.selectedMapId!
+        : GameAssetRegistry.instance.getRandomMap().id;
+    final matchRoomId =
+        'solo_${current.roomCode.toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}';
+
+    final started = _updateMemberInfoInSlots(
+      current,
+      myCode,
+      _buildMyFriendInfo(profile, statusText: 'Đang đấu phòng ${current.roomCode}'),
+    ).copyWith(
+      matchStatus: 'in_match',
+      activeMatchRoomId: matchRoomId,
+      resolvedMapId: resolvedMapId,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = started;
+    await _syncSoloRoomEverywhere(started);
+    return started;
+  }
+
+  /// Đặt lại trạng thái phòng sau khi trận đấu kết thúc để cả phòng có thể xếp đội tái đấu
+  Future<void> resetSoloRoomAfterMatch() async {
+    final current = soloRoomNotifier.value;
+    if (current == null) return;
+
+    final profile = PlayerStorage.currentProfile;
+    final myCode = effectivePlayerCode;
+    final isMeHost = current.isHost(myCode);
+
+    final updated = _updateMemberInfoInSlots(
+      current,
+      myCode,
+      _buildMyFriendInfo(profile, statusText: 'Phòng ${current.roomCode}'),
+    ).copyWith(
+      betGold: isMeHost
+          ? current.betGold.clamp(0, max(0, profile.gold)).toInt()
+          : current.betGold,
+      readyCodes: const [],
+      matchStatus: 'idle',
+      clearActiveMatch: true,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    soloRoomNotifier.value = updated;
+    await _syncSoloRoomEverywhere(updated);
+  }
+
+  /// Đăng ký onDisconnect cho người chơi trong phòng đấu tùy chọn
+  Future<void> registerSoloMatchPresence(
+    String matchRoomId,
+    String playerCode,
+  ) async {
+    final cleanCode = playerCode.trim().toUpperCase();
+    try {
+      final db = _getDb();
+      if (db != null) {
+        final ref = db.ref('rooms/$matchRoomId/players/$cleanCode');
+        await ref.onDisconnect().update({
+          'connected': false,
+          'ready': false,
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Đánh dấu người chơi rời trận (để xử thắng khi cả đội địch rời trận)
+  Future<void> leaveSoloMatchRoom(
+    String matchRoomId,
+    String playerCode,
+  ) async {
+    final cleanCode = playerCode.trim().toUpperCase();
+    final state = <String, Object?>{
+      'connected': false,
+      'ready': false,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    try {
+      final db = _getDb();
+      if (db != null) {
+        await db.ref('rooms/$matchRoomId/players/$cleanCode').update(state);
+      }
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_localMatchPrefix${matchRoomId}_p_$cleanCode';
+      final raw = prefs.getString(key);
+      if (raw != null && raw.isNotEmpty) {
+        final existing = jsonDecode(raw);
+        if (existing is Map) {
+          final merged = Map<String, dynamic>.from(existing)..addAll(state);
+          await prefs.setString(key, jsonEncode(merged));
+          return;
+        }
+      }
+      await prefs.setString(key, jsonEncode(state));
+    } catch (_) {}
+  }
+
+  bool _areSlotsEqual(List<FriendInfo?> a, List<FriendInfo?> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      final pa = a[i];
+      final pb = b[i];
+      if ((pa == null) != (pb == null)) return false;
+      if (pa != null && pb != null) {
+        if (pa.code.toUpperCase() != pb.code.toUpperCase() ||
+            pa.selectedHeroId != pb.selectedHeroId ||
+            pa.heroLevel != pb.heroLevel ||
+            pa.name != pb.name) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  bool _isSoloRoomChanged(SoloDuelRoomState? current, SoloDuelRoomState next) {
+    if (current == null) return true;
+    return current.roomCode != next.roomCode ||
+        current.hostCode != next.hostCode ||
+        current.betGold != next.betGold ||
+        current.selectedMapId != next.selectedMapId ||
+        current.matchStatus != next.matchStatus ||
+        current.activeMatchRoomId != next.activeMatchRoomId ||
+        current.resolvedMapId != next.resolvedMapId ||
+        !_areSlotsEqual(current.blueSlots, next.blueSlots) ||
+        !_areSlotsEqual(current.redSlots, next.redSlots) ||
+        !_areCodeListsEqual(current.readyCodes, next.readyCodes);
+  }
+
+  void _applyIncomingSoloSnapshot(String cleanCode, SoloDuelRoomState? parsed) {
+    final current = soloRoomNotifier.value;
+    if (current == null || current.roomCode.toUpperCase() != cleanCode) return;
+    final myCode = effectivePlayerCode;
+
+    if (parsed == null) {
+      if (!current.isHost(myCode)) {
+        soloRoomNoticeNotifier.value =
+            'Chủ phòng đã đóng phòng $cleanCode.';
+        _soloRoomSubscription?.cancel();
+        _soloRoomSubscription = null;
+        _soloLocalPollTimer?.cancel();
+        _soloLocalPollTimer = null;
+        _watchedSoloCode = null;
+        soloRoomNotifier.value = null;
+      }
+      return;
+    }
+
+    if (!parsed.containsPlayer(myCode)) {
+      soloRoomNoticeNotifier.value = 'Bạn đã rời khỏi phòng $cleanCode.';
+      _soloRoomSubscription?.cancel();
+      _soloRoomSubscription = null;
+      _soloLocalPollTimer?.cancel();
+      _soloLocalPollTimer = null;
+      _watchedSoloCode = null;
+      soloRoomNotifier.value = null;
+      return;
+    }
+
+    if (_isSoloRoomChanged(current, parsed)) {
+      soloRoomNotifier.value = parsed;
+      unawaited(_saveSoloToLocalPrefs(parsed));
+    }
+  }
+
+  void _listenToSoloRoomRealtime(String roomCode) {
+    final cleanCode = roomCode.trim().toUpperCase();
+    if (_watchedSoloCode == cleanCode &&
+        (_soloRoomSubscription != null || _soloLocalPollTimer != null)) {
+      return;
+    }
+
+    _soloRoomSubscription?.cancel();
+    _soloLocalPollTimer?.cancel();
+    _watchedSoloCode = cleanCode;
+
+    final db = _getDb();
+    if (db != null) {
+      _soloRoomSubscription =
+          db.ref('parties/$cleanCode').onValue.listen((event) {
+        final raw = event.snapshot.value;
+        if (raw == null) {
+          _applyIncomingSoloSnapshot(cleanCode, null);
+          return;
+        }
+        final norm = _normalizeMap(raw);
+        if (norm == null ||
+            norm['roomType'] != 'solo_duel' ||
+            norm['closed'] == true) {
+          _applyIncomingSoloSnapshot(cleanCode, null);
+          return;
+        }
+        final parsed = SoloDuelRoomState.fromJson(cleanCode, norm);
+        _applyIncomingSoloSnapshot(cleanCode, parsed);
+      }, onError: (Object err) {
+        debugPrint('Solo room stream error: $err');
+      });
+    }
+
+    _soloLocalPollTimer =
+        Timer.periodic(const Duration(milliseconds: 350), (_) async {
+      if (_watchedSoloCode != cleanCode) return;
+      final localSolo = await _readSoloFromLocalPrefs(cleanCode);
+      if (localSolo != null) {
+        _applyIncomingSoloSnapshot(cleanCode, localSolo);
+      } else if (_getDb() == null) {
+        _applyIncomingSoloSnapshot(cleanCode, null);
+      }
+    });
+  }
+
+  Future<void> _syncSoloRoomEverywhere(SoloDuelRoomState room) async {
+    await _saveSoloToLocalPrefs(room);
+    await _syncSoloToFirebase(room);
+  }
+
+  Future<void> _saveSoloToLocalPrefs(SoloDuelRoomState room) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        '$_localSoloPrefix${room.roomCode.toUpperCase()}',
+        jsonEncode(room.toJson()),
+      );
+    } catch (_) {}
+  }
+
+  Future<SoloDuelRoomState?> _readSoloFromLocalPrefs(String code) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final raw = prefs.getString('$_localSoloPrefix${code.toUpperCase()}');
+      if (raw == null || raw.isEmpty) return null;
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      if (map['closed'] == true) return null;
+      return SoloDuelRoomState.fromJson(code.toUpperCase(), map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _syncSoloToFirebase(SoloDuelRoomState room) async {
+    try {
+      final db = _getDb();
+      if (db == null) return;
+      await db.ref('parties/${room.roomCode.toUpperCase()}').set({
+        ...room.toJson(),
         'updatedAt': ServerValue.timestamp,
       });
     } catch (_) {}

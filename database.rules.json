@@ -20,6 +20,12 @@
         ".write": "auth != null"
       }
     },
+    "solo_rooms": {
+      "$roomCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
     "invitations": {
       "$code": {
         ".read": "auth != null",

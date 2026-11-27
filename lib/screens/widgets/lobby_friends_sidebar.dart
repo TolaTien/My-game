@@ -10,6 +10,7 @@ class LobbyFriendsSidebar extends StatefulWidget {
   final ValueChanged<FriendInfo> onInviteFriend;
   final VoidCallback onOpenFriendsDialog;
   final VoidCallback? onOpenFriendRequests;
+  final VoidCallback? onOpenSoloRoom;
 
   const LobbyFriendsSidebar({
     super.key,
@@ -18,6 +19,7 @@ class LobbyFriendsSidebar extends StatefulWidget {
     required this.onInviteFriend,
     required this.onOpenFriendsDialog,
     this.onOpenFriendRequests,
+    this.onOpenSoloRoom,
   });
 
   @override
@@ -402,11 +404,78 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
     );
   }
 
-  // --- 2. BANNER TRẠNG THÁI TỔ ĐỘI ---
+  // --- 2. BANNER TRẠNG THÁI TỔ ĐỘI HOẶC PHÒNG SOLO ---
   Widget _buildPartyStatusBanner() {
-    return ValueListenableBuilder<PartyRoomState?>(
-      valueListenable: FriendPartyService.instance.partyNotifier,
-      builder: (context, party, _) {
+    return ValueListenableBuilder<SoloDuelRoomState?>(
+      valueListenable: FriendPartyService.instance.soloRoomNotifier,
+      builder: (context, soloRoom, _) {
+        if (soloRoom != null) {
+          return Container(
+            margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFFB300).withValues(alpha: 0.22),
+                  const Color(0xFFFF6D00).withValues(alpha: 0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: const Color(0xFFFFB300).withValues(alpha: 0.65),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFB300),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: const Text(
+                    'SOLO 1V1',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 9,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    '#${soloRoom.roomCode} • Đội ${soloRoom.matchupLabel} (${soloRoom.totalPlayerCount}/8)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (widget.onOpenSoloRoom != null)
+                  InkWell(
+                    onTap: widget.onOpenSoloRoom,
+                    child: const Text(
+                      'Mở phòng ›',
+                      style: TextStyle(
+                        color: Color(0xFFFFD54F),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
+
+        return ValueListenableBuilder<PartyRoomState?>(
+          valueListenable: FriendPartyService.instance.partyNotifier,
+          builder: (context, party, _) {
         if (party == null || party.members.isEmpty) {
           return Container(
             margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
@@ -501,6 +570,8 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
               ),
             ],
           ),
+        );
+          },
         );
       },
     );
@@ -802,6 +873,36 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
                   ),
                 ),
               ),
+              if (widget.onOpenSoloRoom != null) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: 28,
+                  child: ElevatedButton.icon(
+                    key: const Key('sidebar_open_solo_room_button'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFFFF8F00).withValues(alpha: 0.25),
+                      foregroundColor: const Color(0xFFFFD54F),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(7),
+                        side: BorderSide(
+                          color: const Color(0xFFFFB300).withValues(alpha: 0.65),
+                        ),
+                      ),
+                    ),
+                    onPressed: widget.onOpenSoloRoom,
+                    icon: const Icon(Icons.sports_kabaddi_rounded, size: 13),
+                    label: const Text(
+                      'PHÒNG SOLO',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (reqs.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 SizedBox(

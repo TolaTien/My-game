@@ -319,6 +319,7 @@ class PlayerStorage {
     final updated = currentProfile.copyWith(selectedHeroId: heroId);
     await saveProfile(updated);
     unawaited(FriendPartyService.instance.updateMyPartyHero(heroId));
+    unawaited(FriendPartyService.instance.updateMySoloHero(heroId));
   }
 
   /// Mở khóa Trợ thủ AI

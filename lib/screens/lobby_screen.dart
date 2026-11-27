@@ -16,6 +16,7 @@ import 'lucky_wheel_dialog.dart';
 import 'pvp_arena_screen.dart';
 import 'settings_dialog.dart';
 import 'shop_dialog.dart';
+import 'solo_room_dialog.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/hero_showcase_painter.dart';
 import 'widgets/lobby_friends_sidebar.dart';
@@ -48,6 +49,8 @@ class _LobbyScreenState extends State<LobbyScreen>
 
   bool _isLaunchingPartyMatch = false;
   String? _lastLaunchedMatchRoomId;
+  bool _isLaunchingSoloMatch = false;
+  String? _lastLaunchedSoloMatchRoomId;
 
   @override
   void initState() {
@@ -100,6 +103,8 @@ class _LobbyScreenState extends State<LobbyScreen>
     // Lắng nghe trạng thái phòng tổ đội để đồng bộ chế độ & tự động ghép trận cho khách khi chủ phòng bấm Tìm Trận
     FriendPartyService.instance.partyNotifier
         .addListener(_handlePartyRoomChanged);
+    FriendPartyService.instance.soloRoomNotifier
+        .addListener(_handleSoloRoomChanged);
 
     // Bật Lobby BGM
     AudioService.instance.playBgm(BgmTrack.lobby);
@@ -138,6 +143,8 @@ class _LobbyScreenState extends State<LobbyScreen>
         .removeListener(_handleFriendRequestResponse);
     FriendPartyService.instance.partyNotifier
         .removeListener(_handlePartyRoomChanged);
+    FriendPartyService.instance.soloRoomNotifier
+        .removeListener(_handleSoloRoomChanged);
     _breatheController.dispose();
     _pulseController.dispose();
     _shimmerController.dispose();
@@ -201,6 +208,10 @@ class _LobbyScreenState extends State<LobbyScreen>
     SettingsDialog.show(context);
   }
 
+  void _openSoloRoomDialog() {
+    SoloRoomDialog.show(context);
+  }
+
   void _dismissPartyInvitePopup() {
     _partyInvitePopupTimer?.cancel();
     _partyInvitePopupTimer = null;
@@ -229,6 +240,20 @@ class _LobbyScreenState extends State<LobbyScreen>
             accept: true,
           );
           if (mounted) {
+            if (invite.isCustomRoom) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Đã vào Phòng Đấu ${invite.partyCode} cùng ${invite.fromName}!',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  backgroundColor: Colors.green.shade800,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              _openSoloRoomDialog();
+              return;
+            }
             setState(() {
               _isPvpMode = true;
               _selectedPvpMode = invite.mode;
@@ -548,6 +573,51 @@ class _LobbyScreenState extends State<LobbyScreen>
         _isLaunchingPartyMatch = false;
         if (mounted) {
           AudioService.instance.playBgm(BgmTrack.lobby);
+        }
+      });
+    }
+  }
+
+  void _handleSoloRoomChanged() {
+    if (!mounted) return;
+    final solo = FriendPartyService.instance.soloRoomNotifier.value;
+    if (solo == null) {
+      _lastLaunchedSoloMatchRoomId = null;
+      return;
+    }
+
+    final matchRoomId = solo.activeMatchRoomId;
+    if (solo.matchStatus == 'in_match' &&
+        matchRoomId != null &&
+        matchRoomId.isNotEmpty &&
+        !_isLaunchingSoloMatch &&
+        _lastLaunchedSoloMatchRoomId != matchRoomId) {
+      _isLaunchingSoloMatch = true;
+      _lastLaunchedSoloMatchRoomId = matchRoomId;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          _isLaunchingSoloMatch = false;
+          return;
+        }
+        unawaited(AudioService.instance.stopBgm());
+        final navResult = await Navigator.of(context).push<String>(
+          MaterialPageRoute(
+            builder: (context) => PvpArenaScreen(
+              initialMode: PvpGameMode.solo1v1,
+              soloRoom: solo,
+            ),
+          ),
+        );
+        _isLaunchingSoloMatch = false;
+        if (mounted) {
+          AudioService.instance.playBgm(BgmTrack.lobby);
+          await PlayerStorage.loadProfile();
+          setState(() {});
+          if (navResult == 'reopen_solo' &&
+              mounted &&
+              FriendPartyService.instance.soloRoomNotifier.value != null) {
+            _openSoloRoomDialog();
+          }
         }
       });
     }
@@ -1007,6 +1077,35 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
 
+                  // 5.6 PHÒNG SOLO 1V1 (CƯỢC VÀNG VỚI BẠN BÈ)
+                  posBox(
+                    18,
+                    632,
+                    178,
+                    734,
+                    ValueListenableBuilder<SoloDuelRoomState?>(
+                      valueListenable:
+                          FriendPartyService.instance.soloRoomNotifier,
+                      builder: (context, soloRoom, _) {
+                        return _buildSciFiSidebarButton(
+                          label: 'PHÒNG SOLO',
+                          borderColor: const Color(0xFFFFB300),
+                          glowColor: const Color(0xFFFF8F00),
+                          bgColors: const [Color(0xFF2B2112), Color(0xFF1A140B)],
+                          badgeText:
+                              soloRoom != null ? soloRoom.roomCode : 'TẠO PHÒNG',
+                          badgeAlignTopCenter: true,
+                          iconWidget: const Icon(
+                            Icons.sports_kabaddi_rounded,
+                            color: Color(0xFFFFD54F),
+                            size: 38,
+                          ),
+                          onTap: _openSoloRoomDialog,
+                        );
+                      },
+                    ),
+                  ),
+
 
                   // 5.7 SIDEBAR BÊN PHẢI: DANH SÁCH BẠN BÈ ONLINE/OFFLINE & NÚT MỜI TỔ ĐỘI "+"
                   posBox(
@@ -1020,6 +1119,7 @@ class _LobbyScreenState extends State<LobbyScreen>
                       onInviteFriend: _handleInviteFriendFromSidebar,
                       onOpenFriendsDialog: () => _openFriendsDialog(initialTabIndex: 0),
                       onOpenFriendRequests: () => _openFriendsDialog(initialTabIndex: 1),
+                      onOpenSoloRoom: _openSoloRoomDialog,
                     ),
                   ),
 
@@ -3074,12 +3174,14 @@ class _PartyInvitePopupBannerState extends State<_PartyInvitePopupBanner>
                             children: [
                               Row(
                                 children: [
-                                  const Flexible(
+                                  Flexible(
                                     child: Text(
-                                      'LỜI MỜI VÀO TỔ ĐỘI',
+                                      widget.invite.isCustomRoom
+                                          ? 'LỜI MỜI PHÒNG ĐẤU TÙY CHỌN'
+                                          : 'LỜI MỜI VÀO TỔ ĐỘI',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: Color(0xFF00E676),
                                         fontWeight: FontWeight.w900,
                                         fontSize: 11,

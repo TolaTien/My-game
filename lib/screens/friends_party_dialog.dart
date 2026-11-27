@@ -5,6 +5,7 @@ import '../models/pvp_match.dart';
 import '../services/audio_service.dart';
 import '../services/friend_party_service.dart';
 import '../services/player_storage.dart';
+import 'solo_room_dialog.dart';
 import 'widgets/edit_profile_dialog.dart';
 import 'widgets/hero_showcase_painter.dart';
 
@@ -226,6 +227,36 @@ class _FriendsPartyDialogState extends State<FriendsPartyDialog>
                         ),
                       ),
                       const Spacer(),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8F00),
+                          foregroundColor: Colors.black,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          SoloRoomDialog.show(context);
+                        },
+                        icon: const Icon(
+                          Icons.sports_kabaddi_rounded,
+                          size: 15,
+                        ),
+                        label: const Text(
+                          'PHÒNG SOLO 1V1',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       InkWell(
                         borderRadius: BorderRadius.circular(8),
                         onTap: () => EditProfileDialog.show(context, profile),

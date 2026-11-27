@@ -22,11 +22,13 @@ import 'widgets/rank_badge.dart';
 class PvpArenaScreen extends StatefulWidget {
   final PvpGameMode initialMode;
   final PartyRoomState? partyRoom;
+  final SoloDuelRoomState? soloRoom;
 
   const PvpArenaScreen({
     super.key,
     this.initialMode = PvpGameMode.solo1v1,
     this.partyRoom,
+    this.soloRoom,
   });
 
   @override
@@ -83,6 +85,12 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   bool _isPartyStateWritePending = false;
   bool _hasPoppedFromPartyCancel = false;
 
+  // Solo / Custom 4v4 Room Wager & Sync
+  final List<StreamSubscription> _soloSyncSubs = [];
+  int _escrowedSoloBetGold = 0;
+  bool _hasSettledSoloWager = false;
+
+  bool get _isInSoloRoom => widget.soloRoom != null;
   bool get _isInParty => widget.partyRoom != null;
   bool get _isPartyGuest {
     final party = widget.partyRoom;
@@ -118,6 +126,13 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
+
+    if (_isInSoloRoom) {
+      _selectedMode = PvpGameMode.solo1v1;
+      _isMatchmaking = false;
+      _startSoloRoomMatch(widget.soloRoom!);
+      return;
+    }
 
     if (_isInParty) {
       FriendPartyService.instance.partyNotifier.addListener(_onPartyRoomUpdated);
@@ -174,11 +189,32 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _readyTimeoutTimer?.cancel();
     _roomSubscription?.cancel();
     _actionSubscription?.cancel();
+    for (final sub in _soloSyncSubs) {
+      sub.cancel();
+    }
+    _soloSyncSubs.clear();
     _partySyncTimer?.cancel();
     for (final sub in _partySyncSubs) {
       sub.cancel();
     }
     _partySyncSubs.clear();
+    if (_isInSoloRoom) {
+      final soloMatchId = _roomId ?? widget.soloRoom?.activeMatchRoomId;
+      final myCode = FriendPartyService.instance.effectivePlayerCode;
+      if (soloMatchId != null) {
+        unawaited(
+          FriendPartyService.instance.leaveSoloMatchRoom(soloMatchId, myCode),
+        );
+      }
+      // Nếu trận chưa kịp bắt đầu (đối thủ chưa vào) thì hoàn lại Vàng đặt cọc
+      if (!_hasSettledSoloWager &&
+          (_arenaGame?.isWaitingForOpponent ?? true) &&
+          _escrowedSoloBetGold > 0) {
+        _hasSettledSoloWager = true;
+        unawaited(PlayerStorage.addGold(_escrowedSoloBetGold));
+      }
+      unawaited(FriendPartyService.instance.resetSoloRoomAfterMatch());
+    }
     if (_isInParty) {
       FriendPartyService.instance.partyNotifier.removeListener(_onPartyRoomUpdated);
       if (!_isPartyGuest) {
@@ -451,6 +487,256 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     });
   }
 
+  void _startSoloRoomMatch(SoloDuelRoomState soloRoom) {
+    final profile = PlayerStorage.currentProfile;
+    final myCode =
+        FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+    final isHost = soloRoom.isHost(myCode);
+    final myTeam = soloRoom.teamOf(myCode) ?? 'blue';
+    final isLocalTeamBlue = myTeam == 'blue';
+    final hostTeam = soloRoom.teamOf(soloRoom.hostCode) ?? 'blue';
+    final isSameTeamAsHost = myTeam == hostTeam;
+    final mySlotIdx = max(0, soloRoom.slotIndexOf(myCode));
+
+    final myTeamSlots = isLocalTeamBlue ? soloRoom.blueSlots : soloRoom.redSlots;
+    final oppTeamSlots =
+        isLocalTeamBlue ? soloRoom.redSlots : soloRoom.blueSlots;
+
+    final allyInfos = <PvpOpponentInfo>[];
+    final allySlots = <int>[];
+    final allyCodes = <String>[];
+    for (int s = 0; s < SoloDuelRoomState.slotsPerTeam; s++) {
+      final m = myTeamSlots[s];
+      if (m != null && m.code.trim().toUpperCase() != myCode) {
+        allyInfos.add(m.toPvpAlly());
+        allySlots.add(s);
+        allyCodes.add(m.code.trim().toUpperCase());
+      }
+    }
+
+    final enemyInfos = <PvpOpponentInfo>[];
+    final enemySlots = <int>[];
+    final enemyCodes = <String>[];
+    for (int s = 0; s < SoloDuelRoomState.slotsPerTeam; s++) {
+      final m = oppTeamSlots[s];
+      if (m != null) {
+        enemyInfos.add(m.toPvpOpponent());
+        enemySlots.add(s);
+        enemyCodes.add(m.code.trim().toUpperCase());
+      }
+    }
+
+    if (enemyInfos.isEmpty) {
+      enemyInfos.add(
+        const PvpOpponentInfo(
+          name: 'Đối Thủ Phòng Đấu',
+          rankPoints: 1000,
+          rankTier: 'Đồng',
+          heroId: 'george',
+          isBot: false,
+        ),
+      );
+      enemySlots.add(0);
+    }
+
+    final opponentInfo = enemyInfos.first;
+    final customRoster = PvpTeamRoster(
+      mode: PvpGameMode.squad4v4,
+      allies: allyInfos,
+      enemies: enemyInfos,
+    );
+
+    final matchRoomId = soloRoom.activeMatchRoomId ??
+        'solo_${soloRoom.roomCode.toUpperCase()}';
+    final chosenMapId = soloRoom.resolvedMapId ?? soloRoom.selectedMapId;
+    final syncedMapConfig = (chosenMapId != null && chosenMapId.isNotEmpty)
+        ? (GameAssetRegistry.instance.getMap(chosenMapId) ??
+            GameAssetRegistry.instance.getMapFromSeed(matchRoomId))
+        : GameAssetRegistry.instance.getMapFromSeed(matchRoomId);
+
+    // Tạm giữ Vàng đặt cược ngay khi vào phòng đấu để chống thoát ngang trốn cược
+    final int betToEscrow =
+        soloRoom.betGold.clamp(0, max(0, profile.gold)).toInt();
+    if (betToEscrow > 0) {
+      _escrowedSoloBetGold = betToEscrow;
+      unawaited(PlayerStorage.spendGold(betToEscrow));
+    }
+
+    _roomId = matchRoomId;
+    _opponent = opponentInfo;
+    _isMatchmaking = false;
+    _initGame(
+      opponentInfo,
+      isOnline: true,
+      isPlayerOne: isLocalTeamBlue,
+      roster: customRoster,
+      selectedMapConfig: syncedMapConfig,
+      soloMatchRoomId: matchRoomId,
+      isCustomRoom: true,
+      isLocalTeamBlue: isLocalTeamBlue,
+      localCustomSlotIndex: mySlotIdx,
+      localPlayerCode: myCode,
+      customAllySlots: allySlots,
+      customAllyCodes: allyCodes,
+      customEnemySlots: enemySlots,
+      customEnemyCodes: enemyCodes,
+      isCustomRoomHost: isHost,
+      isSameTeamAsHost: isSameTeamAsHost,
+    );
+    _bindSoloMatchSync(
+      matchRoomId: matchRoomId,
+      myCode: myCode,
+      allyCodes: allyCodes,
+      enemyCodes: enemyCodes,
+      isHost: isHost,
+    );
+  }
+
+  void _bindSoloMatchSync({
+    required String matchRoomId,
+    required String myCode,
+    required List<String> allyCodes,
+    required List<String> enemyCodes,
+    required bool isHost,
+  }) {
+    for (final sub in _soloSyncSubs) {
+      sub.cancel();
+    }
+    _soloSyncSubs.clear();
+    _readyTimeoutTimer?.cancel();
+    _syncTxCount = 0;
+    _syncRxCount = 0;
+
+    final allPeerCodes = <String>[...allyCodes, ...enemyCodes];
+    final readyPeers = <String>{};
+    final seenEnemies = <String>{};
+    final connectedEnemies = <String>{};
+
+    unawaited(
+      FriendPartyService.instance.registerSoloMatchPresence(matchRoomId, myCode),
+    );
+
+    _readyTimeoutTimer = Timer(const Duration(seconds: 15), () async {
+      final game = _arenaGame;
+      if (!mounted || game == null || !game.isWaitingForOpponent) return;
+      if (connectedEnemies.isNotEmpty) {
+        game.startOnlineMatch();
+        return;
+      }
+      await _abortUnstartedSoloMatch(
+        'Đối phương không kết nối vào trận kịp thời — đã hoàn lại Vàng cược!',
+      );
+    });
+
+    for (final peerCode in allPeerCodes) {
+      final isEnemyPeer = enemyCodes.contains(peerCode);
+      _soloSyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyPlayerState(matchRoomId, peerCode)
+            .listen((snapshot) {
+          final game = _arenaGame;
+          if (game == null || snapshot.isEmpty) return;
+          _syncRxCount++;
+
+          final connected = snapshot['connected'] as bool? ?? true;
+          final ready = snapshot['ready'] as bool? ?? false;
+
+          if (connected && ready) {
+            readyPeers.add(peerCode);
+          } else {
+            readyPeers.remove(peerCode);
+          }
+
+          if (isEnemyPeer) {
+            if (connected) {
+              seenEnemies.add(peerCode);
+              connectedEnemies.add(peerCode);
+            } else {
+              connectedEnemies.remove(peerCode);
+            }
+          }
+
+          if (game.isWaitingForOpponent &&
+              readyPeers.length >= allPeerCodes.length &&
+              connectedEnemies.isNotEmpty) {
+            _readyTimeoutTimer?.cancel();
+            game.startOnlineMatch();
+          } else if (isEnemyPeer &&
+              !connected &&
+              seenEnemies.isNotEmpty &&
+              connectedEnemies.isEmpty &&
+              enemyCodes.every(seenEnemies.contains) &&
+              game.matchState != PvpMatchState.matchFinished) {
+            if (game.isWaitingForOpponent) {
+              unawaited(
+                _abortUnstartedSoloMatch(
+                  'Đội đối phương đã rời phòng trước khi trận bắt đầu — đã hoàn lại Vàng cược!',
+                ),
+              );
+              return;
+            }
+            game.opponentForfeit();
+            return;
+          }
+
+          game.applyCustomPeerSnapshot(peerCode, snapshot);
+        }),
+      );
+    }
+
+    _soloSyncSubs.add(
+      FriendPartyService.instance.watchPartyActions(matchRoomId).listen((act) {
+        final actor = (act['actorCode'] as String? ?? '').trim().toUpperCase();
+        if (actor.isEmpty || actor == myCode) return;
+        _arenaGame?.applyCustomPeerAction(
+          actor,
+          act['action'] as String? ?? '',
+          text: act['text'] as String?,
+        );
+      }),
+    );
+
+    if (!isHost) {
+      _soloSyncSubs.add(
+        FriendPartyService.instance
+            .watchPartyHostState(matchRoomId)
+            .listen((hostState) {
+          _arenaGame?.applyCustomRoomHostState(hostState);
+        }),
+      );
+    }
+
+    _stateSyncTimer?.cancel();
+    _isStateWritePending = false;
+    _pushLocalStateImmediately(force: true);
+    _stateSyncTimer = Timer.periodic(const Duration(milliseconds: 35), (_) {
+      _pushLocalStateImmediately();
+    });
+  }
+
+  Future<void> _abortUnstartedSoloMatch(String message) async {
+    _readyTimeoutTimer?.cancel();
+    _stateSyncTimer?.cancel();
+    if (!_hasSettledSoloWager && _escrowedSoloBetGold > 0) {
+      _hasSettledSoloWager = true;
+      await PlayerStorage.addGold(_escrowedSoloBetGold);
+      _escrowedSoloBetGold = 0;
+    }
+    await FriendPartyService.instance.resetSoloRoomAfterMatch();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.orange.shade900,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    Navigator.of(context).pop('reopen_solo');
+  }
+
   void _startPartyMatchLocally(PartyRoomState party) {
     if (!_isMatchmaking) return;
     _matchmakingTimer?.cancel();
@@ -595,6 +881,34 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
   void _pushLocalStateImmediately({bool force = false}) {
     final game = _arenaGame;
     if (game == null || !mounted) return;
+    if (_isInSoloRoom) {
+      final soloMatchId = _roomId;
+      if (soloMatchId == null) return;
+      if (_isStateWritePending && !force) return;
+      _isStateWritePending = true;
+      final myCode =
+          FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+      final payload = <String, Object?>{
+        ...game.localSnapshot,
+        'ready': true,
+        'connected': true,
+      };
+      final futures = <Future<void>>[
+        FriendPartyService.instance
+            .writePartyPlayerState(soloMatchId, myCode, payload),
+        if (game.isCustomRoomHost)
+          FriendPartyService.instance
+              .writePartyHostState(soloMatchId, game.customRoomHostSnapshot),
+      ];
+      Future.wait(futures).then((_) {
+        _syncTxCount++;
+      }).catchError((Object err) {
+        debugPrint('Solo State Sync Error: $err');
+      }).whenComplete(() {
+        _isStateWritePending = false;
+      });
+      return;
+    }
     if (_isInParty) {
       final party =
           FriendPartyService.instance.partyNotifier.value ?? widget.partyRoom;
@@ -680,6 +994,17 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     Map<int, String> humanAllyCodes = const {},
     bool isPartyGuest = false,
     String? partyRoomId,
+    String? soloMatchRoomId,
+    bool isCustomRoom = false,
+    bool isLocalTeamBlue = true,
+    int localCustomSlotIndex = 0,
+    String localPlayerCode = '',
+    List<int> customAllySlots = const [],
+    List<String> customAllyCodes = const [],
+    List<int> customEnemySlots = const [],
+    List<String> customEnemyCodes = const [],
+    bool isCustomRoomHost = false,
+    bool isSameTeamAsHost = true,
   }) {
     _hasHandledMatchFinish = false;
     final profile = PlayerStorage.currentProfile;
@@ -696,6 +1021,16 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       localBlueSlotIndex: localBlueSlotIndex,
       humanAllyCodes: humanAllyCodes,
       isPartyGuest: isPartyGuest,
+      isCustomRoom: isCustomRoom,
+      isLocalTeamBlue: isLocalTeamBlue,
+      localCustomSlotIndex: localCustomSlotIndex,
+      localPlayerCode: localPlayerCode,
+      customAllySlots: customAllySlots,
+      customAllyCodes: customAllyCodes,
+      customEnemySlots: customEnemySlots,
+      customEnemyCodes: customEnemyCodes,
+      isCustomRoomHost: isCustomRoomHost,
+      isSameTeamAsHost: isSameTeamAsHost,
     );
 
     _keyboardController?.detach();
@@ -737,7 +1072,21 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
       if (!mounted) return;
       _handleMatchFinished(result);
     };
-    if (isOnline) {
+    if (soloMatchRoomId != null) {
+      final myCode =
+          FriendPartyService.instance.effectivePlayerCode.trim().toUpperCase();
+      _arenaGame!.onLocalAction = (action, {text}) {
+        _pushLocalStateImmediately(force: true);
+        unawaited(
+          FriendPartyService.instance.sendPartyAction(
+            soloMatchRoomId,
+            myCode,
+            action,
+            text: text,
+          ),
+        );
+      };
+    } else if (isOnline) {
       _arenaGame!.onLocalAction = (action, {text}) {
         _pushLocalStateImmediately(force: true);
         final roomId = _roomId;
@@ -768,6 +1117,84 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     _hasHandledMatchFinish = true;
 
     final current = PlayerStorage.currentProfile;
+
+    if (_isInSoloRoom) {
+      _hasSettledSoloWager = true;
+      final solo = widget.soloRoom!;
+      final betGold = solo.betGold;
+      final myCode = FriendPartyService.instance.effectivePlayerCode;
+      final myTeam = solo.teamOf(myCode) ?? 'blue';
+      final myTeamCount =
+          max(1, myTeam == 'blue' ? solo.blueCount : solo.redCount);
+      final totalPlayers = max(2, solo.totalPlayerCount);
+      final totalEscrowPot = _escrowedSoloBetGold * totalPlayers;
+      final potWon = result.isWinner ? (totalEscrowPot ~/ myTeamCount) : 0;
+      final netGoldDelta = potWon - _escrowedSoloBetGold;
+
+      final soloResult = PvpMatchResult(
+        isWinner: result.isWinner,
+        playerRoundsWon: result.playerRoundsWon,
+        opponentRoundsWon: result.opponentRoundsWon,
+        rpDelta: 0,
+        newRankPoints: current.rankPoints,
+        oldRankTier: current.rankTier,
+        newRankTier: current.rankTier,
+        isPromotion: false,
+        isDemotion: false,
+        goldReward: netGoldDelta,
+        matchDuration: result.matchDuration,
+        gameMode: PvpGameMode.solo1v1,
+        starDelta: 0,
+        oldTotalStars: current.rankStars,
+        newTotalStars: current.rankStars,
+        oldStarsInTier: current.starsInTier,
+        newStarsInTier: current.starsInTier,
+        maxStarsInNewTier: current.maxStarsInTier,
+        isChallengerTop10: current.isChallengerTop10,
+        serverRank: current.serverRank,
+      );
+
+      if (potWon > 0) {
+        await PlayerStorage.saveProfile(
+          current.copyWith(gold: current.gold + potWon),
+        );
+      }
+
+      unawaited(
+        PlayerStorage.addHeroExpAfterMatch(
+          isVictory: soloResult.isWinner,
+          isPvp: true,
+          floorOrRounds:
+              soloResult.playerRoundsWon + soloResult.opponentRoundsWon,
+          coinsOrKills: max(0, potWon),
+        ),
+      );
+      unawaited(FriendPartyService.instance.resetSoloRoomAfterMatch());
+
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => _PvpResultModal(
+            result: soloResult,
+            isSoloRoom: true,
+            soloBetGold: betGold,
+            onReturnToLobby: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop();
+            },
+            onPlayAgain: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop('reopen_solo');
+            },
+          ),
+        );
+      });
+      return;
+    }
+
     final tentativeProfile = current.copyWith(
       rankPoints: result.newRankPoints,
       rankStars: result.newTotalStars,
@@ -1360,7 +1787,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
     final game = _arenaGame!;
     final profile = PlayerStorage.currentProfile;
     final opponent = _opponent!;
-    final isTeamMode = game.gameMode != PvpGameMode.solo1v1;
+    final myTeamTotal = 1 + game.allies.length;
+    final enemyTeamTotal = game.allEnemies.length;
+    final isTeamMode = _isInSoloRoom
+        ? (myTeamTotal > 1 || enemyTeamTotal > 1)
+        : (game.gameMode != PvpGameMode.solo1v1);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1395,7 +1826,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         border: Border.all(color: const Color(0xFF00E676)),
                       ),
                       child: Text(
-                        '${game.blueTeamAliveCount}/${game.gameMode.teamSize}',
+                        '${game.blueTeamAliveCount}/$myTeamTotal',
                         style: const TextStyle(
                           color: Color(0xFF00E676),
                           fontSize: 9.5,
@@ -1467,7 +1898,11 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
+                    _isInSoloRoom
+                        ? (widget.soloRoom!.betGold > 0
+                            ? 'PHÒNG ${widget.soloRoom!.matchupLabel} • QUỸ ${widget.soloRoom!.totalPotGold}G • H${game.currentRound}/3'
+                            : 'PHÒNG ${widget.soloRoom!.matchupLabel} • HIỆP ${game.currentRound}/3')
+                        : '${game.gameMode.shortLabel} • HIỆP ${game.currentRound} / 3',
                     style: const TextStyle(
                       color: Colors.amberAccent,
                       fontSize: 10,
@@ -1525,7 +1960,7 @@ class _PvpArenaScreenState extends State<PvpArenaScreen>
                         border: Border.all(color: const Color(0xFFFF1744)),
                       ),
                       child: Text(
-                        '${game.redTeamAliveCount}/${game.gameMode.teamSize}',
+                        '${game.redTeamAliveCount}/$enemyTeamTotal',
                         style: const TextStyle(
                           color: Color(0xFFFF5252),
                           fontSize: 9.5,
@@ -2084,11 +2519,15 @@ class _PvpResultModal extends StatelessWidget {
   final PvpMatchResult result;
   final VoidCallback onReturnToLobby;
   final VoidCallback onPlayAgain;
+  final bool isSoloRoom;
+  final int soloBetGold;
 
   const _PvpResultModal({
     required this.result,
     required this.onReturnToLobby,
     required this.onPlayAgain,
+    this.isSoloRoom = false,
+    this.soloBetGold = 0,
   });
 
   static Color _tierColor(String tier) {
@@ -2182,7 +2621,9 @@ class _PvpResultModal extends StatelessWidget {
                   border: Border.all(color: Colors.white24),
                 ),
                 child: Text(
-                  '${result.gameMode.title} • TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
+                  isSoloRoom
+                      ? 'PHÒNG ĐẤU TÙY CHỌN • TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}'
+                      : '${result.gameMode.title} • TỈ SỐ HIỆP: ${result.playerRoundsWon} - ${result.opponentRoundsWon}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11.5,
@@ -2192,6 +2633,63 @@ class _PvpResultModal extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
+              if (isSoloRoom) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C101A),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: titleColor.withValues(alpha: 0.8),
+                      width: 1.8,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        soloBetGold > 0
+                            ? 'KẾT QUẢ PHÒNG ĐẤU CƯỢC VÀNG'
+                            : 'PHÒNG ĐẤU TÙY CHỌN GIAO HỮU',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        soloBetGold == 0
+                            ? '0 VÀNG (GIAO HỮU)'
+                            : (result.isWinner
+                                ? '+${result.goldReward} VÀNG LỜI (NHẬN ${soloBetGold + result.goldReward}G)'
+                                : '${result.goldReward} VÀNG'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: soloBetGold == 0
+                              ? Colors.cyanAccent
+                              : (result.isWinner
+                                  ? const Color(0xFF00E676)
+                                  : const Color(0xFFFF5252)),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Phòng Solo Tự Chọn • Giữ nguyên Sao Rank & RP',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
               // 2. KHUNG TIẾN TRÌNH RANK & NGÔI SAO (DÙNG CHUNG 1V1 • 2V2 • 4V4)
               Container(
                 width: double.infinity,
@@ -2417,6 +2915,7 @@ class _PvpResultModal extends StatelessWidget {
                   ],
                 ),
               ),
+              ],
 
               // Banner Thăng Hạng / Giáng Hạng
               if (result.isPromotion) ...[
@@ -2496,14 +2995,19 @@ class _PvpResultModal extends StatelessWidget {
                     ),
                     Column(
                       children: [
-                        const Text(
-                          'THƯỞNG VÀNG',
-                          style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        Text(
+                          isSoloRoom ? 'BIẾN ĐỘNG VÀNG' : 'THƯỞNG VÀNG',
+                          style:
+                              const TextStyle(color: Colors.white54, fontSize: 10.5),
                         ),
                         Text(
-                          '+${result.goldReward}',
-                          style: const TextStyle(
-                            color: Colors.amberAccent,
+                          result.goldReward >= 0
+                              ? '+${result.goldReward}'
+                              : '${result.goldReward}',
+                          style: TextStyle(
+                            color: result.goldReward >= 0
+                                ? Colors.amberAccent
+                                : const Color(0xFFFF5252),
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -2533,7 +3037,7 @@ class _PvpResultModal extends StatelessWidget {
                       textStyle: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     onPressed: onPlayAgain,
-                    child: const Text('TÌM TRẬN TIẾP'),
+                    child: Text(isSoloRoom ? 'VỀ PHÒNG SOLO' : 'TÌM TRẬN TIẾP'),
                   ),
                 ],
               ),
