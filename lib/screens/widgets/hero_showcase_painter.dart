@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../registry/sprite_image_cache.dart';
@@ -57,12 +58,14 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(
-                child: CustomPaint(
-                  painter: _HeroCanvasPainter(
-                    heroId: widget.heroId,
-                    themeColor: widget.themeColor,
-                    time: _animController.value * 2 * pi,
-                    animProgress: _animController.value,
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _HeroCanvasPainter(
+                      heroId: widget.heroId,
+                      themeColor: widget.themeColor,
+                      time: _animController.value * 2 * pi,
+                      animProgress: _animController.value,
+                    ),
                   ),
                 ),
               ),
@@ -86,6 +89,9 @@ class _HeroShowcaseWidgetState extends State<HeroShowcaseWidget>
 }
 
 class _HeroCanvasPainter extends CustomPainter {
+  static ui.MaskFilter? _webSafeBlur(double sigma) =>
+      kIsWeb ? null : ui.MaskFilter.blur(ui.BlurStyle.normal, sigma);
+
   final String heroId;
   final Color themeColor;
   final double time;
@@ -172,7 +178,7 @@ class _HeroCanvasPainter extends CustomPainter {
       if (strip != null && strip.width >= 512) {
         final auraPaint = Paint()
           ..color = themeColor.withValues(alpha: 0.30 + 0.12 * sin(time * 3))
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+          ..maskFilter = _webSafeBlur(24);
         canvas.drawCircle(Offset(cx, daisCenter.dy - 78), 68, auraPaint);
 
         final frameCount = max(1, (strip.width / strip.height).round());
@@ -266,7 +272,7 @@ class _HeroCanvasPainter extends CustomPainter {
     final auraPaint = Paint()
       ..color = const Color(0xFF9C27B0)
           .withValues(alpha: 0.32 + 0.12 * sin(time * 3))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+      ..maskFilter = _webSafeBlur(24);
     canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
 
     final scale = (size.height / 270.0).clamp(0.65, 1.05);
@@ -323,7 +329,7 @@ class _HeroCanvasPainter extends CustomPainter {
     final auraPaint = Paint()
       ..color = const Color(0xFF00E5FF)
           .withValues(alpha: 0.30 + 0.12 * sin(time * 3))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+      ..maskFilter = _webSafeBlur(24);
     canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
 
     // Tỉ lệ scale sao cho chân Nova đặt chuẩn xác trên bệ đá sảnh chờ
@@ -379,7 +385,7 @@ class _HeroCanvasPainter extends CustomPainter {
     final auraPaint = Paint()
       ..color = const Color(0xFFFF5722)
           .withValues(alpha: 0.35 + 0.15 * sin(time * 3))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+      ..maskFilter = _webSafeBlur(24);
     canvas.drawCircle(Offset(cx, daisY - 78), 68, auraPaint);
 
     final scale = (size.height / 270.0).clamp(0.65, 1.05);
@@ -412,7 +418,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Hào quang năng lượng phía sau lưng nhân vật
     final auraPaint = Paint()
       ..color = themeColor.withValues(alpha: 0.30 + 0.12 * sin(time * 3))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+      ..maskFilter = _webSafeBlur(24);
     canvas.drawCircle(Offset(cx, cy - 8), 72, auraPaint);
 
     final aspect = img.width / max(1, img.height);
@@ -541,7 +547,7 @@ class _HeroCanvasPainter extends CustomPainter {
       9,
       Paint()
         ..color = const Color(0xFFE040FB)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..maskFilter = _webSafeBlur(6),
     );
     canvas.drawCircle(Offset(cx, cy - 3), 4.5, Paint()..color = Colors.white);
 
@@ -684,7 +690,7 @@ class _HeroCanvasPainter extends CustomPainter {
         daggerPath,
         Paint()
           ..color = const Color(0xFFE040FB)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+          ..maskFilter = _webSafeBlur(5),
       );
       canvas.drawPath(daggerPath, Paint()..color = const Color(0xFFF3E5F5));
       canvas.restore();
@@ -709,7 +715,7 @@ class _HeroCanvasPainter extends CustomPainter {
     );
     final eyeGlow = Paint()
       ..color = const Color(0xFFE040FB)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = _webSafeBlur(4);
     canvas.drawOval(Rect.fromLTWH(cx - 10, cy - 44, 7, 4), eyeGlow);
     canvas.drawOval(Rect.fromLTWH(cx + 3, cy - 44, 7, 4), eyeGlow);
   }
@@ -819,7 +825,7 @@ class _HeroCanvasPainter extends CustomPainter {
       crystalPath,
       Paint()
         ..color = const Color(0xFF00E5FF)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..maskFilter = _webSafeBlur(6),
     );
     canvas.drawPath(crystalPath, Paint()..color = const Color(0xFFE0F2FE));
 
@@ -975,7 +981,7 @@ class _HeroCanvasPainter extends CustomPainter {
       15,
       Paint()
         ..color = const Color(0xFFFF3D00)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        ..maskFilter = _webSafeBlur(8),
     );
     canvas.drawCircle(firePos, 9, Paint()..color = const Color(0xFFFFAB00));
     canvas.drawCircle(firePos, 4, Paint()..color = Colors.white);
@@ -1112,7 +1118,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Bóng bệ
     final shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.5)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      ..maskFilter = _webSafeBlur(12);
     canvas.drawOval(
       Rect.fromCenter(center: Offset(center.dx, center.dy + 8), width: 190, height: 46),
       shadowPaint,
@@ -1151,7 +1157,7 @@ class _HeroCanvasPainter extends CustomPainter {
       ..color = themeColor.withValues(alpha: 0.4 + 0.2 * sin(time * 3))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      ..maskFilter = _webSafeBlur(10);
     canvas.drawCircle(Offset.zero, 75, glowPaint);
 
     final runeLine = Paint()
@@ -1200,7 +1206,7 @@ class _HeroCanvasPainter extends CustomPainter {
 
       final pPaint = Paint()
         ..color = themeColor.withValues(alpha: alpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+        ..maskFilter = _webSafeBlur(2);
       canvas.drawCircle(Offset(px, py), 2.0 + rand.nextDouble() * 2.2, pPaint);
     }
   }
@@ -1353,7 +1359,7 @@ class _HeroCanvasPainter extends CustomPainter {
     final runePulse = sin(time * 3.5);
     final runeGlow = Paint()
       ..color = const Color(0xFF00E5FF).withValues(alpha: 0.7 + 0.3 * runePulse)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      ..maskFilter = _webSafeBlur(10);
     canvas.drawCircle(runeCenter, 11, runeGlow);
     canvas.drawCircle(runeCenter, 6, Paint()..color = Colors.white);
 
@@ -1393,7 +1399,7 @@ class _HeroCanvasPainter extends CustomPainter {
 
     final eyeCyan = Paint()
       ..color = const Color(0xFF00E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = _webSafeBlur(4);
     canvas.drawRect(Rect.fromLTWH(cx - 10, cy - 42, 7, 5), eyeCyan);
     canvas.drawRect(Rect.fromLTWH(cx + 3, cy - 42, 7, 5), eyeCyan);
 
@@ -1484,7 +1490,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Đôi mắt ánh sáng xanh lục rực rỡ dưới mũ trùm
     final eyeGreen = Paint()
       ..color = const Color(0xFF00E676)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      ..maskFilter = _webSafeBlur(5);
     canvas.drawCircle(Offset(cx - 7, cy - 38), 3.5, eyeGreen);
     canvas.drawCircle(Offset(cx + 7, cy - 38), 3.5, eyeGreen);
     canvas.drawCircle(Offset(cx - 7, cy - 38), 1.5, Paint()..color = Colors.white);
@@ -1529,7 +1535,7 @@ class _HeroCanvasPainter extends CustomPainter {
     final shieldGlowAlpha = (0.55 + 0.35 * sin(time * 3.0)).clamp(0.0, 1.0);
     final shieldGlow = Paint()
       ..color = const Color(0xFF00E5FF).withValues(alpha: shieldGlowAlpha)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      ..maskFilter = _webSafeBlur(8);
     canvas.drawCircle(Offset(shieldX, shieldY), 12, shieldGlow);
     canvas.drawCircle(Offset(shieldX, shieldY), 7, Paint()..color = Colors.white);
 
@@ -1544,7 +1550,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Khe nhìn mắt bảo hộ xanh băng rực lửa
     final eyeBlue = Paint()
       ..color = const Color(0xFF00E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = _webSafeBlur(4);
     canvas.drawRect(Rect.fromLTWH(cx - 6, cy - 42, 24, 6), eyeBlue);
   }
 
@@ -1555,7 +1561,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Luồng khói hư không tím ma mị bao quanh (Shadow Void Mist)
     final mistPaint = Paint()
       ..color = const Color(0xFFAB47BC).withValues(alpha: 0.35 + 0.15 * sin(time * 3))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+      ..maskFilter = _webSafeBlur(16);
     canvas.drawCircle(Offset(cx, cy + 20), 45, mistPaint);
 
     // Khăn quàng cổ Ninja bay trong gió tím thẫm
@@ -1594,7 +1600,7 @@ class _HeroCanvasPainter extends CustomPainter {
     // Đôi mắt tím dạ quang sắc lạnh
     final eyePurple = Paint()
       ..color = const Color(0xFFE040FB)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      ..maskFilter = _webSafeBlur(5);
     canvas.drawCircle(Offset(cx - 7, cy - 40), 3.0, eyePurple);
     canvas.drawCircle(Offset(cx + 7, cy - 40), 3.0, eyePurple);
     canvas.drawCircle(Offset(cx - 7, cy - 40), 1.2, Paint()..color = Colors.white);
@@ -1623,7 +1629,7 @@ class _HeroCanvasPainter extends CustomPainter {
       ..color = const Color(0xFFE040FB).withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = _webSafeBlur(4);
     canvas.drawPath(blade, poisonGlow);
 
     canvas.restore();
@@ -1649,7 +1655,7 @@ class _HeroCanvasPainter extends CustomPainter {
       bladePath,
       Paint()
         ..color = bladeColor.withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..maskFilter = _webSafeBlur(6),
     );
     canvas.drawPath(bladePath, Paint()..color = bladeColor);
     canvas.drawLine(

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/constants.dart';
 import '../../registry/asset_registry.dart';
 import '../../registry/sprite_image_cache.dart';
@@ -78,14 +79,12 @@ class WallBlock extends PositionComponent with CollisionCallbacks {
           ..lineTo(center.dx - 11, center.dy)
           ..close();
 
-        // Hào quang xanh ngọc
-        canvas.drawCircle(
-          center,
-          18,
-          ui.Paint()
-            ..color = const ui.Color(0x3300E676)
-            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6),
-        );
+        // Hào quang xanh ngọc (tắt MaskFilter.blur trên Web/Safari để tránh nghẽn GPU)
+        final runeGlow = ui.Paint()..color = const ui.Color(0x3300E676);
+        if (!kIsWeb) {
+          runeGlow.maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+        }
+        canvas.drawCircle(center, 18, runeGlow);
         canvas.drawPath(
           runePath,
           ui.Paint()..color = const ui.Color(0xFFB9F6CA),
@@ -145,13 +144,11 @@ class WallBlock extends PositionComponent with CollisionCallbacks {
           ..lineTo(center.dx - 11, center.dy)
           ..close();
         // Hào quang băng
-        canvas.drawCircle(
-          center,
-          18,
-          ui.Paint()
-            ..color = const ui.Color(0x3300FFFF)
-            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6),
-        );
+        final iceGlow = ui.Paint()..color = const ui.Color(0x3300FFFF);
+        if (!kIsWeb) {
+          iceGlow.maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+        }
+        canvas.drawCircle(center, 18, iceGlow);
         canvas.drawPath(
           crystalPath,
           ui.Paint()..color = const ui.Color(0xFFB2EBF2),

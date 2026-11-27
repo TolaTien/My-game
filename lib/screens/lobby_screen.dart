@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/database_models.dart';
 import '../models/friend_party_models.dart';
@@ -851,19 +852,24 @@ class _LobbyScreenState extends State<LobbyScreen>
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // 1. HÌNH NỀN SẢNH CHỜ SCI-FI (assets/images/ui/sanhcho.png)
+                  // 1. HÌNH NỀN SẢNH CHỜ SCI-FI (tách RepaintBoundary & giảm filterQuality trên Web để mượt Safari iOS)
                   Positioned.fill(
-                    child: Image.asset(
-                      'assets/images/ui/sanhcho.png',
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.high,
+                    child: RepaintBoundary(
+                      child: Image.asset(
+                        'assets/images/ui/sanhcho.png',
+                        fit: BoxFit.fill,
+                        filterQuality:
+                            kIsWeb ? FilterQuality.low : FilterQuality.high,
+                      ),
                     ),
                   ),
 
                   // 2. NHÂN VẬT ĐỨNG TRÊN BỆ ĐÀI TRUNG TÂM DƯỚI LUỒNG SÁNG
                   Align(
                     alignment: const Alignment(0.0, 0.14),
-                    child: _buildCenterStage(profile),
+                    child: RepaintBoundary(
+                      child: _buildCenterStage(profile),
+                    ),
                   ),
 
                   // 3. GÓC TRÊN TRÁI: KHUNG HỒ SƠ & RANK
@@ -2198,9 +2204,10 @@ class _LobbyScreenState extends State<LobbyScreen>
             ? (isGuestReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG')
             : (_isPvpMode ? 'TÌM TRẬN RANK' : 'BẮT ĐẦU');
 
-        return AnimatedBuilder(
-          animation: Listenable.merge([_pulseAnimation, _shimmerController]),
-          builder: (context, child) {
+        return RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_pulseAnimation, _shimmerController]),
+            builder: (context, child) {
             return GestureDetector(
               key: const Key('lobby_main_action_button'),
               onTap: _startGame,
@@ -2283,6 +2290,7 @@ class _LobbyScreenState extends State<LobbyScreen>
               ),
             );
           },
+          ),
         );
       },
     );

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'player.dart';
 import 'dungeon_map.dart';
 import 'enemy_skeleton.dart';
@@ -816,9 +817,10 @@ class BossVictoryPortal extends PositionComponent
     final center = Offset(size.x / 2, size.y / 2);
     final rot = timer * 2.0;
 
-    final glowPaint = Paint()
-      ..color = const Color(0x6600E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final glowPaint = Paint()..color = const Color(0x6600E5FF);
+    if (!kIsWeb) {
+      glowPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    }
     canvas.drawCircle(center, 22, glowPaint);
 
     canvas.save();

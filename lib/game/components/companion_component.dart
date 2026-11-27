@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../registry/sprite_image_cache.dart';
 import '../../services/audio_service.dart';
@@ -1234,13 +1235,12 @@ class CompanionComponent extends PositionComponent
           final rad = bobbingTimer * 4.5 + i * (2 * pi / 5);
           final wispR = 30.0 + progress * 55.0;
           final pt = playerCenter + Offset(cos(rad) * wispR, sin(rad) * wispR);
-          canvas.drawCircle(
-            pt,
-            6.0,
-            Paint()
-              ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.45)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-          );
+          final wispPaint = Paint()
+            ..color = const Color(0xFF80D8FF).withValues(alpha: alpha * 0.45);
+          if (!kIsWeb) {
+            wispPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+          }
+          canvas.drawCircle(pt, 6.0, wispPaint);
           canvas.drawCircle(
             pt,
             3.0,
@@ -1345,13 +1345,16 @@ class CompanionComponent extends PositionComponent
     final impact = droneCenter + strikeOffset;
 
     // Tia laser quỹ đạo 3 lớp (cam ngoài -> vàng giữa -> trắng lõi)
+    final laserOuter = Paint()
+      ..color = const Color(0xFFFF6D00).withValues(alpha: alpha * 0.5)
+      ..strokeWidth = 18.0 * alpha;
+    if (!kIsWeb) {
+      laserOuter.maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    }
     canvas.drawLine(
       Offset(impact.dx, impact.dy - 280),
       impact,
-      Paint()
-        ..color = const Color(0xFFFF6D00).withValues(alpha: alpha * 0.5)
-        ..strokeWidth = 18.0 * alpha
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      laserOuter,
     );
     canvas.drawLine(
       Offset(impact.dx, impact.dy - 280),
@@ -1400,13 +1403,11 @@ class CompanionComponent extends PositionComponent
   /// Vẽ Aegis-X9 - Tinh Linh Lôi Từ (Pha lê bát diện #FFD700 + 2 vòng Gyroscope bạc/cyan xoay chéo)
   void _renderAegisX9(Canvas canvas, Offset center) {
     // 1. Hào quang Aura Glow 30px
-    canvas.drawCircle(
-      center,
-      16,
-      Paint()
-        ..color = const Color(0x44FFD700)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
+    final aegisGlow = Paint()..color = const Color(0x44FFD700);
+    if (!kIsWeb) {
+      aegisGlow.maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    }
+    canvas.drawCircle(center, 16, aegisGlow);
 
     // 3. Vòng Gyroscope kim loại bạc và xanh cyan xoay chéo góc nhau
     canvas.save();
@@ -1522,9 +1523,10 @@ class CompanionComponent extends PositionComponent
   void _renderGlowingCore(Canvas canvas, Offset center) {
     final coreColor = type.themeColor;
 
-    final glowPaint = Paint()
-      ..color = coreColor.withValues(alpha: 0.35)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    final glowPaint = Paint()..color = coreColor.withValues(alpha: 0.35);
+    if (!kIsWeb) {
+      glowPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    }
     canvas.drawCircle(center, 5.0, glowPaint);
 
     final lensPaint = Paint()..color = coreColor;
@@ -1701,9 +1703,10 @@ class CompanionPlasmaProjectile extends PositionComponent
     super.render(canvas);
     final center = Offset(size.x / 2, size.y / 2);
 
-    final haloPaint = Paint()
-      ..color = color.withValues(alpha: 0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+    final haloPaint = Paint()..color = color.withValues(alpha: 0.4);
+    if (!kIsWeb) {
+      haloPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+    }
     canvas.drawCircle(center, 5.5, haloPaint);
 
     final bodyPaint = Paint()..color = color;

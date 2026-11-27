@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'player.dart';
 import '../../services/audio_service.dart';
 import '../big_war_game.dart';
@@ -124,9 +125,10 @@ class PickupItem extends PositionComponent
     final cy = size.y / 2;
 
     // Hào quang đỏ mờ
-    final glowPaint = Paint()
-      ..color = const Color(0x44FF1744)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final glowPaint = Paint()..color = const Color(0x44FF1744);
+    if (!kIsWeb) {
+      glowPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    }
     canvas.drawCircle(Offset(cx, cy), 9, glowPaint);
 
     // Thân bình tròn
@@ -154,9 +156,10 @@ class PickupItem extends PositionComponent
     final cy = size.y / 2;
 
     // Hào quang xanh ngọc lấp lánh (Cyan glow)
-    final glowPaint = Paint()
-      ..color = const Color(0x6600E5FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    final glowPaint = Paint()..color = const Color(0x6600E5FF);
+    if (!kIsWeb) {
+      glowPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    }
     canvas.drawCircle(Offset(cx, cy), 8, glowPaint);
 
     // Viên ngọc lục bảo/lam ngọc hình thoi (Diamond gem)
@@ -195,9 +198,10 @@ class PickupItem extends PositionComponent
     final cy = size.y / 2;
 
     // Hào quang vàng hoàng gia
-    final glowPaint = Paint()
-      ..color = const Color(0x55FFD700)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final glowPaint = Paint()..color = const Color(0x55FFD700);
+    if (!kIsWeb) {
+      glowPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    }
     canvas.drawCircle(Offset(cx, cy), 8, glowPaint);
 
     // Viền vàng đậm bên ngoài

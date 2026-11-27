@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================================
-echo   BIG-WAR MOBILE - DONG GOI FILE APK CHO ANDROID
+echo   BIG-WAR MOBILE - DONG GOI FILE APK TOI UU CHO ANDROID
 echo ========================================================
 set "PROJECT_DIR=%~dp0"
 if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
@@ -9,9 +9,9 @@ if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 cd /d "%PROJECT_DIR%"
 
 if exist ".env" (
-    call flutter build apk --release --split-per-abi --no-tree-shake-icons --dart-define-from-file=.env
+    call flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/app/outputs/symbols --dart-define-from-file=.env
 ) else (
-    call flutter build apk --release --split-per-abi --no-tree-shake-icons
+    call flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/app/outputs/symbols
 )
 
 echo.
