@@ -824,114 +824,48 @@ class _LobbyFriendsSidebarState extends State<LobbyFriendsSidebar> {
     );
   }
 
-  // --- 4. CHÂN SIDEBAR ---
+  // --- 4. CHÂN SIDEBAR (CHỈ HIỆN KHI CÓ YÊU CẦU KẾT BẠN) ---
   Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        border: Border(
-          top: BorderSide(
-            color: const Color(0xFF29D8FF).withValues(alpha: 0.2),
+    return ValueListenableBuilder<List<FriendRequest>>(
+      valueListenable:
+          FriendPartyService.instance.incomingFriendRequestsNotifier,
+      builder: (context, reqs, _) {
+        if (reqs.isEmpty) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.03),
+            border: Border(
+              top: BorderSide(
+                color: const Color(0xFF29D8FF).withValues(alpha: 0.2),
+              ),
+            ),
           ),
-        ),
-      ),
-      child: ValueListenableBuilder<List<FriendRequest>>(
-        valueListenable:
-            FriendPartyService.instance.incomingFriendRequestsNotifier,
-        builder: (context, reqs, _) {
-          return Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 28,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color(0xFF1565C0).withValues(alpha: 0.5),
-                      foregroundColor: const Color(0xFF80D8FF),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7),
-                        side: BorderSide(
-                          color: const Color(0xFF29D8FF).withValues(alpha: 0.4),
-                        ),
-                      ),
-                    ),
-                    onPressed: widget.onOpenFriendsDialog,
-                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 13),
-                    label: const Text(
-                      'TÌM & KẾT BẠN',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 28,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(7),
                 ),
               ),
-              if (widget.onOpenSoloRoom != null) ...[
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 28,
-                  child: ElevatedButton.icon(
-                    key: const Key('sidebar_open_solo_room_button'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color(0xFFFF8F00).withValues(alpha: 0.25),
-                      foregroundColor: const Color(0xFFFFD54F),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7),
-                        side: BorderSide(
-                          color: const Color(0xFFFFB300).withValues(alpha: 0.65),
-                        ),
-                      ),
-                    ),
-                    onPressed: widget.onOpenSoloRoom,
-                    icon: const Icon(Icons.sports_kabaddi_rounded, size: 13),
-                    label: const Text(
-                      'PHÒNG SOLO',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
+              onPressed: widget.onOpenFriendRequests ??
+                  widget.onOpenFriendsDialog,
+              child: Text(
+                'YÊU CẦU KẾT BẠN (${reqs.length})',
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-              if (reqs.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 28,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                    ),
-                    onPressed: widget.onOpenFriendRequests ??
-                        widget.onOpenFriendsDialog,
-                    child: Text(
-                      'YÊU CẦU (${reqs.length})',
-                      style: const TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

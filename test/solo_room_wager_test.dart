@@ -178,7 +178,7 @@ void main() {
         await tester.pumpWidget(const MaterialApp(home: LobbyScreen()));
         await tester.pump(const Duration(milliseconds: 200));
 
-        await tester.tap(find.byKey(const Key('sidebar_open_solo_room_button')));
+        await tester.tap(find.text('PHÒNG SOLO'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
