@@ -54,6 +54,53 @@ class AuthService {
 
   DatabaseReference _playerRef(String uid) => _db.ref('players/$uid');
 
+  DatabaseReference _usernameRef(String nameKey) => _db.ref('usernames/$nameKey');
+
+  static final RegExp _gmailRegex = RegExp(
+    r'^[a-zA-Z0-9]+(?:[._+-][a-zA-Z0-9]+)*@gmail\.com$',
+    caseSensitive: false,
+  );
+
+  static final RegExp _displayNameAllowedRegex = RegExp(
+    r'^[\p{L}\p{N}_\- ]+$',
+    unicode: true,
+  );
+
+  /// Chuẩn hóa khoảng trắng tên hiển thị (gộp nhiều dấu cách liên tiếp thành 1).
+  static String cleanDisplayName(String raw) =>
+      raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Chuẩn hóa key lưu trên nhánh `usernames/{nameKey}` (không phân biệt hoa/thường).
+  static String normalizeUsernameKey(String displayName) =>
+      cleanDisplayName(displayName).toLowerCase();
+
+  /// Kiểm tra định dạng `@gmail.com` hợp lệ.
+  static bool isValidGmail(String rawEmail) =>
+      _gmailRegex.hasMatch(rawEmail.trim());
+
+  /// Kiểm tra hợp lệ tên nhân vật (3–16 ký tự, không chứa ký tự đặc biệt cấm của Firebase).
+  static String? validateDisplayName(String? raw) {
+    final cleaned = cleanDisplayName(raw ?? '');
+    if (cleaned.isEmpty) return 'Chưa nhập tên nhân vật';
+    if (cleaned.length < 3 || cleaned.length > 16) {
+      return 'Tên nhân vật cần từ 3 đến 16 ký tự';
+    }
+    if (!_displayNameAllowedRegex.hasMatch(cleaned)) {
+      return 'Tên chỉ được gồm chữ cái, số, khoảng trắng, gạch ngang/dưới';
+    }
+    return null;
+  }
+
+  /// Kiểm tra hợp lệ địa chỉ Gmail.
+  static String? validateGmail(String? raw) {
+    final s = raw?.trim() ?? '';
+    if (s.isEmpty) return 'Chưa nhập email';
+    if (!isValidGmail(s)) {
+      return 'Vui lòng nhập địa chỉ @gmail.com hợp lệ (VD: tenban@gmail.com)';
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // PUBLIC API
   // ---------------------------------------------------------------------------
@@ -75,16 +122,46 @@ class AuthService {
     }
   }
 
-  /// Đăng ký tài khoản mới và tạo hồ sơ người chơi trên Realtime Database.
+  /// Đăng ký tài khoản mới (bắt buộc @gmail.com & tên nhân vật duy nhất)
+  /// và tạo hồ sơ người chơi trên Realtime Database.
   Future<void> register({
     required String displayName,
     required String email,
     required String password,
   }) async {
     _ensureAvailable();
-    final cleanName = displayName.trim();
-    final cleanEmail = email.trim();
 
+    final nameError = validateDisplayName(displayName);
+    if (nameError != null) {
+      throw AuthFailure(nameError);
+    }
+    final emailError = validateGmail(email);
+    if (emailError != null) {
+      throw AuthFailure(emailError);
+    }
+    if (password.length < 6) {
+      throw const AuthFailure('Mật khẩu quá yếu (tối thiểu 6 ký tự).');
+    }
+
+    final cleanName = cleanDisplayName(displayName);
+    final nameKey = normalizeUsernameKey(cleanName);
+    final cleanEmail = email.trim().toLowerCase();
+
+    // Bước 1: Kiểm tra nhanh tên đã có người đặt chưa trước khi tạo Auth user
+    try {
+      final existingSnap = await _usernameRef(nameKey).get();
+      if (existingSnap.exists) {
+        throw AuthFailure(
+          'Tên nhân vật "$cleanName" đã có người sử dụng. Vui lòng chọn tên khác.',
+        );
+      }
+    } on AuthFailure {
+      rethrow;
+    } catch (e) {
+      debugPrint('AuthService precheck username skipped: $e');
+    }
+
+    // Bước 2: Tạo tài khoản Firebase Authentication (tự chặn trùng Gmail)
     UserCredential cred;
     try {
       cred = await _auth.createUserWithEmailAndPassword(
@@ -96,6 +173,48 @@ class AuthService {
     }
 
     final user = cred.user!;
+
+    // Bước 3: Kiểm tra cả dữ liệu cũ trong `directory` + khóa nguyên tử (Transaction) nhánh `usernames/{nameKey}`
+    try {
+      final isTakenInDirectory = await _isNameTakenInLegacyDirectory(
+        nameKey: nameKey,
+        ownUid: user.uid,
+      );
+      if (isTakenInDirectory) {
+        await _rollbackCreatedAuthUser(user);
+        throw AuthFailure(
+          'Tên nhân vật "$cleanName" đã có người sử dụng. Vui lòng chọn tên khác.',
+        );
+      }
+
+      final txResult = await _usernameRef(nameKey).runTransaction((current) {
+        if (current != null && current is Map) {
+          final existingUid = current['uid']?.toString();
+          if (existingUid != null &&
+              existingUid.isNotEmpty &&
+              existingUid != user.uid) {
+            return Transaction.abort();
+          }
+        }
+        return Transaction.success({
+          'uid': user.uid,
+          'displayName': cleanName,
+          'claimedAt': ServerValue.timestamp,
+        });
+      });
+
+      if (!txResult.committed) {
+        await _rollbackCreatedAuthUser(user);
+        throw AuthFailure(
+          'Tên nhân vật "$cleanName" vừa có người đăng ký. Vui lòng chọn tên khác.',
+        );
+      }
+    } on AuthFailure {
+      rethrow;
+    } catch (e) {
+      debugPrint('AuthService username reservation warning: $e');
+    }
+
     try {
       await user.updateDisplayName(cleanName);
     } catch (_) {}
@@ -215,7 +334,87 @@ class AuthService {
     await PlayerStorage.saveProfile(profile, syncCloud: false);
     // Chạy lại loadProfile để áp dụng các bước nâng cấp dữ liệu cũ (mã GR, ...)
     final loaded = await PlayerStorage.loadProfile();
+    unawaited(_backfillUsernameReservation(user.uid, loaded.playerName));
     await _afterProfileReady(loaded);
+  }
+
+  Future<bool> _isNameTakenInLegacyDirectory({
+    required String nameKey,
+    required String ownUid,
+  }) async {
+    try {
+      final dirSnap = await _db.ref('directory').get();
+      if (dirSnap.exists && dirSnap.value is Map) {
+        final dirMap = dirSnap.value as Map;
+        for (final value in dirMap.values) {
+          if (value is Map) {
+            final entryName = value['name']?.toString() ?? '';
+            if (normalizeUsernameKey(entryName) == nameKey) {
+              return true;
+            }
+          }
+        }
+      }
+
+      final lbSnap = await _db.ref('leaderboard').get();
+      if (lbSnap.exists && lbSnap.value is Map) {
+        final lbMap = lbSnap.value as Map;
+        for (final entry in lbMap.entries) {
+          final key = entry.key.toString();
+          if (key.startsWith('seed_') || key == ownUid) continue;
+          final val = entry.value;
+          if (val is Map) {
+            final entryUid = val['uid']?.toString() ?? key;
+            if (entryUid == ownUid) continue;
+            final entryName = val['name']?.toString() ?? '';
+            if (normalizeUsernameKey(entryName) == nameKey) {
+              return true;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('AuthService legacy directory check skipped: $e');
+    }
+    return false;
+  }
+
+  Future<void> _rollbackCreatedAuthUser(User user) async {
+    try {
+      await user.delete();
+    } catch (e) {
+      debugPrint('AuthService rollback delete user failed: $e');
+    }
+    try {
+      await _auth.signOut();
+    } catch (_) {}
+  }
+
+  /// Tự động đăng ký giữ chỗ tên cho các tài khoản cũ đã tạo trước khi có bảng `usernames`.
+  Future<void> _backfillUsernameReservation(
+    String uid,
+    String playerName,
+  ) async {
+    final cleaned = cleanDisplayName(playerName);
+    if (cleaned.length < 3 ||
+        cleaned.length > 16 ||
+        cleaned.startsWith('Chiến Binh #') ||
+        !_displayNameAllowedRegex.hasMatch(cleaned)) {
+      return;
+    }
+    final nameKey = normalizeUsernameKey(cleaned);
+    try {
+      await _usernameRef(nameKey).runTransaction((current) {
+        if (current != null) {
+          return Transaction.abort();
+        }
+        return Transaction.success({
+          'uid': uid,
+          'displayName': cleaned,
+          'claimedAt': ServerValue.timestamp,
+        });
+      });
+    } catch (_) {}
   }
 
   Future<void> _afterProfileReady(PlayerProfile profile) async {

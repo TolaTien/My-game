@@ -132,9 +132,6 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  static bool _isValidEmail(String v) =>
-      RegExp(r'^[\w.+\-]+@[\w\-]+(\.[\w\-]+)+$').hasMatch(v.trim());
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -374,47 +371,33 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: 10),
           ],
 
-          // Trường 0 (Khi Đăng ký): Chiến danh
+          // Trường 0 (Khi Đăng ký): Chiến danh (không trùng lặp)
           if (_isRegister) ...[
             _buildPillField(
               controller: _nameCtrl,
               focusNode: _nameFocus,
-              placeholder: 'Display Name (3–16 ký tự)',
+              placeholder: 'Tên nhân vật duy nhất (3–16 ký tự)',
               icon: Icons.shield_outlined,
               action: TextInputAction.next,
               isCompact: isCompact,
               onSubmitted: (_) => _emailFocus.requestFocus(),
-              validator: (v) {
-                final s = v?.trim() ?? '';
-                if (s.isEmpty) return 'Chưa nhập tên nhân vật';
-                if (s.length < 3 || s.length > 16) {
-                  return 'Tên nhân vật cần từ 3 đến 16 ký tự';
-                }
-                return null;
-              },
+              validator: AuthService.validateDisplayName,
             ),
             SizedBox(height: isCompact ? 8 : 12),
           ],
 
-          // Trường 1: Email
+          // Trường 1: Gmail (@gmail.com)
           _buildPillField(
             controller: _emailCtrl,
             focusNode: _emailFocus,
-            placeholder: 'Email',
+            placeholder: 'Gmail (VD: tenban@gmail.com)',
             icon: Icons.alternate_email_rounded,
             keyboard: TextInputType.emailAddress,
             action: TextInputAction.next,
             isCompact: isCompact,
             autofill: const [AutofillHints.email],
             onSubmitted: (_) => _passFocus.requestFocus(),
-            validator: (v) {
-              final s = v?.trim() ?? '';
-              if (s.isEmpty) return 'Chưa nhập email';
-              if (!_isValidEmail(s)) {
-                return 'Email phải có dấu @ và tên miền hợp lệ';
-              }
-              return null;
-            },
+            validator: AuthService.validateGmail,
           ),
           SizedBox(height: isCompact ? 8 : 12),
 

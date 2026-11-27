@@ -1,5 +1,12 @@
 {
   "rules": {
+    "usernames": {
+      "$nameKey": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() == auth.uid)",
+        ".validate": "newData.hasChildren(['uid', 'displayName']) && newData.child('uid').val() == auth.uid && newData.child('displayName').isString() && newData.child('displayName').val().length >= 3 && newData.child('displayName').val().length <= 16"
+      }
+    },
     "matchmaking": {
       ".read": "auth != null",
       ".write": "auth != null"
@@ -58,19 +65,39 @@
     },
     "leaderboard": {
       ".read": true,
-      ".write": "auth != null"
+      "$uid": {
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['uid', 'name', 'rankPoints']) && newData.child('uid').val() == $uid && newData.child('rankPoints').isNumber() && newData.child('rankPoints').val() >= 0"
+      }
     },
     "players": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
         "account": {
-          "email": { ".validate": "newData.isString()" },
-          "displayName": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 32" }
+          "email": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "displayName": {
+            ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 16"
+          }
         },
         "profile": {
-          "gold": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-          "playerName": { ".validate": "newData.isString() && newData.val().length <= 32" }
+          "gold": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "xu": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "rankPoints": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "rankStars": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "playerName": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 32"
+          }
         }
       }
     }
