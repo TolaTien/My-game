@@ -27,8 +27,8 @@ void main() {
       expect(find.text('👋'), findsOneWidget);
       expect(find.text('Please enter your email and password'), findsOneWidget);
 
-      // Kiểm tra các trường Email & Password
-      expect(find.text('Email'), findsOneWidget);
+      // Kiểm tra các trường Gmail & Password
+      expect(find.textContaining('Gmail'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
 
       // Kiểm tra nút Login cam và liên kết Register now!
@@ -66,8 +66,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // Kiểm tra trường Display Name xuất hiện và nút đổi thành Register
-      expect(find.textContaining('Display Name'), findsOneWidget);
+      // Kiểm tra trường Tên nhân vật duy nhất xuất hiện và nút đổi thành Register
+      expect(find.textContaining('Tên nhân vật duy nhất'), findsOneWidget);
       expect(find.text('Register'), findsOneWidget);
       expect(find.textContaining('Login now!'), findsOneWidget);
 
