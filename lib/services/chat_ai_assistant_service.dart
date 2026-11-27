@@ -476,6 +476,7 @@ class ChatAiAssistantService {
     List<ChatAiMessage> history = const [],
     http.Client? client,
     bool bypassKeywordFilter = false,
+    bool bypassScopeFilter = false,
   }) async {
     final trimmed = rawQuery.trim();
     if (trimmed.isEmpty) {
@@ -488,7 +489,7 @@ class ChatAiAssistantService {
       if (localReply != null) {
         return localReply;
       }
-    } else if (!isGameRelatedQuery(trimmed)) {
+    } else if (!bypassScopeFilter && !isGameRelatedQuery(trimmed)) {
       return offTopicRefusalReply;
     }
 

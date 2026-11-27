@@ -42,34 +42,42 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     });
   }
 
-  Future<void> _sendPrompt(String text) async {
+  Future<void> _sendPrompt(
+    String text, {
+    bool preferInstantFaq = false,
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
 
     AudioService.instance.playSfx(SfxSound.uiClick);
 
-    // Fast-path: lọc từ khóa FAQ & chặn câu hỏi ngoài lề ngay tại client (<1ms, 0 token)
-    final instantReply = ChatAiAssistantService.instance.resolveLocalReply(trimmed);
-    if (instantReply != null) {
-      setState(() {
-        _messages.add(
-          ChatAiMessage(
-            sender: 'user',
-            text: trimmed,
-            timestamp: DateTime.now(),
-          ),
-        );
-        _messages.add(
-          ChatAiMessage(
-            sender: 'ai',
-            text: instantReply,
-            timestamp: DateTime.now(),
-          ),
-        );
-        _controller.clear();
-      });
-      _scrollToBottom();
-      return;
+    final isProxyReady = ChatAiAssistantService.instance.isProxyConfigured;
+
+    // Khi bấm nút gợi ý nhanh (hoặc đang chạy chế độ Demo offline) -> trả lời FAQ tức thì
+    if (preferInstantFaq || !isProxyReady) {
+      final instantReply =
+          ChatAiAssistantService.instance.resolveLocalReply(trimmed);
+      if (instantReply != null) {
+        setState(() {
+          _messages.add(
+            ChatAiMessage(
+              sender: 'user',
+              text: trimmed,
+              timestamp: DateTime.now(),
+            ),
+          );
+          _messages.add(
+            ChatAiMessage(
+              sender: 'ai',
+              text: instantReply,
+              timestamp: DateTime.now(),
+            ),
+          );
+          _controller.clear();
+        });
+        _scrollToBottom();
+        return;
+      }
     }
 
     final historySnapshot = List<ChatAiMessage>.from(_messages);
@@ -87,10 +95,12 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
     });
     _scrollToBottom();
 
+    // Khi đã cấu hình AI Proxy -> gửi thẳng sang Gemini để trả lời tự nhiên
     final reply = await ChatAiAssistantService.instance.generateReplyAsync(
       trimmed,
       history: historySnapshot,
-      bypassKeywordFilter: true,
+      bypassKeywordFilter: isProxyReady,
+      bypassScopeFilter: isProxyReady,
     );
 
     if (!mounted) return;
@@ -244,8 +254,12 @@ class _ChatAiDialogState extends State<ChatAiDialog> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    onPressed:
-                        _isLoading ? null : () => _sendPrompt(topic.prompt),
+                    onPressed: _isLoading
+                        ? null
+                        : () => _sendPrompt(
+                              topic.prompt,
+                              preferInstantFaq: true,
+                            ),
                   );
                 },
               ),
