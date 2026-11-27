@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../services/audio_service.dart';
@@ -64,6 +66,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _focusFirstField() {
+    // Trên Web / thiết bị cảm ứng không tự bật focus khi mới mở màn hình
+    // để tránh iOS Safari tự cuộn / phóng to viewport trước khi người dùng chạm.
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      return;
+    }
     if (_isRegister) {
       _nameFocus.requestFocus();
     } else {
@@ -536,9 +545,10 @@ class _AuthScreenState extends State<AuthScreen> {
       enabled: !_loading,
       validator: validator,
       onFieldSubmitted: onSubmitted,
-      style: const TextStyle(
-        color: Color(0xFFF8FAFC),
-        fontSize: 13.5,
+      style: TextStyle(
+        color: const Color(0xFFF8FAFC),
+        // iOS Safari / PWA yêu cầu >= 16px để không tự phóng to & đẩy khung hình khi bấm vào ô nhập
+        fontSize: kIsWeb ? 16.0 : 13.5,
         fontWeight: FontWeight.w500,
       ),
       cursorColor: _brightOrange,
