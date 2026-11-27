@@ -826,8 +826,6 @@ class _LobbyScreenState extends State<LobbyScreen>
         body: ValueListenableBuilder<PlayerProfile>(
         valueListenable: PlayerStorage.profileNotifier,
         builder: (context, profile, _) {
-          final canSpin = profile.canSpinToday();
-
           return LayoutBuilder(
             builder: (context, constraints) {
               final w = constraints.maxWidth;
@@ -913,20 +911,18 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
 
-                  // 5. SIDEBAR TRÁI: 5 NÚT CHỨC NĂNG ĐÚNG THEO ẢNH SANHCHO.PNG
-                  // 5.1 VÒNG QUAY (QUAY NGAY)
+                  // 5. SIDEBAR TRÁI: CÁC NÚT CHỨC NĂNG SẢNH CHỜ
+                  // 5.1 VÒNG QUAY
                   posBox(
                     18,
-                    108,
-                    187,
-                    220,
+                    118,
+                    178,
+                    214,
                     _buildSciFiSidebarButton(
                       label: 'VÒNG QUAY',
                       borderColor: const Color(0xFFFFB300),
                       glowColor: const Color(0xFFFFA000),
                       bgColors: const [Color(0xFF282B3A), Color(0xFF1B1E2B)],
-                      badgeText: canSpin ? 'QUAY NGAY' : 'ĐÃ QUAY',
-                      badgeAlignTopCenter: true,
                       iconWidget: Container(
                         width: 40,
                         height: 40,
@@ -1077,32 +1073,23 @@ class _LobbyScreenState extends State<LobbyScreen>
                     ),
                   ),
 
-                  // 5.6 PHÒNG SOLO 1V1 (CƯỢC VÀNG VỚI BẠN BÈ)
+                  // 5.6 PHÒNG SOLO / TÙY CHỌN 4V4
                   posBox(
                     18,
                     632,
                     178,
-                    734,
-                    ValueListenableBuilder<SoloDuelRoomState?>(
-                      valueListenable:
-                          FriendPartyService.instance.soloRoomNotifier,
-                      builder: (context, soloRoom, _) {
-                        return _buildSciFiSidebarButton(
-                          label: 'PHÒNG SOLO',
-                          borderColor: const Color(0xFFFFB300),
-                          glowColor: const Color(0xFFFF8F00),
-                          bgColors: const [Color(0xFF2B2112), Color(0xFF1A140B)],
-                          badgeText:
-                              soloRoom != null ? soloRoom.roomCode : 'TẠO PHÒNG',
-                          badgeAlignTopCenter: true,
-                          iconWidget: const Icon(
-                            Icons.sports_kabaddi_rounded,
-                            color: Color(0xFFFFD54F),
-                            size: 38,
-                          ),
-                          onTap: _openSoloRoomDialog,
-                        );
-                      },
+                    728,
+                    _buildSciFiSidebarButton(
+                      label: 'PHÒNG SOLO',
+                      borderColor: const Color(0xFFFFB300),
+                      glowColor: const Color(0xFFFF8F00),
+                      bgColors: const [Color(0xFF2B2112), Color(0xFF1A140B)],
+                      iconWidget: const Icon(
+                        Icons.sports_kabaddi_rounded,
+                        color: Color(0xFFFFD54F),
+                        size: 38,
+                      ),
+                      onTap: _openSoloRoomDialog,
                     ),
                   ),
 
