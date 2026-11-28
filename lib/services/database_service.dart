@@ -228,7 +228,7 @@ class MockDatabaseService implements DatabaseService {
           final entry = _leaderboard[i];
           final rankNum = i + 1;
           final isTop10 = rankNum <= PvpRankSystem.challengerTopLimit &&
-              entry.rankStars >= PvpRankSystem.legendaryStartTotalStars;
+              entry.rankStars >= PvpRankSystem.challengerMinTotalStars;
           final resolvedTier = PvpRankSystem.getTierFromStars(
             entry.rankStars,
             isTop10Challenger: isTop10,
@@ -259,13 +259,13 @@ class MockDatabaseService implements DatabaseService {
         localIdx >= 0 ? _leaderboard[localIdx].rankNumber : _leaderboard.length;
     final isChallengerTop10 =
         serverRank <= PvpRankSystem.challengerTopLimit &&
-            profile.rankStars >= PvpRankSystem.legendaryStartTotalStars;
+            profile.rankStars >= PvpRankSystem.challengerMinTotalStars;
 
-    int top10CutoffStars = PvpRankSystem.legendaryStartTotalStars + 1;
+    int top10CutoffStars = PvpRankSystem.challengerMinTotalStars;
     if (_leaderboard.length >= PvpRankSystem.challengerTopLimit) {
       final tenthEntry = _leaderboard[PvpRankSystem.challengerTopLimit - 1];
       top10CutoffStars = max(
-        PvpRankSystem.legendaryStartTotalStars,
+        PvpRankSystem.challengerMinTotalStars,
         tenthEntry.rankStars,
       );
     }

@@ -75,7 +75,7 @@ class FirebaseDatabaseService implements DatabaseService {
           final e = list[i];
           final rankNum = i + 1;
           final isTop10 = rankNum <= PvpRankSystem.challengerTopLimit &&
-              e.rankStars >= PvpRankSystem.legendaryStartTotalStars;
+              e.rankStars >= PvpRankSystem.challengerMinTotalStars;
           final resolvedTier = PvpRankSystem.getTierFromStars(
             e.rankStars,
             isTop10Challenger: isTop10,
@@ -170,12 +170,12 @@ class FirebaseDatabaseService implements DatabaseService {
           final serverRank = idx >= 0 ? list[idx].rankNumber : list.length + 1;
           final isChallengerTop10 =
               serverRank <= PvpRankSystem.challengerTopLimit &&
-                  profile.rankStars >= PvpRankSystem.legendaryStartTotalStars;
-          int top10CutoffStars = PvpRankSystem.legendaryStartTotalStars + 1;
+                  profile.rankStars >= PvpRankSystem.challengerMinTotalStars;
+          int top10CutoffStars = PvpRankSystem.challengerMinTotalStars;
           if (list.length >= PvpRankSystem.challengerTopLimit) {
             final tenth = list[PvpRankSystem.challengerTopLimit - 1];
             top10CutoffStars = max(
-              PvpRankSystem.legendaryStartTotalStars,
+              PvpRankSystem.challengerMinTotalStars,
               tenth.rankStars,
             );
           }

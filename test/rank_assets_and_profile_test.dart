@@ -45,6 +45,43 @@ void main() {
       expect(challenger.rankAssetPath, 'assets/images/ranks/rank_thach_dau.png');
     });
 
+    test('Progression Platinum -> Diamond -> Legendary -> Challenger never skips Legendary', () {
+      // Bạch Kim (9..11 sao) -> Kim Cương (12..14 sao)
+      expect(PvpRankSystem.getTierFromStars(11), 'Bạch Kim');
+      expect(PvpRankSystem.getTierFromStars(12), 'Kim Cương');
+      expect(PvpRankSystem.getTierFromStars(14), 'Kim Cương');
+
+      // 15..17 sao (0..2 sao Huyền Thoại): dù nằm Top 10 Server vẫn phải ở Huyền Thoại
+      for (final stars in [15, 16, 17]) {
+        expect(
+          PvpRankSystem.getTierFromStars(stars, isTop10Challenger: true),
+          'Huyền Thoại',
+        );
+        final prof = PlayerProfile(
+          rankStars: stars,
+          isChallengerTop10: true,
+          serverRank: 1,
+        );
+        expect(prof.isChallengerTop10, isFalse);
+        expect(prof.rankTier, 'Huyền Thoại');
+      }
+
+      // >= 18 sao (từ 3 sao Huyền Thoại trở lên) + Top 10 Server -> mới lên Thách Đấu
+      expect(
+        PvpRankSystem.getTierFromStars(18, isTop10Challenger: false),
+        'Huyền Thoại',
+      );
+      expect(
+        PvpRankSystem.getTierFromStars(18, isTop10Challenger: true),
+        'Thách Đấu',
+      );
+      expect(PvpEloCalculator.getRankTier(2000), 'Huyền Thoại');
+      expect(
+        PvpEloCalculator.getRankTier(2090, isTop10Challenger: true),
+        'Thách Đấu',
+      );
+    });
+
     testWidgets('EditProfileDialog displays user rank badge, stars, RP and next tier',
         (tester) async {
       tester.view.physicalSize = const Size(1280, 800);

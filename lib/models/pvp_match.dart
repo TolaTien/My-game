@@ -384,13 +384,18 @@ class PvpMatchResult {
 ///   + Vàng: 6..8 tổng sao (0⭐, 1⭐, 2⭐; đủ 3 sao lên Bạch Kim 0⭐)
 ///   + Bạch Kim: 9..11 tổng sao (0⭐, 1⭐, 2⭐; đủ 3 sao lên Kim Cương 0⭐)
 ///   + Kim Cương: 12..14 tổng sao (0⭐, 1⭐, 2⭐; đủ 3 sao lên Huyền Thoại 0⭐)
-/// - Từ Huyền Thoại (tổng sao >= 15): bắt đầu từ 0 sao (0s, 1s, 2s...) cộng sao tích lũy
-///   đến Thách Đấu (Top 10 game thủ nhiều sao nhất server).
+/// - Từ Huyền Thoại (tổng sao >= 15): bắt đầu từ 0 sao (0⭐, 1⭐, 2⭐...) cộng sao tích lũy.
+/// - Thách Đấu: cần đạt tối thiểu 3 sao Huyền Thoại (tổng sao >= 18) VÀ nằm trong
+///   Top 10 game thủ nhiều sao nhất server (tránh nhảy thẳng từ Kim Cương lên Thách Đấu).
 class PvpRankSystem {
   static const int starsPerStandardTier = 3;
   static const int standardTierCount = 5; // Đồng, Bạc, Vàng, Bạch Kim, Kim Cương
   static const int legendaryStartTotalStars =
       starsPerStandardTier * standardTierCount; // 15 tổng sao = Huyền Thoại 0 sao
+  static const int challengerMinLegendaryStars =
+      3; // Cần ít nhất 3 sao Huyền Thoại trước khi xét Thách Đấu
+  static const int challengerMinTotalStars =
+      legendaryStartTotalStars + challengerMinLegendaryStars; // 18 tổng sao
   static const int challengerTopLimit = 10; // Top 10 game thủ nhiều sao nhất server
 
   static const List<String> standardTiers = [
@@ -449,7 +454,9 @@ class PvpRankSystem {
   }) {
     final safeStars = max(0, totalStars);
     if (safeStars >= legendaryStartTotalStars) {
-      return isTop10Challenger ? 'Thách Đấu' : 'Huyền Thoại';
+      final eligibleChallenger =
+          isTop10Challenger && safeStars >= challengerMinTotalStars;
+      return eligibleChallenger ? 'Thách Đấu' : 'Huyền Thoại';
     }
     final tierIdx =
         (safeStars ~/ starsPerStandardTier).clamp(0, standardTiers.length - 1);
@@ -500,8 +507,10 @@ class PvpRankSystem {
     );
     final starsInTier = getStarsInTier(totalStars);
     if (totalStars >= legendaryStartTotalStars) {
+      final eligibleChallenger =
+          isTop10Challenger && totalStars >= challengerMinTotalStars;
       final rankSuffix =
-          (isTop10Challenger && serverRank != null && serverRank <= challengerTopLimit)
+          (eligibleChallenger && serverRank != null && serverRank <= challengerTopLimit)
               ? ' #$serverRank'
               : '';
       return '$tier$rankSuffix • $starsInTier ⭐';
@@ -582,7 +591,7 @@ class PvpEloCalculator {
       newTier = PvpRankSystem.getTierFromStars(
         newTotalStars,
         isTop10Challenger: resolvedNewChallenger &&
-            newTotalStars >= PvpRankSystem.legendaryStartTotalStars,
+            newTotalStars >= PvpRankSystem.challengerMinTotalStars,
       );
     } else {
       int rawRpDelta = 0;
@@ -636,8 +645,11 @@ class PvpEloCalculator {
     );
   }
 
-  static String getRankTier(int rp, {bool isTop10Challenger = true}) {
-    if (rp >= 2000) return isTop10Challenger ? 'Thách Đấu' : 'Huyền Thoại';
+  static String getRankTier(int rp, {bool isTop10Challenger = false}) {
+    final challengerMinRp =
+        PvpRankSystem.rpFromTotalStars(PvpRankSystem.challengerMinTotalStars);
+    if (rp >= challengerMinRp && isTop10Challenger) return 'Thách Đấu';
+    if (rp >= 2000) return 'Huyền Thoại';
     if (rp >= 1800) return 'Kim Cương';
     if (rp >= 1600) return 'Bạch Kim';
     if (rp >= 1400) return 'Vàng';

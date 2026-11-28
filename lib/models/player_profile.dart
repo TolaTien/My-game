@@ -90,15 +90,14 @@ class PlayerProfile {
       rankStars >= PvpRankSystem.legendaryStartTotalStars;
 
   /// Kiểm tra người chơi có nằm trong Top 10 Thách Đấu nhiều sao nhất server hay không
+  /// (yêu cầu đạt tối thiểu [PvpRankSystem.challengerMinTotalStars] tổng sao = Huyền Thoại 3⭐)
   bool get isChallengerTop10 {
-    if (!isLegendaryOrAbove) return false;
+    if (rankStars < PvpRankSystem.challengerMinTotalStars) return false;
     if (_isChallengerTop10 != null) return _isChallengerTop10;
     if (serverRank != null) {
       return serverRank! >= 1 &&
           serverRank! <= PvpRankSystem.challengerTopLimit;
     }
-    // Tương thích ngược khi khởi tạo const PlayerProfile(rankPoints: >= 2000) không truyền rankStars
-    if (_rankStars == null) return rankPoints >= 2000;
     return false;
   }
 
